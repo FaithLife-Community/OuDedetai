@@ -533,26 +533,41 @@ class TUI(App):
                 self.go_to_main_menu()
             except ReturningToMainMenu:
                 pass
+
         if choice is None or choice == "Exit":
             logging.info("Exiting installation.")
             self.tui_screens = []
             self.is_running = False
-        elif choice.startswith("Install"):
-            self.reset_screen()
-            self.installer_step = 0
-            self.installer_step_count = 0
+
+        if choice in ["Install", "Advanced Install"]:
             if self._installer_thread is not None:
                 # The install thread should have completed with ReturningToMainMenu
                 # Check just in case
                 if self._installer_thread.is_alive():
-                    raise Exception("Previous install is still running")
-                # Reset user choices and try again!
-                self.conf.faithlife_product = None # type: ignore[assignment]
+                    try:
+                        self.conf.faithlife_product = None  # type: ignore[assignment]
+                        self.conf.faithlife_product_version = None
+                        self.conf.faithlife_product_release = None
+                        self.conf.install_dir = None
+                        self._installer_thread.join(timeout=0.2)
+                        self._installer_thread = None
+                    except:
+                        raise Exception("Previous install is still running")
+
+            self.reset_screen()
+            self.installer_step = 0
+            self.installer_step_count = 0
+
+            if choice.startswith("Install"):
+                logging.debug(f"{self.conf.faithlife_product=}")
+                self.conf._overrides.assume_yes = True
+            elif choice.startswith("Advanced"):
+                pass  # Stub
+
             self._installer_thread = self.start_thread(
                 _install,
                 daemon_bool=True,
             )
-
         elif choice.startswith(f"Update {constants.APP_NAME}"):
             utils.update_to_latest_lli_release(self)
         elif self.conf._raw.faithlife_product and choice == f"Run {self.conf._raw.faithlife_product}": #noqa: E501
@@ -889,7 +904,7 @@ class TUI(App):
                 indexing = "Run Indexing"
             labels_default = [run, indexing]
         else:
-            labels_default = ["Install Logos Bible Software"]
+            labels_default = ["Install", "Advanced Install"]
         labels.extend(labels_default)
 
         labels_support = ["Utilities →", "Wine Config →"]

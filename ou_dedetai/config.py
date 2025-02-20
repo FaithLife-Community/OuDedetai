@@ -728,8 +728,9 @@ class Config:
         return output
     
     @install_dir.setter
-    def install_dir(self, value: str | Path):
-        value = str(Path(value).absolute())
+    def install_dir(self, value: Optional[str | Path]):
+        if value is not None:
+            value = str(Path(value).absolute())
         if self._raw.install_dir != value:
             self._raw.install_dir = value
             # Reset cache that depends on install_dir
