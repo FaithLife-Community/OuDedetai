@@ -584,7 +584,6 @@ def get_downloaded_file_path(download_dir: str, filename: str):
 
 def grep(regexp, filepath):
     fp = Path(filepath)
-    found = None
     ct = 0
     try:
         found = False
