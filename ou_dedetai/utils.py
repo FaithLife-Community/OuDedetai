@@ -28,6 +28,7 @@ from . import system
 from . import wine
 
 
+# FIXME: This function isn't used and should probably be removed.
 def get_calling_function_name():
     if 'inspect' in sys.modules:
         stack = inspect.stack()
@@ -38,6 +39,7 @@ def get_calling_function_name():
         return "Inspect Not Enabled"
 
 
+# FIXME: Not good practice to clobber a built-in [list] as a variable name.
 def append_unique(list, item):
     if item not in list:
         list.append(item)
@@ -138,6 +140,8 @@ def file_exists(file_path: Optional[str | bytes | Path]) -> bool:
         return False
 
 
+# FIXME: Surely the appropriate JSON filename and key name depend on Product
+# Name and don't always include "Logos"?
 def get_current_logos_version(logos_appdata_dir: Optional[str]) -> Optional[str]:
     if logos_appdata_dir is None:
         return None
@@ -237,6 +241,7 @@ def get_wine_options(app: App) -> List[str]:  # noqa: E501
     logging.debug(f"{sorted_binaries=}")
 
     for wine_binary_path in sorted_binaries:
+        # FIXME: The results of this function aren't used [anymore?].
         code, description = get_winebin_code_and_desc(app, wine_binary_path)  # noqa: E501
 
         # Create wine binary option array
@@ -245,6 +250,7 @@ def get_wine_options(app: App) -> List[str]:  # noqa: E501
     return wine_binary_options
 
 
+# FIXME: This function is not used and should probably be removed.
 def get_procs_using_file(file_path):
     procs = set()
     for proc in psutil.process_iter(['pid', 'open_files', 'name']):
@@ -330,6 +336,8 @@ def compare_logos_linux_installer_version(app: App) -> Optional[VersionCompariso
     return output
 
 
+# FIXME: This actually compares any wine binary with recommended version. Maybe
+# the function should be renamed to 'check_recommended_wine_version'?
 def compare_recommended_appimage_version(app: App):
     status = None
     message = None
@@ -576,9 +584,10 @@ def get_downloaded_file_path(download_dir: str, filename: str):
 
 def grep(regexp, filepath):
     fp = Path(filepath)
-    found = False
+    found = None
     ct = 0
     if fp.exists():
+        found = False
         with fp.open() as f:
             for line in f:
                 ct += 1
