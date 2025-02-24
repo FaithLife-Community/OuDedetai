@@ -1,0 +1,21 @@
+name: Run app tests on PR creation or modification
+on:
+  pull-request:
+  workflow-dispatch:
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        cache: pip
+    - name: install app
+      run: |
+        pip install  --upgrade pip
+        pip install .
+    - name: run-tests
+      run: |
+        scripts/run-tests.sh
