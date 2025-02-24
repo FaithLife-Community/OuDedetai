@@ -141,7 +141,7 @@ class StatusGui(Frame):
         self.grid(row=0, column=0, sticky='nwes')
 
         self.statusvar = StringVar()
-        self.message_label = Label(self, textvariable=self.statusvar)
+        self.message_label = Label(self, textvariable=self.statusvar, wraplength=350, justify="left")
         # Progress bar
         self.progressvar = IntVar(value=0)
         self.progress = Progressbar(
