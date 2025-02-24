@@ -1,7 +1,7 @@
 name: Run app tests on PR creation or modification
 on:
-  pull-request:
-  workflow-dispatch:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   execute:
