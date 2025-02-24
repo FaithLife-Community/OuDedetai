@@ -41,6 +41,7 @@ APP_ASSETS_DIR = BUNDLE_DIR / 'assets'
 APP_NAME = 'Ou Dedetai'
 BINARY_NAME = 'oudedetai'
 PACKAGE_NAME = 'ou_dedetai'
+REPO_NAME = 'OuDedetai'
 
 REPOSITORY_LINK = "https://github.com/FaithLife-Community/LogosLinuxInstaller"
 WIKI_LINK = f"{REPOSITORY_LINK}/wiki"
