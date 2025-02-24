@@ -283,7 +283,8 @@ class TestGeneralUtils(unittest.TestCase):
         self.assertTrue(utils.grep(r'LOGOS_DIR', self.grepfile))
 
     def test_grep_nofile(self):
-        self.assertIsNone(utils.grep(r'test', 'thisfiledoesnotexist'))
+        with self.assertRaises(FileNotFoundError):
+            utils.grep(r'test', 'thisfiledoesnotexist')
 
     def test_grep_notfound(self):
         self.assertFalse(utils.grep(r'TEST_NOT_IN_FILE', self.grepfile))

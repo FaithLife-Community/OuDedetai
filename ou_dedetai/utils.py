@@ -586,7 +586,7 @@ def grep(regexp, filepath):
     fp = Path(filepath)
     found = None
     ct = 0
-    if fp.exists():
+    try:
         found = False
         with fp.open() as f:
             for line in f:
@@ -595,7 +595,10 @@ def grep(regexp, filepath):
                 if re.search(regexp, text):
                     logging.debug(f"{filepath}:{ct}:{text}")
                     found = True
-    return found
+        return found
+    except FileNotFoundError as e:
+        logging.error(e)
+        raise e
 
 
 def untar_file(file_path, output_dir):
