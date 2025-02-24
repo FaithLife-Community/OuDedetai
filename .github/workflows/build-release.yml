@@ -21,7 +21,9 @@ jobs:
       branch: main
 
   release:
-    runs-on: ubuntu-latest
+    runs-on:
+      - ubuntu-latest
+      - ubuntu-24.04-arm
     needs: build
     permissions:
       contents: write
