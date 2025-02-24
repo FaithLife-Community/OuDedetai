@@ -43,7 +43,7 @@ BINARY_NAME = 'oudedetai'
 PACKAGE_NAME = 'ou_dedetai'
 REPO_NAME = 'OuDedetai'
 
-REPOSITORY_LINK = "https://github.com/FaithLife-Community/LogosLinuxInstaller"
+REPOSITORY_LINK = f"https://github.com/FaithLife-Community/{REPO_NAME}"
 WIKI_LINK = f"{REPOSITORY_LINK}/wiki"
 TELEGRAM_LINK = "https://t.me/linux_logos"
 MATRIX_LINK = "https://matrix.to/#/#logosbible:matrix.org"
