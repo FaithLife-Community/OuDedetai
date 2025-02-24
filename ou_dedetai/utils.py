@@ -387,7 +387,7 @@ def is_appimage(file_path):
     logging.debug(f"Converting path to expanded_path: {expanded_path}")
     if file_exists(expanded_path):
         logging.debug(f"{expanded_path} exists!")
-        with file_path.open('rb') as f:
+        with expanded_path.open('rb') as f:
             f.seek(1)
             elf_sig = f.read(3)
             f.seek(8)
