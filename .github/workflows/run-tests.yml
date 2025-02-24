@@ -18,4 +18,4 @@ jobs:
         pip install .
     - name: run-tests
       run: |
-        scripts/run-tests.sh
+        python3 -m unittest discover -v
