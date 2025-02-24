@@ -23,7 +23,9 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on:
+      - ubuntu-20.04
+      - ubuntu-24.04-arm
     outputs:
       bin_name: ${{ steps.pyinstaller.outputs.bin_name }}
       sha_short: ${{ steps.sha.outputs.sha_short }}
