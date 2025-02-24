@@ -38,7 +38,6 @@ def ensure_choices(app: App):
     app.status("Install is running…")
 
 
-
 def ensure_install_dirs(app: App):
     app.installer_step_count += 1
     ensure_choices(app=app)
@@ -134,7 +133,6 @@ def ensure_product_installer_download(app: App):
         shutil.copy(downloaded_file, installer.parent)
 
     logging.debug(f"> '{downloaded_file}' exists?: {Path(downloaded_file).is_file()}")  # noqa: E501
-
 
 
 def ensure_wineprefix_init(app: App):
