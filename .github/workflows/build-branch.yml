@@ -22,6 +22,9 @@ on:
         type: string
 
 jobs:
+  test:
+    uses: ./.github/workflows/run-tests.yml
+
   build:
     runs-on: ubuntu-20.04
     outputs:
