@@ -125,7 +125,7 @@ class TestAppUtils(unittest.TestCase):
 
 class TestGeneralUtils(unittest.TestCase):
     def setUp(self):
-        self.grepfile = TESTDATADIR / 'config.json'
+        self.grepfile = TESTDATADIR / 'legacy_config.json'
         self.tiny_appimage = TESTDATADIR / 'wine_tiny_v2.AppImage'
 
     # @unittest.skip("Unused function")
