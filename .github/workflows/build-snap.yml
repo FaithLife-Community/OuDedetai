@@ -1,0 +1,26 @@
+name: Build & release to test-builds repo
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Dependencies
+      run: |
+        sudo apt install -y snapd
+        snap install --classic snapcraft
+    - name: Patch snapcraft.yaml
+      run: |
+        echo We want to build from the current branch not re-pull from git.
+        sed -i 's#source: https://github.com/FaithLife-Community/LogosLinuxInstaller.git#source: ..#' snap/snapcraft.yaml 
+    - name: Build snap
+      working-directory: snap
+      run: |
+        snapcraft
+    - name: Upload snap
+      uses: actions/upload-artifact@v4
+      with:
+        name: oudedetai.snap
+        path: snap/*.snap
