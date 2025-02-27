@@ -14,9 +14,10 @@ jobs:
       branch: ${{ inputs.branch }}
 
   release:
-    runs-on:
-      - ubuntu-latest
-      - ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
     needs: build
     permissions:
       contents: write

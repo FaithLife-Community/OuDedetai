@@ -23,9 +23,10 @@ on:
 
 jobs:
   build:
-    runs-on:
-      - ubuntu-20.04
-      - ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
     outputs:
       bin_name: ${{ steps.pyinstaller.outputs.bin_name }}
       sha_short: ${{ steps.sha.outputs.sha_short }}
