@@ -424,7 +424,8 @@ class TUI(App):
                             self.choice_q.get(),
                         )
                         if self.active_screen.screen_id == 2:
-                            self.tui_screens.pop()
+                            if self.tui_screens:
+                                self.tui_screens.pop()
 
                     if len(self.tui_screens) == 0:
                         self.active_screen = self.menu_screen
