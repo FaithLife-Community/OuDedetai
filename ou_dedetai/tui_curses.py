@@ -40,7 +40,7 @@ def title(app: App, title_text, title_start_y_adj):
     from ou_dedetai.tui_app import TUI
     if not isinstance(app, TUI):
         raise ValueError("curses MUST be used with the TUI")
-    stdscr = app.main_window
+    stdscr = app.header_window
     if not stdscr:
         raise Exception("Expected main window to be initialized, but it wasn't")
     title_lines = wrap_text(app, title_text)
@@ -58,7 +58,7 @@ def text_centered(app: App, text: str, start_y=0) -> tuple[int, list[str]]:
     from ou_dedetai.tui_app import TUI
     if not isinstance(app, TUI):
         raise ValueError("curses MUST be used with the TUI")
-    stdscr = app.get_menu_window()
+    stdscr = app.get_main_window()
     text_lines = wrap_text(app, text)
     text_start_y = start_y
     text_width = max(len(line) for line in text_lines)
@@ -84,7 +84,7 @@ def confirm(app: App, question_text: str, height=None, width=None):
     from ou_dedetai.tui_app import TUI
     if not isinstance(app, TUI):
         raise ValueError("curses MUST be used with the TUI")
-    stdscr = app.get_menu_window()
+    stdscr = app.get_main_window()
     question_text = question_text + " [Y/n]: "
     question_start_y, question_lines = text_centered(app, question_text)
 
@@ -106,7 +106,7 @@ class CursesDialog:
     def __init__(self, app):
         from ou_dedetai.tui_app import TUI
         self.app: TUI = app
-        self.stdscr: curses.window = self.app.get_menu_window()
+        self.stdscr: curses.window = self.app.get_main_window()
 
     def __str__(self):
         return "Curses Dialog"
@@ -219,7 +219,7 @@ class MenuDialog(CursesDialog):
         self.user_input = "Processing"
         self.submit = False
         self.question_text = question_text
-        self.options = options
+        self.app.options = options
         self.question_start_y = None
         self.question_lines = None
 
@@ -230,18 +230,18 @@ class MenuDialog(CursesDialog):
         self.stdscr.erase()
         # We should be on a menu screen at this point
         if isinstance(self.app.active_screen, tui_screen.MenuScreen):
-            self.app.active_screen.set_options(self.options)
-        self.total_pages = (len(self.options) - 1) // self.app.options_per_page + 1
+            self.app.active_screen.set_options(self.app.options)
+        self.total_pages = (len(self.app.options) - 1) // self.app.options_per_page + 1
         # Default menu_bottom to 0, it should get set to something larger
         menu_bottom = 0
 
         self.question_start_y, self.question_lines = text_centered(self.app, self.question_text) #noqa: E501
         # Display the options, centered
-        options_start_y = self.question_start_y + len(self.question_lines) + 2
+        options_start_y = self.question_start_y + len(self.question_lines) + 1
         for i in range(self.app.options_per_page):
             index = self.app.current_page * self.app.options_per_page + i
-            if index < len(self.options):
-                option = self.options[index]
+            if index < len(self.app.options):
+                option = self.app.options[index]
                 if type(option) is list:
                     option_lines = []
                     wine_binary_code = option[0]
@@ -269,19 +269,17 @@ class MenuDialog(CursesDialog):
                 for j, line in enumerate(option_lines):
                     y = options_start_y + i + j
                     x = max(0, self.app.window_width // 2 - len(line) // 2)
-                    if y < self.app.menu_window_height:
+                    if y < self.app.main_window_height:
                         if index == self.app.current_option:
                             write_line(self.app, self.stdscr, y, x, line, self.app.window_width, curses.A_REVERSE) #noqa: E501
                         else:
                             write_line(self.app, self.stdscr, y, x, line, self.app.window_width) #noqa: E501
-                menu_bottom = y
+                self.app.menu_bottom = y
 
                 if type(option) is list:
                     options_start_y += (len(option_lines))
 
         # Display pagination information
-        page_info = f"Page {self.app.current_page + 1}/{self.total_pages} | Selected Option: {self.app.current_option + 1}/{len(self.options)}" #noqa: E501
-        write_line(self.app, self.stdscr, max(menu_bottom, self.app.menu_window_height) - 3, 2, page_info, self.app.window_width, curses.A_BOLD) #noqa: E501
 
     def do_menu_up(self):
         if self.app.current_option == self.app.current_page * self.app.options_per_page and self.app.current_page > 0: #noqa: E501
@@ -312,15 +310,15 @@ class MenuDialog(CursesDialog):
         if len(self.app.tui_screens) > 0:
             self.stdscr = self.app.tui_screens[-1].get_stdscr()
         else:
-            self.stdscr = self.app.menu_screen.get_stdscr()
+            self.stdscr = self.app.main_screen.get_stdscr()
         key = self.stdscr.getch()
 
         try:
             if key == -1:  # If key not found, keep processing.
                 pass
-            elif key == curses.KEY_UP or key == 259:  # Up arrow
+            elif key == curses.KEY_UP or key == 259 or key == curses.KEY_LEFT or key == 260:  # Up arrow
                 self.do_menu_up()
-            elif key == curses.KEY_DOWN or key == 258:  # Down arrow
+            elif key == curses.KEY_DOWN or key == 258 or key == curses.KEY_RIGHT or key == 261:  # Down arrow
                 self.do_menu_down()
             elif key == 27:
                 # Sometimes the up/down arrow key is represented by a series of 3 keys.
@@ -332,7 +330,7 @@ class MenuDialog(CursesDialog):
                     elif final_key == 66:
                         self.do_menu_down()
             elif key == ord('\n') or key == 10:  # Enter key
-                self.user_input = self.options[self.app.current_option]
+                self.user_input = self.app.options[self.app.current_option]
             elif key == ord('\x1b'):
                 signal.signal(signal.SIGINT, self.app.end)
         except KeyboardInterrupt:
@@ -348,5 +346,5 @@ class MenuDialog(CursesDialog):
         return self.user_input
 
     def set_options(self, new_options):
-        self.options = new_options
+        self.app.options = new_options
         self.app.menu_options = new_options
