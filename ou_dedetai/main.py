@@ -209,6 +209,10 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
 
     if args.debug:
         msg.update_log_level(logging.DEBUG)
+        if not ephemeral_config.wine_debug:
+            ephemeral_config.wine_debug = constants.DEFAULT_WINEDEBUG
+        # Developers may want to consider adding +relay for excessive debug output
+        ephemeral_config.wine_debug+=',+loaddll,+pid,+threadname'
 
     if args.delete_log:
         ephemeral_config.delete_log = True
