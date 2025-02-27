@@ -64,12 +64,10 @@ class DialogScreen(Screen):
 
 
 class ConsoleScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, title, subtitle, title_start_y):
+    def __init__(self, app, screen_id, queue, event, start_y):
         super().__init__(app, screen_id, queue, event)
-        self.stdscr: Optional[curses.window] = self.app.header_window
-        self.title = title
-        self.subtitle = subtitle
-        self.title_start_y = title_start_y
+        self.stdscr: Optional[curses.window] = self.app.console_window
+        self.start_y = start_y
 
     def __str__(self):
         return "Curses Console Screen"
@@ -79,19 +77,37 @@ class ConsoleScreen(CursesScreen):
             raise Exception("stdscr should be set at this point in the console screen."
                             "Please report this incident to the developers")
         self.stdscr.erase()
-        subtitle_start = tui_curses.title(self.app, self.title, self.title_start_y)
-        tui_curses.title(self.app, self.subtitle, subtitle_start + 1)
-
-        console_start_y = len(tui_curses.wrap_text(self.app, self.title)) + len(
-            tui_curses.wrap_text(self.app, self.subtitle)) + 1
-        tui_curses.write_line(self.app, self.stdscr, console_start_y, self.app.terminal_margin, "---Console---", self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
+        tui_curses.write_line(self.app, self.stdscr, self.start_y, self.app.terminal_margin, "---Console---", self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
         recent_messages = self.app.recent_console_log
         for i, message in enumerate(recent_messages, 1):
             message_lines = tui_curses.wrap_text(self.app, message)
             for j, line in enumerate(message_lines):
                 if 2 + j < self.app.window_height:
                     truncated = message[:self.app.window_width - (self.app.terminal_margin * 2)] #noqa: E501
-                    tui_curses.write_line(self.app, self.stdscr, console_start_y + i, self.app.terminal_margin, truncated, self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
+                    tui_curses.write_line(self.app, self.stdscr, self.start_y + i, self.app.terminal_margin, truncated, self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
+
+
+class HeaderScreen(CursesScreen):
+    def __init__(self, app, screen_id, queue, event, title, subtitle, title_start_y):
+        super().__init__(app, screen_id, queue, event)
+        self.stdscr: Optional[curses.window] = self.app.header_window
+        self.title = title
+        self.subtitle = subtitle
+        self.title_start_y = title_start_y
+
+    def __str__(self):
+        return "Curses Header Screen"
+
+    def display(self):
+        if self.stdscr is None:
+            raise Exception("stdscr should be set at this point in the header screen."
+                            "Please report this incident to the developers")
+        self.stdscr.erase()
+        subtitle_start = tui_curses.title(self.app, self.stdscr, self.title, self.title_start_y)
+        tui_curses.title(self.app, self.stdscr, self.subtitle, subtitle_start + 1)
 
         self.stdscr.noutrefresh()
         curses.doupdate()
@@ -108,7 +124,7 @@ class FooterScreen(CursesScreen):
 
     def display(self):
         if self.stdscr is None:
-            raise Exception("stdscr should be set at this point in the console screen."
+            raise Exception("stdscr should be set at this point in the footer screen."
                             "Please report this incident to the developers")
         self.stdscr.erase()
 
@@ -265,9 +281,9 @@ class TextScreen(CursesScreen):
             raise Exception("stdscr should be set at this point in the console screen."
                             "Please report this incident to the developers")
         self.stdscr.erase()
-        text_start_y, text_lines = tui_curses.text_centered(self.app, self.text)
+        text_start_y, text_lines = tui_curses.text_centered(self.app, self.stdscr, self.text)
         if self.wait:
-            self.spinner_index = tui_curses.spinner(self.app, self.spinner_index, text_start_y + len(text_lines) + 1) #noqa: E501
+            self.spinner_index = tui_curses.spinner(self.app, self.stdscr, self.spinner_index, text_start_y + len(text_lines) + 1) #noqa: E501
             time.sleep(0.1)
         self.stdscr.noutrefresh()
         curses.doupdate()

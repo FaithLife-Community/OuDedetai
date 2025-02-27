@@ -75,23 +75,28 @@ class TUI(App):
 
         # Default height and width to something reasonable so these values are always
         # ints, on each loop these values will be updated to their real values
-        self.window_height_min = 21
+        self.window_height_min = 20
         self.window_height = self.window_width = 80
         self.header_window_height = self.header_window_width = 80
+        self.console_window_height = self.console_window_width = 80
         self.main_window_height = self.main_window_width = 80
         self.footer_window_height = self.footer_window_width = 80
         # Default to a value to allow for int type
         self.header_window_height_min: int = 0
+        self.console_window_height_min: int = 0
         self.main_window_height_min: int = 0
         self.footer_window_height_min: int = 0
 
         self.header_window_ratio: Optional[float] = None
+        self.console_window_ratio: Optional[float] = None
         self.main_window_ratio: Optional[float] = None
         self.footer_window_ratio: Optional[float] = None
         self.header_window: Optional[curses.window] = None
+        self.console_window: Optional[curses.window] = None
         self.main_window: Optional[curses.window] = None
         self.footer_window: Optional[curses.window] = None
         self.resize_window: Optional[curses.window] = None
+        self.windows: list = []
 
         # For menu dialogs.
         # a new MenuDialog is created every loop, so we can't store it there.
@@ -105,6 +110,7 @@ class TUI(App):
         # corresponding @property functions
         self._main_screen: Optional[tui_screen.MenuScreen] = None
         self._active_screen: Optional[tui_screen.Screen] = None
+        self._header: Optional[tui_screen.ConsoleScreen] = None
         self._console: Optional[tui_screen.ConsoleScreen] = None
         self._footer: Optional[tui_screen.FooterScreen] = None
         # End internal property values
@@ -180,9 +186,17 @@ class TUI(App):
     def console(self) -> tui_screen.ConsoleScreen:
         if self._console is None:
             self._console = tui_screen.ConsoleScreen(
-                self, 0, self.status_q, self.status_e, self.title, self.subtitle, 0
+                self, 0, self.status_q, self.status_e, 0
             )  # noqa: E501
         return self._console
+
+    @property
+    def header(self) -> tui_screen.HeaderScreen:
+        if self._header is None:
+            self._header = tui_screen.HeaderScreen(
+                self, 0, self.status_q, self.status_e, self.title, self.subtitle, 0
+            )  # noqa: E501
+        return self._header
 
     @property
     def footer(self) -> tui_screen.FooterScreen:
@@ -198,23 +212,27 @@ class TUI(App):
         return self.console_log[-self.console_log_lines:]
 
     def set_header_window_dimensions(self):
-        self.header_window_ratio = 0.25
+        self.header_window_height_min = 2
+        self.header_window_height = min(max(
+            int(self.window_height * self.header_window_ratio), self.header_window_height_min
+        ), 4)
+
+    def set_console_window_dimensions(self):
         if self.console_log:
             min_console_height = len(tui_curses.wrap_text(self, self.console_log[-1]))
         else:
             min_console_height = 2
-        self.header_window_height_min = 5
-        # self.header_window_height_min = (
-        #     len(tui_curses.wrap_text(self, self.title))
-        #     + len(tui_curses.wrap_text(self, self.subtitle))
-        #     + min_console_height
-        # )
-        self.header_window_height = max(
-            int(self.window_height * self.header_window_ratio), self.header_window_height_min
+        self.header_window_height_min = (
+            len(tui_curses.wrap_text(self, self.title))
+            + len(tui_curses.wrap_text(self, self.subtitle))
+            + min_console_height
+        )
+        self.console_window_height = max(
+            int(self.window_height * self.console_window_ratio), self.console_window_height_min
         )  # noqa: E501
+        self.console_log_lines = max(self.console_window_height - self.console_window_height_min, 1)
 
     def set_footer_window_dimensions(self):
-        self.footer_window_ratio = 0.10
         self.footer_window_height_min = 3
         self.footer_window_height = 3
         #self.footer_window_height = max(
@@ -222,7 +240,6 @@ class TUI(App):
         #)
 
     def set_main_window_dimensions(self):
-        self.main_window_ratio = 0.65
         self.main_window_height_min = 5
         self.main_window_height = max(
             int(self.window_height * self.main_window_ratio), self.main_window_height_min,
@@ -230,21 +247,34 @@ class TUI(App):
 
     def set_window_dimensions(self):
         curses.resizeterm(self.window_height, self.window_width)
+        self.header_window_ratio = 0.10
+        self.console_window_ratio = 0.15
+        self.footer_window_ratio = 0.10
+        self.main_window_ratio = 0.55  # Intentionally short his by 10% to avoid hidden lines
 
         self.set_header_window_dimensions()
+        self.set_console_window_dimensions()
         self.set_footer_window_dimensions()
         self.set_main_window_dimensions()
 
     def set_windows(self):
-        self.console_log_lines = max(self.header_window_height - self.header_window_height_min, 1)
-        self.options_per_page = max(self.window_height - self.header_window_height - self.main_window_height_min - self.footer_window_height, 1)
+        self.options_per_page = max(self.window_height - self.header_window_height - self.console_window_height - self.main_window_height_min - self.footer_window_height, 1)
 
-        self.header_window = curses.newwin(self.header_window_height, curses.COLS, 0, 0)
-        self.main_window = curses.newwin(self.main_window_height, curses.COLS, self.header_window_height + 1, 0)
-        self.footer_window = curses.newwin(self.footer_window_height, curses.COLS, self.header_window_height + self.main_window_height, 0)
+        header_window_start = 0
+        console_window_start = self.header_window_height
+        main_window_start = self.header_window_height + self.console_window_height + 1
+        footer_window_start = self.header_window_height + self.console_window_height + self.main_window_height + 2
+
+        self.header_window = curses.newwin(self.header_window_height, curses.COLS, header_window_start, 0)
+        self.console_window = curses.newwin(self.console_window_height, curses.COLS, console_window_start, 0)
+        self.main_window = curses.newwin(self.main_window_height, curses.COLS, main_window_start, 0)
+        self.footer_window = curses.newwin(self.footer_window_height, curses.COLS, footer_window_start, 0)
 
         resize_lines = tui_curses.wrap_text(self, "Screen too small.")
         self.resize_window = curses.newwin(len(resize_lines) + 1, curses.COLS, 0, 0)
+
+        self.windows = [self.header_window, self.console_window, self.main_window,
+                        self.footer_window]
 
     def create_windows(self):
         self.update_tty_dimensions()
@@ -266,71 +296,38 @@ class TUI(App):
         curses.init_pair(6, curses.COLOR_BLACK, curses.COLOR_WHITE)  # Light
         curses.init_pair(7, curses.COLOR_WHITE, curses.COLOR_BLACK)  # Dark
 
+    def set_background_color(self, color_pair_option):
+        self.stdscr.bkgd(" ", curses.color_pair(color_pair_option))
+        for i in self.windows:
+            if i:
+                i.bkgd(" ", curses.color_pair(color_pair_option))
+
     def set_curses_color_scheme(self):
         if self.conf.curses_color_scheme == "System":
-            self.stdscr.bkgd(" ", curses.color_pair(1))
-            if self.header_window:
-                self.header_window.bkgd(" ", curses.color_pair(1))
-            if self.main_window:
-                self.main_window.bkgd(" ", curses.color_pair(1))
-            if self.footer_window:
-                self.footer_window.bkgd(" ", curses.color_pair(1))
+            self.set_background_color(1)
         elif self.conf.curses_color_scheme == "Logos":
-            self.stdscr.bkgd(" ", curses.color_pair(4))
-            if self.header_window:
-                self.header_window.bkgd(" ", curses.color_pair(4))
-            if self.main_window:
-                self.main_window.bkgd(" ", curses.color_pair(4))
-            if self.footer_window:
-                self.footer_window.bkgd(" ", curses.color_pair(4))
+            self.set_background_color(4)
         elif self.conf.curses_color_scheme == "Light":
-            self.stdscr.bkgd(" ", curses.color_pair(6))
-            if self.header_window:
-                self.header_window.bkgd(" ", curses.color_pair(6))
-            if self.main_window:
-                self.main_window.bkgd(" ", curses.color_pair(6))
-            if self.footer_window:
-                self.footer_window.bkgd(" ", curses.color_pair(6))
+            self.set_background_color(6)
         elif self.conf.curses_color_scheme == "Dark":
-            self.stdscr.bkgd(" ", curses.color_pair(7))
-            if self.header_window:
-                self.header_window.bkgd(" ", curses.color_pair(7))
-            if self.main_window:
-                self.main_window.bkgd(" ", curses.color_pair(7))
-            if self.footer_window:
-                self.footer_window.bkgd(" ", curses.color_pair(7))
+            self.set_background_color(7)
 
     def erase(self):
-        if self.header_window:
-            self.header_window.erase()
-        if self.main_window:
-            self.main_window.erase()
-        if self.footer_window:
-            self.footer_window.erase()
-        if self.resize_window:
-            self.resize_window.erase()
+        for i in self.windows:
+            if i:
+                i.erase()
 
     def clear(self):
         self.stdscr.clear()
-        if self.header_window:
-            self.header_window.clear()
-        if self.main_window:
-            self.main_window.clear()
-        if self.footer_window:
-            self.footer_window.clear()
-        if self.resize_window:
-            self.resize_window.clear()
+        for i in self.windows:
+            if i:
+                i.clear()
 
     def refresh(self):
         self.stdscr.timeout(100)
-        if self.header_window:
-            self.header_window.noutrefresh()
-        if self.main_window:
-            self.main_window.noutrefresh()
-        if self.footer_window:
-            self.footer_window.noutrefresh()
-        if self.resize_window:
-            self.resize_window.noutrefresh()
+        for i in self.windows:
+            if i:
+                i.noutrefresh()
         curses.doupdate()
 
     def init_curses(self):
@@ -345,6 +342,7 @@ class TUI(App):
             self.stdscr.keypad(True)
 
             # Reset console/main_screen. They'll be initialized next access
+            self._header = None
             self._console = None
             self._main_screen = tui_screen.MenuScreen(
                 self,
@@ -428,6 +426,7 @@ class TUI(App):
             margin = 0
         resize_lines = tui_curses.wrap_text(self, "Screen too small.")
         self.resize_window = curses.newwin(len(resize_lines) + 1, curses.COLS, 0, 0)
+        self.windows = [self.resize_window]
         for i, line in enumerate(resize_lines):
             if i < self.window_height:
                 tui_curses.write_line(
@@ -453,7 +452,6 @@ class TUI(App):
 
         self.active_screen = self.main_screen
         check_resize_last_time = last_time = time.time()
-        self.logos.monitor()
 
         while self.is_running:
             if self.window_height >= self.window_height_min and self.window_width >= 35:
@@ -461,6 +459,7 @@ class TUI(App):
                 if not self.resizing:
                     if isinstance(self.active_screen, tui_screen.CursesScreen):
                         self.erase()
+                        self.header.display()
                         self.console.display()
                         self.footer.display()
 
