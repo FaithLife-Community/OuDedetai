@@ -75,30 +75,38 @@ class TUI(App):
 
         # Default height and width to something reasonable so these values are always
         # ints, on each loop these values will be updated to their real values
+        self.window_height_min = 21
         self.window_height = self.window_width = 80
-        self.main_window_height = self.menu_window_height = 80
+        self.header_window_height = self.header_window_width = 80
+        self.main_window_height = self.main_window_width = 80
+        self.footer_window_height = self.footer_window_width = 80
         # Default to a value to allow for int type
-        self.main_window_min: int = 0
-        self.menu_window_min: int = 0
+        self.header_window_height_min: int = 0
+        self.main_window_height_min: int = 0
+        self.footer_window_height_min: int = 0
 
-        self.menu_window_ratio: Optional[float] = None
+        self.header_window_ratio: Optional[float] = None
         self.main_window_ratio: Optional[float] = None
-        self.main_window_ratio = None
+        self.footer_window_ratio: Optional[float] = None
+        self.header_window: Optional[curses.window] = None
         self.main_window: Optional[curses.window] = None
-        self.menu_window: Optional[curses.window] = None
+        self.footer_window: Optional[curses.window] = None
         self.resize_window: Optional[curses.window] = None
 
         # For menu dialogs.
         # a new MenuDialog is created every loop, so we can't store it there.
+        self.options: list = []
         self.current_option: int = 0
         self.current_page: int = 0
         self.total_pages: int = 0
+        self.menu_bottom: int = 0
 
         # Start internal property variables, shouldn't be accessed directly, see their 
         # corresponding @property functions
-        self._menu_screen: Optional[tui_screen.MenuScreen] = None
+        self._main_screen: Optional[tui_screen.MenuScreen] = None
         self._active_screen: Optional[tui_screen.Screen] = None
         self._console: Optional[tui_screen.ConsoleScreen] = None
+        self._footer: Optional[tui_screen.FooterScreen] = None
         # End internal property values
 
         # Lines for the on-screen console log
@@ -129,7 +137,7 @@ class TUI(App):
         self.use_python_dialog = False
 
         logging.debug(f"Use Python Dialog?: {self.use_python_dialog}")
-        self.set_window_dimensions()
+        self.create_windows()
 
         self.config_updated_hooks += [self._config_update_hook]
 
@@ -146,7 +154,7 @@ class TUI(App):
     @property
     def active_screen(self) -> tui_screen.Screen:
         if self._active_screen is None:
-            self._active_screen = self.menu_screen
+            self._active_screen = self.main_screen
             if self._active_screen is None:
                 raise ValueError("Curses hasn't been initialized yet")
         return self._active_screen
@@ -156,9 +164,9 @@ class TUI(App):
         self._active_screen = value
 
     @property
-    def menu_screen(self) -> tui_screen.MenuScreen:
-        if self._menu_screen is None:
-            self._menu_screen = tui_screen.MenuScreen(
+    def main_screen(self) -> tui_screen.MenuScreen:
+        if self._main_screen is None:
+            self._main_screen = tui_screen.MenuScreen(
                 self,
                 0,
                 self.status_q,
@@ -166,7 +174,7 @@ class TUI(App):
                 "Main Menu",
                 self.set_tui_menu_options(),
             )  # noqa: E501
-        return self._menu_screen
+        return self._main_screen
     
     @property
     def console(self) -> tui_screen.ConsoleScreen:
@@ -177,41 +185,71 @@ class TUI(App):
         return self._console
 
     @property
+    def footer(self) -> tui_screen.FooterScreen:
+        if self._footer is None:
+            self._footer = tui_screen.FooterScreen(
+                self, 0, self.status_q, self.status_e, 0
+            )  # noqa: E501
+        return self._footer
+
+    @property
     def recent_console_log(self) -> list[str]:
         """Outputs console log trimmed by the maximum length"""
         return self.console_log[-self.console_log_lines:]
 
-    def set_window_dimensions(self):
-        self.update_tty_dimensions()
-        curses.resizeterm(self.window_height, self.window_width)
-        self.main_window_ratio = 0.25
+    def set_header_window_dimensions(self):
+        self.header_window_ratio = 0.25
         if self.console_log:
             min_console_height = len(tui_curses.wrap_text(self, self.console_log[-1]))
         else:
             min_console_height = 2
-        self.main_window_min = (
-            len(tui_curses.wrap_text(self, self.title))
-            + len(tui_curses.wrap_text(self, self.subtitle))
-            + min_console_height
-        )
-        self.menu_window_ratio = 0.75
-        self.menu_window_min = 3
-        self.main_window_height = max(
-            int(self.window_height * self.main_window_ratio), self.main_window_min
-        )  # noqa: E501#noqa: E501
-        self.menu_window_height = max(
-            self.window_height - self.main_window_height,
-            int(self.window_height * self.menu_window_ratio),
-            self.menu_window_min,
+        self.header_window_height_min = 5
+        # self.header_window_height_min = (
+        #     len(tui_curses.wrap_text(self, self.title))
+        #     + len(tui_curses.wrap_text(self, self.subtitle))
+        #     + min_console_height
+        # )
+        self.header_window_height = max(
+            int(self.window_height * self.header_window_ratio), self.header_window_height_min
         )  # noqa: E501
-        self.console_log_lines = max(self.main_window_height - self.main_window_min, 1)
-        self.options_per_page = max(self.window_height - self.main_window_height - 6, 1)
-        self.main_window = curses.newwin(self.main_window_height, curses.COLS, 0, 0)
-        self.menu_window = curses.newwin(
-            self.menu_window_height, curses.COLS, self.main_window_height + 1, 0
-        )
+
+    def set_footer_window_dimensions(self):
+        self.footer_window_ratio = 0.10
+        self.footer_window_height_min = 3
+        self.footer_window_height = 3
+        #self.footer_window_height = max(
+        #    int(self.window_height * self.footer_window_ratio), self.footer_window_height_min
+        #)
+
+    def set_main_window_dimensions(self):
+        self.main_window_ratio = 0.65
+        self.main_window_height_min = 5
+        self.main_window_height = max(
+            int(self.window_height * self.main_window_ratio), self.main_window_height_min,
+        )  # noqa: E501
+
+    def set_window_dimensions(self):
+        curses.resizeterm(self.window_height, self.window_width)
+
+        self.set_header_window_dimensions()
+        self.set_footer_window_dimensions()
+        self.set_main_window_dimensions()
+
+    def set_windows(self):
+        self.console_log_lines = max(self.header_window_height - self.header_window_height_min, 1)
+        self.options_per_page = max(self.window_height - self.header_window_height - self.main_window_height_min - self.footer_window_height, 1)
+
+        self.header_window = curses.newwin(self.header_window_height, curses.COLS, 0, 0)
+        self.main_window = curses.newwin(self.main_window_height, curses.COLS, self.header_window_height + 1, 0)
+        self.footer_window = curses.newwin(self.footer_window_height, curses.COLS, self.header_window_height + self.main_window_height, 0)
+
         resize_lines = tui_curses.wrap_text(self, "Screen too small.")
         self.resize_window = curses.newwin(len(resize_lines) + 1, curses.COLS, 0, 0)
+
+    def create_windows(self):
+        self.update_tty_dimensions()
+        self.set_window_dimensions()
+        self.set_windows()
 
     @staticmethod
     def set_curses_style():
@@ -231,52 +269,66 @@ class TUI(App):
     def set_curses_color_scheme(self):
         if self.conf.curses_color_scheme == "System":
             self.stdscr.bkgd(" ", curses.color_pair(1))
+            if self.header_window:
+                self.header_window.bkgd(" ", curses.color_pair(1))
             if self.main_window:
                 self.main_window.bkgd(" ", curses.color_pair(1))
-            if self.menu_window:
-                self.menu_window.bkgd(" ", curses.color_pair(1))
+            if self.footer_window:
+                self.footer_window.bkgd(" ", curses.color_pair(1))
         elif self.conf.curses_color_scheme == "Logos":
             self.stdscr.bkgd(" ", curses.color_pair(4))
+            if self.header_window:
+                self.header_window.bkgd(" ", curses.color_pair(4))
             if self.main_window:
                 self.main_window.bkgd(" ", curses.color_pair(4))
-            if self.menu_window:
-                self.menu_window.bkgd(" ", curses.color_pair(4))
+            if self.footer_window:
+                self.footer_window.bkgd(" ", curses.color_pair(4))
         elif self.conf.curses_color_scheme == "Light":
             self.stdscr.bkgd(" ", curses.color_pair(6))
+            if self.header_window:
+                self.header_window.bkgd(" ", curses.color_pair(6))
             if self.main_window:
                 self.main_window.bkgd(" ", curses.color_pair(6))
-            if self.menu_window:
-                self.menu_window.bkgd(" ", curses.color_pair(6))
+            if self.footer_window:
+                self.footer_window.bkgd(" ", curses.color_pair(6))
         elif self.conf.curses_color_scheme == "Dark":
             self.stdscr.bkgd(" ", curses.color_pair(7))
+            if self.header_window:
+                self.header_window.bkgd(" ", curses.color_pair(7))
             if self.main_window:
                 self.main_window.bkgd(" ", curses.color_pair(7))
-            if self.menu_window:
-                self.menu_window.bkgd(" ", curses.color_pair(7))
+            if self.footer_window:
+                self.footer_window.bkgd(" ", curses.color_pair(7))
 
-    def update_windows(self):
-        if isinstance(self.active_screen, tui_screen.CursesScreen):
-            if self.main_window:
-                self.main_window.erase()
-            if self.menu_window:
-                self.menu_window.erase()
-            self.stdscr.timeout(100)
-            self.console.display()
+    def erase(self):
+        if self.header_window:
+            self.header_window.erase()
+        if self.main_window:
+            self.main_window.erase()
+        if self.footer_window:
+            self.footer_window.erase()
+        if self.resize_window:
+            self.resize_window.erase()
 
     def clear(self):
         self.stdscr.clear()
+        if self.header_window:
+            self.header_window.clear()
         if self.main_window:
             self.main_window.clear()
-        if self.menu_window:
-            self.menu_window.clear()
+        if self.footer_window:
+            self.footer_window.clear()
         if self.resize_window:
             self.resize_window.clear()
 
     def refresh(self):
+        self.stdscr.timeout(100)
+        if self.header_window:
+            self.header_window.noutrefresh()
         if self.main_window:
             self.main_window.noutrefresh()
-        if self.menu_window:
-            self.menu_window.noutrefresh()
+        if self.footer_window:
+            self.footer_window.noutrefresh()
         if self.resize_window:
             self.resize_window.noutrefresh()
         curses.doupdate()
@@ -292,9 +344,9 @@ class TUI(App):
             curses.cbreak()
             self.stdscr.keypad(True)
 
-            # Reset console/menu_screen. They'll be initialized next access
+            # Reset console/main_screen. They'll be initialized next access
             self._console = None
-            self._menu_screen = tui_screen.MenuScreen(
+            self._main_screen = tui_screen.MenuScreen(
                 self,
                 0,
                 self.status_q,
@@ -302,7 +354,8 @@ class TUI(App):
                 "Main Menu",
                 self.set_tui_menu_options(),
             )  # noqa: E501
-            # self.menu_screen = tui_screen.MenuDialog(self, 0, self.status_q, self.status_e, "Main Menu", self.set_tui_menu_options(dialog=True)) #noqa: E501
+            self._footer = None
+            # self.main_screen = tui_screen.MenuDialog(self, 0, self.status_q, self.status_e, "Main Menu", self.set_tui_menu_options(dialog=True)) #noqa: E501
             self.refresh()
         except curses.error as e:
             logging.error(f"Curses error in init_curses: {e}")
@@ -337,7 +390,7 @@ class TUI(App):
         curses.endwin()
 
     def update_main_window_contents(self):
-        self.menu_screen.set_options(self.set_tui_menu_options())
+        self.main_screen.set_options(self.set_tui_menu_options())
 
     # ERR: On a sudden resize, the Curses menu is not properly resized,
     # and we are not currently dynamically passing the menu options based
@@ -349,8 +402,7 @@ class TUI(App):
     def resize_curses(self):
         self.resizing = True
         curses.endwin()
-        self.update_tty_dimensions()
-        self.set_window_dimensions()
+        self.create_windows()
         self.clear()
         self.init_curses()
         self.refresh()
@@ -370,7 +422,7 @@ class TUI(App):
 
     def draw_resize_screen(self):
         self.clear()
-        if self.window_width > 10:
+        if self.window_width > self.window_height_min:
             margin = self.terminal_margin
         else:
             margin = 0
@@ -399,21 +451,24 @@ class TUI(App):
         self.status_q.put(f"{timestamp} {self.console_message}")
         self.report_waiting(f"{self.console_message}")  # noqa: E501
 
-        self.active_screen = self.menu_screen
+        self.active_screen = self.main_screen
         check_resize_last_time = last_time = time.time()
         self.logos.monitor()
 
         while self.is_running:
-            if self.window_height >= 10 and self.window_width >= 35:
+            if self.window_height >= self.window_height_min and self.window_width >= 35:
                 self.terminal_margin = 2
                 if not self.resizing:
-                    self.update_windows()
+                    if isinstance(self.active_screen, tui_screen.CursesScreen):
+                        self.erase()
+                        self.console.display()
+                        self.footer.display()
 
                     self.active_screen.display()
 
                     if self.choice_q.qsize() > 0:
                         self.choice_processor(
-                            self.menu_window,
+                            self.main_window,
                             self.active_screen.screen_id,
                             self.choice_q.get(),
                         )
@@ -422,7 +477,7 @@ class TUI(App):
                                 self.tui_screens.pop()
 
                     if len(self.tui_screens) == 0:
-                        self.active_screen = self.menu_screen
+                        self.active_screen = self.main_screen
                     else:
                         self.active_screen = self.tui_screens[-1]
 
@@ -430,16 +485,16 @@ class TUI(App):
                         run_monitor, last_time = utils.stopwatch(last_time, 2.5)
                         if run_monitor:
                             self.logos.monitor()
-                            self.menu_screen.set_options(self.set_tui_menu_options())
+                            self.main_screen.set_options(self.set_tui_menu_options())
 
                     if isinstance(self.active_screen, tui_screen.CursesScreen):
                         self.refresh()
-            elif self.window_width >= 10:
-                if self.window_width < 10:
+            elif self.window_width >= self.window_height_min:
+                if self.window_width < self.window_height_min:
                     # Avoid drawing errors on very small screens
                     self.terminal_margin = 1
                 self.draw_resize_screen()
-            elif self.window_width < 10:
+            elif self.window_width < self.window_height_min:
                 self.terminal_margin = 0  # Avoid drawing errors on very small screens
             # Check every second to see if the screen resized without our know-how
             # This is done on a timer because curses.is_term_resized takes a fair bit of
@@ -516,9 +571,9 @@ class TUI(App):
     def go_to_main_menu(self):
         self.tui_screens = []
         self.reset_screen()
-        self.menu_screen.choice = "Processing"
+        self.main_screen.choice = "Processing"
         # Reset running state of main menu so it can submit again.
-        self.menu_screen.running = 0
+        self.main_screen.running = 0
         self.choice_q.put("Return to Main Menu")
 
     def main_menu_select(self, choice):
@@ -561,11 +616,11 @@ class TUI(App):
         elif self.conf._raw.faithlife_product and choice == f"Run {self.conf._raw.faithlife_product}": #noqa: E501
             self.reset_screen()
             self.logos.start()
-            self.menu_screen.set_options(self.set_tui_menu_options())
+            self.main_screen.set_options(self.set_tui_menu_options())
         elif self.conf._raw.faithlife_product and choice == f"Stop {self.conf.faithlife_product}": #noqa: E501
             self.reset_screen()
             self.logos.stop()
-            self.menu_screen.set_options(self.set_tui_menu_options())
+            self.main_screen.set_options(self.set_tui_menu_options())
         elif choice == "Run Indexing":
             self.active_screen.running = 0
             self.active_screen.choice = "Processing"
@@ -698,9 +753,9 @@ class TUI(App):
             appimage_filename = choice
         self.conf.wine_appimage_path = Path(appimage_filename)
         utils.set_appimage_symlink(self)
-        if not self.menu_window:
+        if not self.main_window:
             raise ValueError("Curses hasn't been initialized")
-        self.menu_screen.choice = "Processing"
+        self.main_screen.choice = "Processing"
         self.appimage_q.put(str(self.conf.wine_appimage_path))
         self.appimage_e.set()
 
@@ -718,7 +773,7 @@ class TUI(App):
 
     def password_prompt(self, choice):
         if choice:
-            self.menu_screen.choice = "Processing"
+            self.main_screen.choice = "Processing"
             self.password_q.put(choice)
             self.password_e.set()
 
@@ -749,13 +804,13 @@ class TUI(App):
     def switch_screen(self):
         if (
             self.active_screen is not None
-            and self.active_screen != self.menu_screen
+            and self.active_screen != self.main_screen
             and len(self.tui_screens) > 0
         ):  # noqa: E501
             self.tui_screens.pop(0)
-        if self.active_screen == self.menu_screen:
-            self.menu_screen.choice = "Processing"
-            self.menu_screen.running = 0
+        if self.active_screen == self.main_screen:
+            self.main_screen.choice = "Processing"
+            self.main_screen.running = 0
         if isinstance(self.active_screen, tui_screen.CursesScreen):
             self.clear()
 
@@ -1202,8 +1257,8 @@ class TUI(App):
     def update_tty_dimensions(self):
         self.window_height, self.window_width = self.stdscr.getmaxyx()
 
-    def get_menu_window(self):
-        return self.menu_window
+    def get_main_window(self):
+        return self.main_window
 
 
 def control_panel_app(stdscr: curses.window, ephemeral_config: EphemeralConfiguration):
