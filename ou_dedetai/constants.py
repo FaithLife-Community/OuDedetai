@@ -91,8 +91,7 @@ PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
 FAITHLIFE_PRODUCT_VERSIONS = ["10"]
 
-# XXX: edit the below to tell them to generate a support bundle instead.
-SUPPORT_MESSAGE = f"If you need help, please consult:\n{WIKI_LINK}\nIf that doesn't answer your question, please send the following files {DEFAULT_CONFIG_PATH}, {DEFAULT_APP_WINE_LOG_PATH} and {DEFAULT_APP_LOG_PATH} to one of the following group chats:\nTelegram: {TELEGRAM_LINK}\nMatrix: {MATRIX_LINK}"  # noqa: E501
+SUPPORT_MESSAGE = f"If you need help, please consult:\n{WIKI_LINK}\nIf that doesn't answer your question, please use the \"Get Support\" option"  # noqa: E501
 DEFAULT_SUPPORT_FILE_NAME = "FaithlifeCommunitySupport.zip"
 
 # Strings for choosing a follow up file or directory
