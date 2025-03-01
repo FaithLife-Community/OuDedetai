@@ -250,7 +250,7 @@ class TUI(App):
         self.header_window_ratio = 0.10
         self.console_window_ratio = 0.15
         self.footer_window_ratio = 0.10
-        self.main_window_ratio = 0.55  # Intentionally short his by 10% to avoid hidden lines
+        self.main_window_ratio = 0.55  # Intentionally short this by 10% to avoid hidden lines
 
         self.set_header_window_dimensions()
         self.set_console_window_dimensions()
