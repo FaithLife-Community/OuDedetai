@@ -1,7 +1,7 @@
 import copy
 import os
 import subprocess
-from typing import Optional
+from typing import Any, Optional
 from dataclasses import dataclass
 import json
 import logging
@@ -409,22 +409,7 @@ class PersistentConfiguration:
             _legacy=legacy
         )
 
-    def write_json_file(self, output: dict, config_file_path: str) -> None:
-        logging.info(f"Writing config to {config_file_path}")
-        os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
-        try:
-            with open(config_file_path, 'w') as config_file:
-                # Write this into a string first to avoid partial writes
-                # if encoding fails (which it shouldn't)
-                json_str = json.dumps(output, indent=4, sort_keys=True)
-                config_file.write(json_str)
-                config_file.write('\n')
-        except IOError as e:
-            logging.error(f"Error writing to file {config_file_path}: {e}")  # noqa: E501
-            # Continue, the installer can still operate even if it fails to write.
-
-    def write_config(self) -> None:
-        config_file_path = LegacyConfiguration.config_file_path()
+    def _as_dict(self) -> dict[str, Any]:
         # Copy the values into a flat structure for easy json dumping
         output = copy.deepcopy(self.__dict__)
         # Merge the legacy dictionary if present
@@ -439,7 +424,6 @@ class PersistentConfiguration:
                 or k == "CONFIG_FILE"
             ):
                 del output[k]
-
         if self.install_dir is not None:
             # Ensure all paths stored are relative to install_dir
             for k, v in output.items():
@@ -449,11 +433,31 @@ class PersistentConfiguration:
                     continue
                 if (isinstance(v, str) and v.startswith(self.install_dir)): #noqa: E501
                     output[k] = utils.get_relative_path(v, self.install_dir)
+        return output
 
+    def write_config(self) -> None:
+        config_file_path = LegacyConfiguration.config_file_path()
+        output = self._as_dict()
+
+        def write_json_file(config_file_path: str) -> None:
+            logging.info(f"Writing config to {config_file_path}")
+            os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
+            try:
+                with open(config_file_path, 'w') as config_file:
+                    # Write this into a string first to avoid partial writes
+                    # if encoding fails (which it shouldn't)
+                    json_str = json.dumps(output, indent=4, sort_keys=True)
+                    config_file.write(json_str)
+                    config_file.write('\n')
+            except IOError as e:
+                logging.error(f"Error writing to file {config_file_path}: {e}")  # noqa: E501
+                # Continue, the installer can still operate even if it fails to write.
+
+        if self.install_dir is not None:
             portable_config_path = os.path.expanduser(self.install_dir + f"/{constants.BINARY_NAME}.json") #noqa: E501
-            self.write_json_file(output, portable_config_path)
+            write_json_file(portable_config_path)
 
-        self.write_json_file(output, config_file_path)
+        write_json_file(config_file_path)
 
 # Needed this logic outside this class too for before when the app is initialized
 def get_wine_prefix_path(install_dir: str) -> str:
@@ -735,7 +739,7 @@ class Config:
 
     @property
     def install_dir_default(self) -> str:
-        return f"{str(constants.XDG_DATA_HOME)}/{constants.BINARY_NAME}"  # noqa: E501
+        return f"{constants.DATA_HOME}/{constants.BINARY_NAME}"  # noqa: E501
 
     @property
     def install_dir(self) -> str:
@@ -1091,7 +1095,7 @@ class Config:
     @property
     def download_dir(self) -> str:
         if self._download_dir is None:
-            self._download_dir = str(constants.CACHE_DIR)
+            self._download_dir = constants.CACHE_DIR
         return self._download_dir
     
     @property

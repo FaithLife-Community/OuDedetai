@@ -4,6 +4,7 @@ import threading
 import time
 from typing import Optional, Tuple
 
+from ou_dedetai import constants
 from ou_dedetai.app import App
 from ou_dedetai.config import EphemeralConfiguration
 from ou_dedetai.system import SuperuserCommandNotFound
@@ -91,6 +92,9 @@ class CLI(App):
     def update_self(self):
         utils.update_to_latest_lli_release(self)
 
+    def get_support(self):
+        control.get_support(self)
+
     _exit_option: str = "Exit"
 
     def _ask(self, question: str, options: list[str] | str) -> str:
@@ -116,6 +120,8 @@ class CLI(App):
         self.input_event.set()
         # Signal CLI itself to stop.
         self.running = False
+        # We always want this to return regardless of level
+        print(f"Closing {constants.APP_NAME} due to: {reason}")
         return super().exit(reason, intended)
     
     def _status(self, message: str, percent: Optional[int] = None):
