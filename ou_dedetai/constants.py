@@ -45,6 +45,7 @@ REPO_NAME = 'OuDedetai'
 
 REPOSITORY_LINK = f"https://github.com/FaithLife-Community/{REPO_NAME}"
 WIKI_LINK = f"{REPOSITORY_LINK}/wiki"
+REPOSITORY_NEW_ISSUE_LINK = f"{REPOSITORY_LINK}/issues/new"
 TELEGRAM_LINK = "https://t.me/linux_logos"
 MATRIX_LINK = "https://matrix.to/#/#logosbible:matrix.org"
 
@@ -55,12 +56,12 @@ if RUNMODE == 'snap':
     _snap_user_common = os.getenv('SNAP_USER_COMMON')
     if _snap_user_common is None:
         raise ValueError("SNAP_USER_COMMON environment MUST exist when running a snap.")
-    CACHE_DIR = Path(_snap_user_common) / '.cache' / 'FaithLife-Community'
+    CACHE_DIR = str(Path(_snap_user_common) / '.cache' / 'FaithLife-Community')
     del _snap_user_common
 else:
-    CACHE_DIR = Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache' / 'FaithLife-Community')) #noqa: E501
+    CACHE_DIR = str(Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache' / 'FaithLife-Community'))) #noqa: E501
 
-XDG_DATA_HOME = Path(os.getenv('XDG_DATA_HOME', Path.home() / '.local/share' / 'FaithLife-Community')) #noqa: E501
+DATA_HOME = str(Path(os.getenv('XDG_DATA_HOME', Path.home() / '.local/share' / 'FaithLife-Community'))) #noqa: E501
 CONFIG_DIR = os.getenv("XDG_CONFIG_HOME", "~/.config") + "/FaithLife-Community"
 STATE_DIR = os.getenv("XDG_STATE_HOME", "~/.local/state") + "/FaithLife-Community"
 
@@ -88,13 +89,18 @@ LOGOS_WHITE = '#FCFCFC'
 PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
-FAITHLIFE_PRODUCT_VERSIONS = ["10", "9"]
+FAITHLIFE_PRODUCT_VERSIONS = ["10"]
 
+# XXX: edit the below to tell them to generate a support bundle instead.
 SUPPORT_MESSAGE = f"If you need help, please consult:\n{WIKI_LINK}\nIf that doesn't answer your question, please send the following files {DEFAULT_CONFIG_PATH}, {DEFAULT_APP_WINE_LOG_PATH} and {DEFAULT_APP_LOG_PATH} to one of the following group chats:\nTelegram: {TELEGRAM_LINK}\nMatrix: {MATRIX_LINK}"  # noqa: E501
+DEFAULT_SUPPORT_FILE_NAME = "FaithlifeCommunitySupport.zip"
 
 # Strings for choosing a follow up file or directory
 PROMPT_OPTION_DIRECTORY = "Choose Directory"
 PROMPT_OPTION_FILE = "Choose File"
+PROMPT_OPTION_NEW_FILE = "Save as"
+
+PROMPT_OPTION_SIGILS = [PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE, PROMPT_OPTION_NEW_FILE] #noqa: E501
 
 # String for when a binary is meant to be downloaded later
 DOWNLOAD = "Download"

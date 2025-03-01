@@ -176,17 +176,20 @@ class CachedRequests:
         return CachedRequests(
             last_updated=time.time()
         )
+    
+    def _as_dict(self) -> dict[str, str]:
+        output = self.__dict__.copy()
+        for output_key in self.__dict__.keys():
+            if output_key.startswith("_"):
+                del output[output_key]
+        return output
 
     def _write(self) -> None:
         """Writes the cache to disk. Done internally when there are changes"""
         path = Path(constants.NETWORK_CACHE_PATH)
         path.parent.mkdir(exist_ok=True, parents=True)
         with open(path, "w") as f:
-            output = self.__dict__.copy()
-            for output_key in self.__dict__.keys():
-                if output_key.startswith("_"):
-                    del output[output_key]
-            json.dump(output, f, indent=4, sort_keys=True, default=vars)
+            json.dump(self._as_dict(), f, indent=4, sort_keys=True, default=vars)
             f.write("\n")
         if self._update_hook:
             self._update_hook()

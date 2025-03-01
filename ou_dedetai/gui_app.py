@@ -19,7 +19,11 @@ from tkinter.ttk import Style
 from typing import Callable, Optional
 
 from ou_dedetai.app import App
-from ou_dedetai.constants import PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE
+from ou_dedetai.constants import (
+    PROMPT_OPTION_DIRECTORY,
+    PROMPT_OPTION_FILE,
+    PROMPT_OPTION_NEW_FILE,
+)
 from ou_dedetai.config import EphemeralConfiguration
 
 from . import constants
@@ -72,6 +76,12 @@ class GuiApp(App):
                 title=question,
                 initialdir=Path().home(),
             )
+        elif answer == PROMPT_OPTION_NEW_FILE:
+            answer = fd.asksaveasfilename(
+                parent=self.root,
+                title=question,
+                initialdir=Path().home(),
+            )
         return answer
 
     def _status(self, message, percent = None):
@@ -87,8 +97,6 @@ class GuiApp(App):
             self._status_gui.progress.config(mode='indeterminate')
             self._status_gui.progress.start()
         self._status_gui.statusvar.set(message)
-        if message:
-            super()._status(message, percent)
 
     def clear_status(self):
         self._status('', 0)
@@ -451,6 +459,7 @@ class ControlWindow(GuiApp):
             command=self.switch_logging
         )
         self.gui.logging_button.state(['disabled'])
+        self.gui.support_button.config(command=self.get_support)
 
         self.gui.config_button.config(command=self.edit_config)
         self.gui.deps_button.config(command=self.install_deps)
@@ -569,7 +578,6 @@ class ControlWindow(GuiApp):
         utils.update_to_latest_recommended_appimage(self)
         self.root.event_generate(evt)
 
-
     def set_appimage(self, evt=None):
         # TODO: Separate as advanced feature.
         appimage_filename = self.open_file_dialog("AppImage", "AppImage")
@@ -586,6 +594,11 @@ class ControlWindow(GuiApp):
             self.logos.switch_logging,
             action=desired_state.lower()
         )
+
+    def get_support(self):
+        def _run():
+            control.get_support(self)
+        self.start_thread(_run)
 
     def update_logging_button(self, evt=None):
         state = self.reverse_logging_state_value(self.current_logging_state_value())

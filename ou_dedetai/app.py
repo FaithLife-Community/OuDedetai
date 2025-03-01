@@ -10,7 +10,8 @@ from typing import Callable, NoReturn, Optional
 from ou_dedetai import constants
 from ou_dedetai.constants import (
     PROMPT_OPTION_DIRECTORY,
-    PROMPT_OPTION_FILE
+    PROMPT_OPTION_FILE,
+    PROMPT_OPTION_NEW_FILE
 )
 
 
@@ -63,7 +64,7 @@ class App(abc.ABC):
         If the internal ask function returns None, the process will exit with 1
         """
         def validate_result(answer: str, options: list[str]) -> Optional[str]:
-            special_cases = set([PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE])
+            special_cases = set(constants.PROMPT_OPTION_SIGILS)
             # These constants have special meaning, don't worry about them to start with
             simple_options = list(set(options) - special_cases)
             # This MUST have the same indexes as above
@@ -82,6 +83,8 @@ class App(abc.ABC):
                 return answer
             if PROMPT_OPTION_DIRECTORY in options and Path(answer).is_dir():
                 return answer
+            if PROMPT_OPTION_NEW_FILE in options and Path(answer).parent.is_dir():
+                return answer
 
             # Not valid
             return None
@@ -94,10 +97,7 @@ class App(abc.ABC):
                     return option
 
         passed_options: list[str] | str = options
-        if len(passed_options) == 1 and (
-            PROMPT_OPTION_DIRECTORY in passed_options
-            or PROMPT_OPTION_FILE in passed_options
-        ):
+        if len(passed_options) == 1 and passed_options[0] in constants.PROMPT_OPTION_SIGILS: #noqa: E501
             # Set the only option to be the follow up prompt
             passed_options = options[0]
         elif passed_options is not None and self._exit_option is not None:
@@ -209,11 +209,11 @@ class App(abc.ABC):
             current_step_percent = percent or 0
             # We're further than the start of our current step, percent more
             installer_percent = round((self.installer_step * 100 + current_step_percent) / self.installer_step_count) # noqa: E501
-            logging.debug(f"Install {installer_percent}: {message}")
+            logging.debug(f"Install {installer_percent}%: {message}")
             self._status(message, percent=installer_percent)
         else:
             # Otherwise just print status using the progress given
-            logging.debug(f"{message}: {percent}")
+            logging.debug(f"{message}: {percent}%")
             self._status(message, percent)
         self._last_status = message
 

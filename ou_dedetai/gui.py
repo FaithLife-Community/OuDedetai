@@ -141,7 +141,7 @@ class StatusGui(Frame):
         self.grid(row=0, column=0, sticky='nwes')
 
         self.statusvar = StringVar()
-        self.message_label = Label(self, textvariable=self.statusvar, wraplength=350, justify="left")
+        self.message_label = Label(self, textvariable=self.statusvar, wraplength=350, justify="left") #noqa: E501
         # Progress bar
         self.progressvar = IntVar(value=0)
         self.progress = Progressbar(
@@ -239,6 +239,10 @@ class ControlGui(StatusGui):
         self.loggingstatevar = StringVar(value='Enable')
         self.logging_label = Label(self, text="Toggle app logging")
         self.logging_button = Button(self, textvariable=self.loggingstatevar)
+        # Support options
+        self.support_state_var = StringVar(value='Get Support')
+        self.support_label = Label(self, text="Troubleshooting")
+        self.support_button = Button(self, textvariable=self.support_state_var)
         # Separator
         s3 = Separator(self, orient='horizontal')
 
@@ -284,6 +288,9 @@ class ControlGui(StatusGui):
         self.logging_label.grid(column=0, row=row, sticky='w', pady=2)
         self.logging_button.grid(column=1, row=row, sticky='w', pady=2)
         row += 1
+        self.support_label.grid(column=0, row=row, sticky='w', pady=2)
+        self.support_button.grid(column=1, row=row, sticky='w', pady=2)
+        row += 1
         s3.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)
         row += 1
         self.message_label.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)  # noqa: E501
@@ -292,6 +299,7 @@ class ControlGui(StatusGui):
 
     def show_advanced_install_button(self):
         self.app_install_advanced.grid(column=2, row=0, sticky='w', pady=2)
+
 
 class ToolTip:
     def __init__(self, widget, text):
