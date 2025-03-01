@@ -79,7 +79,7 @@ class InstallerGui(Frame):
         self.version_dropdown.state(['readonly'])
         #TODO: Remove this dropdown
         self.version_dropdown['values'] = ('10')
-        self.versionvar.set(self.version_dropdown['values'][1])
+        self.versionvar.set(self.version_dropdown['values'][0])
         if app.conf._raw.faithlife_product_version in self.version_dropdown['values']:
             self.version_dropdown.set(app.conf._raw.faithlife_product_version)
 

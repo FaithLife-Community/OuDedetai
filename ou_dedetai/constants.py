@@ -88,7 +88,7 @@ LOGOS_WHITE = '#FCFCFC'
 PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
-FAITHLIFE_PRODUCT_VERSIONS = ["10", "9"]
+FAITHLIFE_PRODUCT_VERSIONS = ["10"] # This used to include 9
 
 SUPPORT_MESSAGE = f"If you need help, please consult:\n{WIKI_LINK}\nIf that doesn't answer your question, please send the following files {DEFAULT_CONFIG_PATH}, {DEFAULT_APP_WINE_LOG_PATH} and {DEFAULT_APP_LOG_PATH} to one of the following group chats:\nTelegram: {TELEGRAM_LINK}\nMatrix: {MATRIX_LINK}"  # noqa: E501
 
