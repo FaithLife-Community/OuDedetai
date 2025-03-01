@@ -720,7 +720,7 @@ class Config:
     def winetricks_binary(self) -> str:
         """Download winetricks if it doesn't exist"""
         from ou_dedetai import system
-        # Path is now static, the installer puts a syslink here if we're using appimage
+        # Path is now static, the installer puts a symlink here if we're using appimage
         winetricks_path = Path(self.installer_binary_dir) / "winetricks"
     
         system.ensure_winetricks(
