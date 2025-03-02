@@ -126,7 +126,7 @@ class UserInputDialog(CursesDialog):
         super().__init__(app)
         self.question_text = question_text
         self.default_text = default_text
-        self.user_input = ""
+        self.user_input = default_text
         self.submit = False
 
         self.question_start_y, self.question_lines = text_centered(self.app, self.question_text) #noqa: E501
