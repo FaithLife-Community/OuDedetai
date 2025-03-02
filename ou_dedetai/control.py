@@ -304,21 +304,31 @@ def get_support(app: App) -> str:
 
         app.status(f"Wrote support bundle to: {output_path}", percent=100)
 
-        platform = app.ask(
-            "Which support platform would you like to use?\n"
+        answer = app.ask(
+            "How would you like to continue to get support?\n"
             f"Make sure to upload {output_path} and describe your issue.",
             [
-                'Telegram',
-                'Matrix',
-                'Github Issues'
+                'Launch Telegram',
+                'Launch Matrix',
+                'Open Github Issues',
+                "Show links"
             ]
         )
 
-        if platform == "Telegram":
+        if answer == "Launch Telegram":
             webbrowser.open(constants.TELEGRAM_LINK)
-        elif platform == "Matrix":
+        elif answer == "Launch Matrix":
             webbrowser.open(constants.MATRIX_LINK)
-        elif platform == "Github Issues":
+        elif answer == "Open Github Issues":
             webbrowser.open(constants.REPOSITORY_NEW_ISSUE_LINK)
+        elif answer == "Show links":
+            # Re-use app.approve to show a dialog-friendly pop-up
+            app.approve(
+                "Here are the links:\n"
+                f"- Telegram: {constants.TELEGRAM_LINK}\n"
+                f"- Matrix: {constants.MATRIX_LINK}\n"
+                f"- Github Repository: {constants.REPOSITORY_LINK}\n"
+                f"- Github Issues: {constants.REPOSITORY_NEW_ISSUE_LINK}\n"
+            )
 
     return output_path
