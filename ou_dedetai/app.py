@@ -83,7 +83,11 @@ class App(abc.ABC):
                 return answer
             if PROMPT_OPTION_DIRECTORY in options and Path(answer).is_dir():
                 return answer
-            if PROMPT_OPTION_NEW_FILE in options and Path(answer).parent.is_dir():
+            if (
+                PROMPT_OPTION_NEW_FILE in options
+                and not Path(answer).is_dir()
+                and Path(answer).parent.is_dir()
+            ):
                 return answer
 
             # Not valid
