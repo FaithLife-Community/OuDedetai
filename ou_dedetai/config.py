@@ -415,6 +415,9 @@ class PersistentConfiguration:
         # Merge the legacy dictionary if present
         if self._legacy is not None:
             output |= self._legacy.__dict__
+            # Don't save DIALOG into the config
+            if os.getenv("DIALOG"):
+                del output["DIALOG"]
         
         # Remove all keys starting with _ (to remove legacy from the saved blob)
         for k in list(output.keys()):
