@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from ou_dedetai import system
-from ou_dedetai.app import App
+from ou_dedetai.app import App, UserExitedFromAsk
 
 from . import constants
 from . import network
@@ -276,7 +276,16 @@ def ensure_launcher_shortcuts(app: App):
 def install(app: App):
     """Entrypoint for installing"""
     app.status('Installing…')
-    ensure_launcher_shortcuts(app)
+    try:
+        ensure_launcher_shortcuts(app)
+    except UserExitedFromAsk:
+        # Reset choices, it's possible that the user didn't mean to select
+        # one of the options they did - that is why they are exiting
+        app.conf.faithlife_product = None  # type: ignore[assignment]
+        app.conf.faithlife_product_version = None  # type: ignore[assignment]
+        app.conf.faithlife_product_release = None  # type: ignore[assignment]
+        app.conf.install_dir = None  # type: ignore[assignment]
+        raise
     app.status("Install Complete!", 100)
     # Trigger a config update event to refresh the UIs
     app._config_updated_event.set()

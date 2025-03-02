@@ -681,7 +681,7 @@ class Config:
         return self._ask_if_not_found("faithlife_product_release", question, options)
 
     @faithlife_product_release.setter
-    def faithlife_product_release(self, value: str):
+    def faithlife_product_release(self, value: Optional[str]):
         if self._raw.faithlife_product_release != value:
             self._raw.faithlife_product_release = value
             # Reset dependents

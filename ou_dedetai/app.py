@@ -15,6 +15,10 @@ from ou_dedetai.constants import (
 )
 
 
+class UserExitedFromAsk(Exception):
+    """Exception thrown when the user hit cancel in an ask dialog"""
+
+
 class App(abc.ABC):
     # FIXME: consider weighting install steps. Different steps take different lengths
     installer_step_count: int = 0
@@ -108,6 +112,8 @@ class App(abc.ABC):
             passed_options = options + [self._exit_option]
 
         answer = self._ask(question, passed_options)
+        if answer is None or answer == self._exit_option:
+            raise UserExitedFromAsk
         while answer is None or validate_result(answer, options) is None:
             invalid_response = "That response is not valid, please try again."
             new_question = f"{invalid_response}\n{question}"
@@ -119,12 +125,6 @@ class App(abc.ABC):
                 # Huh? coding error, this should have been checked earlier
                 logging.critical("An invalid response slipped by, please report this incident to the developers") #noqa: E501
                 self.exit("Failed to get a valid value from user")
-
-        if answer == self._exit_option:
-            answer = None
-        
-        if answer is None:
-            self.exit("Failed to get a valid value from user")
 
         return answer
 

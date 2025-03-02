@@ -18,7 +18,7 @@ from tkinter import filedialog as fd
 from tkinter.ttk import Style
 from typing import Callable, Optional
 
-from ou_dedetai.app import App
+from ou_dedetai.app import App, UserExitedFromAsk
 from ou_dedetai.constants import (
     PROMPT_OPTION_DIRECTORY,
     PROMPT_OPTION_FILE,
@@ -485,9 +485,16 @@ class ControlWindow(GuiApp):
         
         Fallback to defaults if we don't know a response"""
         def _install():
-            installer.install(self)
-            # Enable the run button
-            self.gui.app_button.state(['!disabled'])
+            try:
+                self.populate_defaults()
+                installer.install(self)
+            except UserExitedFromAsk:
+                # Ensure that the defaults are properly set back up
+                self.populate_defaults()
+            finally:
+                # Enable the run button
+                self.gui.app_button.state(['!disabled'])
+                self.gui.app_install_advanced.state(['!disabled'])
         # Disable the install buttons
         self.gui.app_button.state(['disabled'])
         self.gui.app_install_advanced.state(['disabled'])

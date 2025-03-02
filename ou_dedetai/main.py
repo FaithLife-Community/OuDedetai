@@ -4,6 +4,7 @@ import curses
 import logging.handlers
 from typing import Callable, Tuple
 
+from ou_dedetai.app import UserExitedFromAsk
 from ou_dedetai.config import (
     EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path
 )
@@ -447,7 +448,12 @@ def main():
     # Print terminal banner
     logging.info(f"{constants.APP_NAME}, {constants.LLI_CURRENT_VERSION} by {constants.LLI_AUTHOR}.")  # noqa: E501
 
-    run(ephemeral_config, action)
+    try:
+        run(ephemeral_config, action)
+    except UserExitedFromAsk:
+        # This isn't a critical failure, the user doesn't need a traceback,
+        # they are the ones who told us to exit.
+        pass
 
 
 if __name__ == '__main__':

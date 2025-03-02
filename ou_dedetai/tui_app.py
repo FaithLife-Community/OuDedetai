@@ -9,7 +9,7 @@ from pathlib import Path
 from queue import Queue
 from typing import Any, Optional
 
-from ou_dedetai.app import App
+from ou_dedetai.app import App, UserExitedFromAsk
 from ou_dedetai.constants import (
     PROMPT_OPTION_DIRECTORY,
     PROMPT_OPTION_FILE
@@ -29,12 +29,6 @@ from . import wine
 
 console_message = ""
 
-
-class ReturningToMainMenu(Exception):
-    """Exception raised when user returns to the main menu
-    
-    effectively stopping execution on the executing thread where this exception 
-    originated from"""
 
 
 # TODO: Fix hitting cancel in Dialog Screens; currently crashes program.
@@ -531,9 +525,10 @@ class TUI(App):
         def _install():
             try:
                 installer.install(app=self)
-                self.go_to_main_menu()
-            except ReturningToMainMenu:
+            except UserExitedFromAsk:
                 pass
+            finally:
+                self.go_to_main_menu()
 
         if choice is None or choice == "Exit":
             logging.info("Exiting installation.")
@@ -542,18 +537,10 @@ class TUI(App):
 
         if choice in ["Install", "Advanced Install"]:
             if self._installer_thread is not None:
-                # The install thread should have completed with ReturningToMainMenu
+                # The install thread should have completed with UserExitedFromAsk
                 # Check just in case
                 if self._installer_thread.is_alive():
-                    try:
-                        self.conf.faithlife_product = None  # type: ignore[assignment]
-                        self.conf.faithlife_product_version = None
-                        self.conf.faithlife_product_release = None
-                        self.conf.install_dir = None
-                        self._installer_thread.join(timeout=0.2)
-                        self._installer_thread = None
-                    except:
-                        raise Exception("Previous install is still running")
+                    raise RuntimeError("Previous install is still running")
 
             self.reset_screen()
             self.installer_step = 0
@@ -810,7 +797,6 @@ class TUI(App):
         if answer == self._exit_option:
             self.tui_screens = []
             self.reset_screen()
-            raise ReturningToMainMenu
 
         return answer
 
