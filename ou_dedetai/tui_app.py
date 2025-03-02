@@ -911,10 +911,10 @@ class TUI(App):
             labels_default = ["Install", "Advanced Install"]
         labels.extend(labels_default)
 
-        labels_support = ["Get Support", "Utilities →", "Wine Config →"]
+        labels_support = ["Utilities →", "Wine Config →"]
         labels.extend(labels_support)
 
-        labels_options = ["Change Color Scheme"]
+        labels_options = ["Change Color Scheme", "Get Support"]
         labels.extend(labels_options)
 
         labels.append("Exit")
