@@ -136,7 +136,7 @@ class App(abc.ABC):
 
     def approve(self, question: str, context: Optional[str] = None) -> bool:
         """Asks the user a y/n question"""
-        question = (f"{context}\n" if context else "") + question
+        question = (f"{context}\n\n" if context else "") + question
         options = ["Yes", "No"]
         return self.ask(question, options) == "Yes"
 

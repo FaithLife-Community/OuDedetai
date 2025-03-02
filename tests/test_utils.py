@@ -330,7 +330,3 @@ class TestGeneralUtils(unittest.TestCase):
     @unittest.skip("Test requires oudedetai binary.")
     def test_update_to_latest_lli_release(self):
         pass
-
-    @unittest.skip("Test not feasible.")
-    def test_watch_db(self):
-        pass

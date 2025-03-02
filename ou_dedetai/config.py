@@ -490,6 +490,18 @@ def get_logos_appdata_dir(
     return f'{wine_prefix}/drive_c/users/{wine_user}/AppData/Local/{faithlife_product}'
 
 
+def get_logos_user_id(
+    logos_appdata_dir: str
+) -> Optional[str]:
+    logos_data_path = Path(logos_appdata_dir) / "Data"
+    contents = os.listdir(logos_data_path)
+    children = [logos_data_path / child for child in contents]
+    file_children = [child for child in children if child.is_dir()]
+    if file_children and len(file_children) > 0:
+        return file_children[0].name
+    else:
+        return None
+
 class Config:
     """Set of configuration values. 
     
@@ -787,6 +799,14 @@ class Config:
             wine_user,
             self.faithlife_product
         )
+
+    @property
+    def _logos_user_id(self) -> Optional[str]:
+        """Name of the Logos user id throughout the app"""
+        logos_appdata_dir = self._logos_appdata_dir
+        if logos_appdata_dir is None:
+            return None
+        return get_logos_user_id(logos_appdata_dir)
 
     @property
     # This used to be called WINEPREFIX
