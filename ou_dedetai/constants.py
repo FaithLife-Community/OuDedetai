@@ -89,7 +89,7 @@ LOGOS_WHITE = '#FCFCFC'
 PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
-FAITHLIFE_PRODUCT_VERSIONS = ["10"]
+FAITHLIFE_PRODUCT_VERSIONS = ["10"] # This used to include 9
 
 SUPPORT_MESSAGE = f"If you need help, please consult:\n{WIKI_LINK}\nIf that doesn't answer your question, please use the \"Get Support\" option"  # noqa: E501
 DEFAULT_SUPPORT_FILE_NAME = "FaithlifeCommunitySupport.zip"
