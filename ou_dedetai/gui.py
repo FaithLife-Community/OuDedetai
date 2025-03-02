@@ -43,7 +43,7 @@ class ChoiceGui(Frame):
 
         # Place widgets.
         row = 0
-        self.question_label.grid(column=0, row=row, sticky='nws', pady=2)
+        self.question_label.grid(column=0, row=row, sticky='nws', pady=2, padx=8)
         self.answer_dropdown.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
         row += 1
         self.cancel_button.grid(column=1, row=row, sticky='e', pady=2)
