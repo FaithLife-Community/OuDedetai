@@ -179,7 +179,7 @@ class App(abc.ABC):
 
     @abc.abstractmethod
     def _ask(self, question: str, options: list[str] | str) -> Optional[str]:
-        """Implementation for asking a question pre-front end
+        """Implementation for asking a question per-front end
 
         Options may include ability to prompt for an additional value.
         Such as asking for one of strings or a directory.
@@ -193,7 +193,7 @@ class App(abc.ABC):
 
     @abc.abstractmethod
     def _info(self, message: str) -> None:
-        """Implementation for displaying information to the user pre-front end
+        """Implementation for displaying information to the user per-front end
         """
         raise NotImplementedError()
 

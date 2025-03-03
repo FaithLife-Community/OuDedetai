@@ -13,7 +13,7 @@ import threading
 import time
 from tkinter import PhotoImage, messagebox
 from tkinter import Tk
-from tkinter import Toplevel
+from tkinter import Toplevel as TkToplevel
 from tkinter import filedialog as fd
 from tkinter.ttk import Style
 from typing import Callable, Optional
@@ -187,7 +187,7 @@ class Root(Tk):
         self.iconphoto(False, self.pi)
 
 
-class Top(Toplevel):
+class Toplevel(TkToplevel):
     def __init__(self, *args, **kwargs):
         super().__init__(**kwargs)
         set_style(self)
@@ -200,7 +200,7 @@ class Top(Toplevel):
 class ChoicePopUp:
     """Creates a pop-up with a choice"""
     def __init__(self, question: str, options: list[str], answer_q: Queue[Optional[str]], answer_event: Event, **kwargs): #noqa: E501
-        self.root = Top()
+        self.root = Toplevel()
         # Set root parameters.
         self.gui = gui.ChoiceGui(self.root, question, options)
         self.root.title("Question")
@@ -235,9 +235,7 @@ class ChoicePopUp:
 class InfoPopUp:
     """Creates a pop-up with info shared to the user"""
     def __init__(self, message: str, **kwargs):
-        self.root = Top()
-        logging.debug(self.root.__dict__)
-        self.root.resizable(True, True)
+        self.root = Toplevel()
         # Set root parameters.
         self.gui = gui.InfoGui(self.root, message)
         self.root.title("Info")
@@ -499,7 +497,7 @@ class ControlWindow(GuiApp):
 
     def run_installer(self, evt=None):
         classname = constants.BINARY_NAME
-        installer_window_top = Top()
+        installer_window_top = Toplevel()
         InstallerWindow(installer_window_top, self.root, app=self, class_=classname) #noqa: E501
 
     def run_logos(self, evt=None):
