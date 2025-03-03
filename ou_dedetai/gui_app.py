@@ -230,7 +230,7 @@ class ChoicePopUp:
         self.root = Toplevel()
         # Set root parameters.
         self.gui = gui.ChoiceGui(self.root, question, options)
-        self.root.title(f"Quesiton: {question.strip().strip(':')}")
+        self.root.title("Question")
         self.root.resizable(False, False)
         # Set root widget event bindings.
         self.root.bind(
