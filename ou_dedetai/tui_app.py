@@ -804,7 +804,7 @@ class TUI(App):
         self.ask_answer_queue.put(choice)
         self.ask_answer_event.set()
 
-    def _info(self, message: str) -> str:
+    def _info(self, message: str) -> None:
         self.ask_answer_event.clear()
         self.stack_menu(
             2,
