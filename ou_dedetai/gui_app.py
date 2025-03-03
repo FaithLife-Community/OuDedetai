@@ -172,47 +172,7 @@ class Root(Tk):
         super().__init__(**kwargs)
         self.classname = kwargs.get('classname')
         # Set the theme.
-        self.style = Style()
-        self.style.theme_use('alt')
-
-        # Update color scheme.
-        self.style.configure('TCheckbutton', bordercolor=constants.LOGOS_GRAY)
-        self.style.configure('TCombobox', bordercolor=constants.LOGOS_GRAY)
-        self.style.configure('TCheckbutton', indicatorcolor=constants.LOGOS_GRAY)
-        self.style.configure('TRadiobutton', indicatorcolor=constants.LOGOS_GRAY)
-        bg_widgets = [
-            'TCheckbutton', 'TCombobox', 'TFrame', 'TLabel', 'TRadiobutton'
-        ]
-        fg_widgets = ['TButton', 'TSeparator']
-        for w in bg_widgets:
-            self.style.configure(w, background=constants.LOGOS_WHITE)
-        for w in fg_widgets:
-            self.style.configure(w, background=constants.LOGOS_GRAY)
-        self.style.configure(
-            'Horizontal.TProgressbar',
-            thickness=10, background=constants.LOGOS_BLUE,
-            bordercolor=constants.LOGOS_GRAY,
-            troughcolor=constants.LOGOS_GRAY,
-        )
-
-        # Justify to the left [('Button.label', {'sticky': 'w'})]
-        self.style.layout(
-            "TButton", [(
-                'Button.border', {
-                    'sticky': 'nswe', 'children': [(
-                        'Button.focus', {
-                            'sticky': 'nswe', 'children': [(
-                                'Button.padding', {
-                                    'sticky': 'nswe', 'children': [(
-                                        'Button.label', {'sticky': 'w'}
-                                    )]
-                                }
-                            )]
-                        }
-                    )]
-                }
-            )]
-        )
+        set_style(self)
 
         # Make root widget's outer border expand with window.
         self.columnconfigure(0, weight=1)
@@ -716,6 +676,51 @@ class ControlWindow(GuiApp):
             return 'ENABLED'
         else:
             return 'DISABLED'
+
+
+def set_style(tkapp):
+    # Set the theme.
+    tkapp.style = Style()
+    tkapp.style.theme_use('alt')
+
+    # Update color scheme.
+    tkapp.style.configure('TCheckbutton', bordercolor=constants.LOGOS_GRAY)
+    tkapp.style.configure('TCombobox', bordercolor=constants.LOGOS_GRAY)
+    tkapp.style.configure('TCheckbutton', indicatorcolor=constants.LOGOS_GRAY)
+    tkapp.style.configure('TRadiobutton', indicatorcolor=constants.LOGOS_GRAY)
+    bg_widgets = [
+        'TCheckbutton', 'TCombobox', 'TFrame', 'TLabel', 'TRadiobutton'
+    ]
+    fg_widgets = ['TButton', 'TSeparator']
+    for w in bg_widgets:
+        tkapp.style.configure(w, background=constants.LOGOS_WHITE)
+    for w in fg_widgets:
+        tkapp.style.configure(w, background=constants.LOGOS_GRAY)
+    tkapp.style.configure(
+        'Horizontal.TProgressbar',
+        thickness=10, background=constants.LOGOS_BLUE,
+        bordercolor=constants.LOGOS_GRAY,
+        troughcolor=constants.LOGOS_GRAY,
+    )
+
+    # Justify to the left [('Button.label', {'sticky': 'w'})]
+    tkapp.style.layout(
+        "TButton", [(
+            'Button.border', {
+                'sticky': 'nswe', 'children': [(
+                    'Button.focus', {
+                        'sticky': 'nswe', 'children': [(
+                            'Button.padding', {
+                                'sticky': 'nswe', 'children': [(
+                                    'Button.label', {'sticky': 'w'}
+                                )]
+                            }
+                        )]
+                    }
+                )]
+            }
+        )]
+    )
 
 
 def start_gui_app(
