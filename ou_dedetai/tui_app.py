@@ -804,6 +804,21 @@ class TUI(App):
         self.ask_answer_queue.put(choice)
         self.ask_answer_event.set()
 
+    def _info(self, message: str) -> str:
+        self.ask_answer_event.clear()
+        self.stack_menu(
+            2,
+            Queue(),
+            threading.Event(),
+            message,
+            self.which_dialog_options(['Return to Main Menu']),
+        )
+
+        # Wait for user response.
+        self.ask_answer_event.wait()
+        _ = self.ask_answer_queue.get()
+        self.ask_answer_event.clear()
+
     def _status(self, message: str, percent: int | None = None):
         message = message.lstrip("\r")
         if self.console_log[-1] == message:
