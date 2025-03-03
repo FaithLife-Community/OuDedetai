@@ -85,6 +85,7 @@ class GuiApp(App):
         return answer
 
     def _info(self, message):
+        """Display information to the user"""
         InfoPopUp(message)
 
     def _status(self, message, percent = None):
