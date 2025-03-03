@@ -16,6 +16,7 @@ from ou_dedetai.constants import (
 )
 from ou_dedetai.config import EphemeralConfiguration
 
+from . import backup
 from . import control
 from . import constants
 from . import installer
@@ -861,9 +862,9 @@ class TUI(App):
         self.todo_e.wait()
         self.todo_e.clear()
         if self.tmp == "backup":
-            control.backup(self)
+            backup.backup(self)
         else:
-            control.restore(self)
+            backup.restore(self)
         self.go_to_main_menu()
 
     def report_waiting(self, text):
