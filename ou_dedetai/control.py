@@ -325,8 +325,8 @@ def get_support(app: App) -> str:
         elif answer == "Open Github Issues":
             webbrowser.open(constants.REPOSITORY_NEW_ISSUE_LINK)
         elif answer == "Show links":
-            # Re-use app.approve to show a dialog-friendly pop-up
-            app.approve(
+            # Use app.info to show a dialog-friendly pop-up
+            app.info(
                 "Here are the links:\n"
                 f"- Telegram: {constants.TELEGRAM_LINK}\n"
                 f"- Matrix: {constants.MATRIX_LINK}\n"
