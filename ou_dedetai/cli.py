@@ -114,6 +114,13 @@ class CLI(App):
         # NOTE: this response is validated in App's .ask
         return output
 
+    def _info(self, message: str) -> None:
+        """Display information to the user"""
+        self.input_q.put((message, ['Continue?']))
+        self.input_event.set()
+        self.choice_event.wait()
+        self.choice_event.clear()
+
     def exit(self, reason: str, intended: bool = False):
         # Signal CLI.user_input_processor to stop.
         self.input_q.put(None)
