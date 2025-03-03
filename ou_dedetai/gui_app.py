@@ -184,10 +184,20 @@ class Root(Tk):
         self.iconphoto(False, self.pi)
 
 
+class Top(Toplevel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(**kwargs)
+        set_style(self)
+
+        # Make root widget's outer border expand with window.
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+
+
 class ChoicePopUp:
     """Creates a pop-up with a choice"""
     def __init__(self, question: str, options: list[str], answer_q: Queue[Optional[str]], answer_event: Event, **kwargs): #noqa: E501
-        self.root = Toplevel()
+        self.root = Top()
         # Set root parameters.
         self.gui = gui.ChoiceGui(self.root, question, options)
         self.root.title("Question")
