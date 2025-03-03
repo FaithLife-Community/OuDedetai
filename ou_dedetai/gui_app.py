@@ -84,6 +84,9 @@ class GuiApp(App):
             )
         return answer
 
+    def _info(self, message):
+        InfoPopUp(message)
+
     def _status(self, message, percent = None):
         message = message.lstrip("\r")
         if percent is not None:
@@ -201,7 +204,6 @@ class ChoicePopUp:
         # Set root parameters.
         self.gui = gui.ChoiceGui(self.root, question, options)
         self.root.title("Question")
-        self.root.resizable(False, False)
         # Set root widget event bindings.
         self.root.bind(
             "<Return>",
@@ -227,6 +229,30 @@ class ChoicePopUp:
     def on_cancel_released(self, evt=None):
         self.answer_q.put(None)
         self.answer_event.set()
+        self.root.destroy()
+
+
+class InfoPopUp:
+    """Creates a pop-up with info shared to the user"""
+    def __init__(self, message: str, **kwargs):
+        self.root = Top()
+        logging.debug(self.root.__dict__)
+        self.root.resizable(True, True)
+        # Set root parameters.
+        self.gui = gui.InfoGui(self.root, message)
+        self.root.title("Info")
+        # Set root widget event bindings.
+        self.root.bind(
+            "<Return>",
+            self.on_okay_released
+        )
+        self.root.bind(
+            "<Escape>",
+            self.on_okay_released
+        )
+        self.gui.okay_button.config(command=self.on_okay_released)
+
+    def on_okay_released(self, evt=None):
         self.root.destroy()
 
 

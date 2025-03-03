@@ -5,6 +5,7 @@ from tkinter import IntVar
 from tkinter import messagebox
 from tkinter import simpledialog
 from tkinter import StringVar
+from tkinter import Text
 from tkinter.ttk import Button
 from tkinter.ttk import Checkbutton
 from tkinter.ttk import Combobox
@@ -47,6 +48,31 @@ class ChoiceGui(Frame):
         self.answer_dropdown.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
         row += 1
         self.cancel_button.grid(column=1, row=row, sticky='e', pady=2)
+        self.okay_button.grid(column=2, row=row, sticky='e', pady=2)
+
+
+class InfoGui(Frame):
+    _default_prompt: str = "Info"
+
+    def __init__(self, root, message: str, **kwargs):
+        super(InfoGui, self).__init__(root, **kwargs)
+        self.italic = font.Font(slant='italic')
+        self.config(padding=5)
+        self.grid(row=0, column=0, sticky='nwes')
+
+        # Label Row
+        h = len(message.split('\n')) - 1
+        self.info_text = Text(self, height=h)
+        self.info_text.insert(1.0, message)
+        self.info_text.config(state='disabled')
+
+        # Cancel/Okay buttons row.
+        self.okay_button = Button(self, text="Okay")
+
+        # Place widgets.
+        row = 0
+        self.info_text.grid(column=0, row=row, sticky='nws', pady=2, padx=8)
+        row += 1
         self.okay_button.grid(column=2, row=row, sticky='e', pady=2)
 
 
