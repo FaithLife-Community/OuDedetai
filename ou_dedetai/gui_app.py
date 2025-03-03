@@ -499,7 +499,7 @@ class ControlWindow(GuiApp):
 
     def run_installer(self, evt=None):
         classname = constants.BINARY_NAME
-        installer_window_top = Toplevel()
+        installer_window_top = Top()
         InstallerWindow(installer_window_top, self.root, app=self, class_=classname) #noqa: E501
 
     def run_logos(self, evt=None):
