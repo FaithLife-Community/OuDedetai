@@ -7,7 +7,6 @@ import logging
 import os
 import queue
 import sqlite3
-import inotify.adapters # type: ignore
 import psutil
 import re
 import shutil
@@ -17,6 +16,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import threading
 from ou_dedetai.app import App
 from packaging.version import Version
 from pathlib import Path
@@ -27,6 +27,10 @@ from . import network
 from . import system
 from . import wine
 
+if sys.platform.startswith("linux"):
+    import inotify.adapters  # type: ignore
+elif sys.platform.startswith(("darwin", "freebsd", "dragonfly", "netbsd", "openbsd")):
+    import select
 
 # FIXME: This function isn't used and should probably be removed.
 def get_calling_function_name():
@@ -661,10 +665,6 @@ def watch_db(path: str, sql_statements: list[str]):
 
     This function may run infinitely, spawn it on it's own thread
     """
-    # Silence inotify logs
-    logging.getLogger('inotify').setLevel(logging.CRITICAL)
-    i = inotify.adapters.Inotify()
-    i.add_watch(path)
 
     def execute_sql(cur):
         # logging.debug(f"Executing SQL against {path}: {sql_statements}")
@@ -681,30 +681,57 @@ def watch_db(path: str, sql_statements: list[str]):
 
         # Execute once before we start the loop
         execute_sql(cur)
-        swallow_one = True
+        if sys.platform.startswith("linux"):
+            def monitor_inotify():
+                """Monitor file changes using inotify."""
+                logging.getLogger('inotify').setLevel(logging.CRITICAL)
+                i = inotify.adapters.Inotify()
+                i.add_watch(path)
 
-        # Keep track of if we've added -wal and -shm are added yet
-        # They may not exist when we start
-        watching_wal_and_shm = False
-        for event in i.event_gen(yield_nones=False):
-            (_, type_names, _, _) = event
-            # These files may not exist when it's executes for the first time
-            if (
-                not watching_wal_and_shm
-                and Path(path + "-wal").exists()
-                and Path(path + "-shm").exists()
-            ):
-                i.add_watch(path + "-wal")
-                i.add_watch(path + "-shm")
-                watching_wal_and_shm = True
-
-            if 'IN_MODIFY' in type_names or 'IN_CLOSE_WRITE' in type_names:
-                # Check to make sure that we aren't responding to our own write
-                if swallow_one:
-                    swallow_one = False
-                    continue
-                execute_sql(cur)
                 swallow_one = True
+
+                # Keep track of if we've added -wal and -shm are added yet
+                # They may not exist when we start
+                watching_wal_and_shm = False
+                for event in i.event_gen(yield_nones=False):
+                    (_, type_names, _, _) = event
+                    # These files may not exist when it's executes for the first time
+                    if (
+                        not watching_wal_and_shm
+                        and Path(path + "-wal").exists()
+                        and Path(path + "-shm").exists()
+                    ):
+                        i.add_watch(path + "-wal")
+                        i.add_watch(path + "-shm")
+                        watching_wal_and_shm = True
+
+                    if 'IN_MODIFY' in type_names or 'IN_CLOSE_WRITE' in type_names:
+                        # Check to make sure that we aren't responding to our own write
+                        if swallow_one:
+                            swallow_one = False
+                            continue
+                        execute_sql(cur)
+                        swallow_one = True
+
+            monitor_inotify()
+
+        elif sys.platform.startswith(("darwin", "freebsd", "dragonfly", "netbsd", "openbsd")):
+            def monitor_kqueue():
+                """Monitor file changes using kqueue."""
+                kq = select.kqueue()
+                fd = open(path, "rb")  # Open file to track
+                kevent = select.kevent(fd.fileno(), filter=select.KQ_FILTER_VNODE,
+                                       flags=select.KQ_EV_ADD | select.KQ_EV_ENABLE,
+                                       fflags=select.KQ_NOTE_WRITE | select.KQ_NOTE_EXTEND)
+                kq.control([kevent], 0, 0)
+
+                while True:
+                    events = kq.control(None, 1)  # Block until event occurs
+                    if events:
+                        execute_sql()
+
+            monitor_kqueue()
+
         # Shouldn't be possible to get here, but on the off-chance it happens, 
         # we'd like to know and cleanup
         logging.debug(f"Stopped watching {path}")
