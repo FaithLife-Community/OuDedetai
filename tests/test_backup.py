@@ -29,23 +29,23 @@ class TestBackup(unittest.TestCase):
                 nd.mkdir(parents=True)
                 backup_dirs.append(str(nd))
             
-            b = backup.BackupBase(self.app)
+            b = backup.BackupTask(self.app)
             bdirs = b._get_all_backups()
             self.assertEqual(bdirs, backup_dirs)
 
     def test_get_dir_group_size(self):
         size_dir = 4096
 
-        cmd = ['du', '-sb', TESTDATADIR]
+        cmd = ['du', '-sb', str(TESTDATADIR)]
         size_du = int(subprocess.check_output(cmd).decode().split()[0])
         size_testdata = size_du + size_dir  # add in 'data' dir
 
-        cmd = ['du', '-sb', REPODIR / 'snap']
+        cmd = ['du', '-sb', str(REPODIR / 'snap')]
         size_du = int(subprocess.check_output(cmd).decode().split()[0])
         size_snap = size_du + size_dir*3  # add in 'snap', 'bin', 'gui' dirs
 
         self.app.conf.backup_dir = Path('.')
-        b = backup.BackupBase(self.app)
+        b = backup.BackupTask(self.app)
         dirs = [TESTDATADIR, REPODIR / 'snap']
         size = b._get_dir_group_size(dirs)
         self.assertEqual(size_testdata + size_snap, size)
@@ -56,7 +56,6 @@ class TestBackup(unittest.TestCase):
             self.app.conf.backup_dir = d / 'backups'
             self.app.conf._logos_appdata_dir = d / 'Logos'
             b = backup.BackupTask(self.app)
-            b._set_dest_dir()
             self.assertTrue(b.destination_dir)
             self.assertEqual(b.destination_dir.parent, Path(self.app.conf.backup_dir))
 
@@ -73,7 +72,6 @@ class TestRestore(unittest.TestCase):
             self.app.conf._logos_appdata_dir = d / 'Logos'
             self.app.conf.logos_exe = self.app.conf._logos_appdata_dir / 'Logos.exe'
             r = backup.RestoreTask(self.app)
-            r._set_dest_dir()
             self.assertTrue(r.destination_dir)
             self.assertEqual(r.destination_dir, Path(self.app.conf._logos_appdata_dir))
 
@@ -89,6 +87,6 @@ class TestRestore(unittest.TestCase):
             self.app.conf._logos_appdata_dir = d / name
             self.app.conf.logos_exe = self.app.conf._logos_appdata_dir / f'{name}.exe'
             r = backup.RestoreTask(self.app)
-            r.set_source_dir(src_dir)
+            r._source_dir = src_dir
             self.assertTrue(r.source_dir)
             self.assertEqual(r.source_dir, src_dir)

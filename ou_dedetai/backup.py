@@ -1,25 +1,30 @@
+import abc
 import queue
 import logging
 import shutil
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from typing import Tuple
 from ou_dedetai import constants
 from ou_dedetai import utils
 from ou_dedetai.app import App
 
 
-class BackupBase:
+class BackupBase(abc.ABC):
     DATA_DIRS = ['Data', 'Documents', 'Users']
 
-    def __init__(self, app: App) -> None:
+    def __init__(
+        self,
+        app: App,
+        mode: str,
+    ) -> None:
         self.app = app
-        self.mode = None
-        self.source_dir = None
-        self.data_size = None
-        self.destination_dir = None
-        self.destination_disk_used_init = None
+        self.mode = mode
+        self._destination_dir: Optional[Path] = None
+        self._source_dir: Optional[Path] = None
+        self.data_size = 1
+        self.destination_disk_used_init: Optional[int] = None
         self.q: queue.Queue[int] = queue.Queue()
         if not self.app.approve(f"Use existing backups folder \"{self.app.conf.backup_dir}\"?"): # noqa: E501
             # Reset backup dir.
@@ -53,7 +58,12 @@ class BackupBase:
         return all_backups
 
     def _get_copy_percentage(self) -> int:
-        delta = self._get_dest_disk_used() - self.destination_disk_used_init
+        disk_used = self._get_dest_disk_used()
+        # This should already be set by run, but in case it isn't
+        if not self.destination_disk_used_init:
+            self.destination_disk_used_init = disk_used
+
+        delta = disk_used - self.destination_disk_used_init
         percent = int(delta * 100 / self.data_size)
         # logging.debug(f"{percent=}")
         return percent
@@ -62,9 +72,9 @@ class BackupBase:
         return shutil.disk_usage(self.destination_dir).used
 
     def _get_dir_group_size(
-            self,
-            dirs: List[Path] | Tuple[Path],
-        ) -> int:
+        self,
+        dirs: List[Path] | Tuple[Path],
+    ) -> int:
         size = utils.get_folder_group_size(dirs)
         logging.debug(f"backup {size=}")
         return size
@@ -78,11 +88,12 @@ class BackupBase:
     def _prepare_dest_dir(self) -> None:
         """Remove existing data."""
         for d in self.DATA_DIRS:
-            dst = Path(self.destination_dir) / d
+            dst = self.destination_dir / d
             if dst.is_dir():
                 shutil.rmtree(dst)
 
     def _run(self) -> None:
+        self.app.status(f"Running {self.mode} from {self.source_dir} to {self.destination_dir}") #noqa: E501
         if self.source_dir is None:
             self.app.exit("source directory not set")
         elif self.destination_dir is None:
@@ -117,70 +128,81 @@ class BackupBase:
             self.app.exit(f"not enough free disk space for {self.mode}.")
         logging.debug(f"Sufficient space verified on {self.destination_dir} disk.")
 
+    @property
+    def source_dir(self) -> Path:
+        if not self._source_dir:
+            self._source_dir = self._get_source_dir()
+        return self._source_dir
+
+    @abc.abstractmethod
+    def _get_source_dir(self) -> Path:
+        """Source path. Differs depending on backup/restore"""
+        raise NotImplementedError
+
+    @property
+    def destination_dir(self) -> Path:
+        if not self._destination_dir:
+            self._destination_dir = self._get_destination_dir()
+        return self._destination_dir
+
+    @abc.abstractmethod
+    def _get_destination_dir(self) -> Path:
+        """Destination path. Differs depending on backup/restore"""
+        raise NotImplementedError
+
 
 class BackupTask(BackupBase):
     def __init__(self, app: App) -> None:
-        super().__init__(app)
-        self.mode = 'backup'
+        super().__init__(app, 'backup')
         self.description = 'Use'
-        self.source_dir = Path(self.app.conf._logos_appdata_dir).expanduser().resolve()
 
     def run(self) -> None:
         """Run the backup task."""
-        self._set_dest_dir()
-        self.app.status(f"Backing up data to: {self.destination_dir}")
         self._run()
 
-    def _set_dest_dir(self) -> None:
+    def _get_source_dir(self) -> Path:
+        if self.app.conf._logos_appdata_dir is None:
+            self.app.exit("Cannot backup when product is not installed.")
+        return Path(self.app.conf._logos_appdata_dir).expanduser().resolve()
+
+    def _get_destination_dir(self) -> Path:
+        """Destination path. Differs depending on backup/restore"""
         timestamp = utils.get_timestamp().replace('-', '')
         name = f"{self.app.conf.faithlife_product}-{timestamp}"
-        self.destination_dir = self.backup_dir / name
-        logging.debug(f"Backup directory path: {self.destination_dir}.")
+        destination_dir = self.backup_dir / name
+        logging.debug(f"Backup directory path: {destination_dir}.")
 
         # Check for existing backup.
         try:
-            self.destination_dir.mkdir()
+            destination_dir.mkdir()
         except FileExistsError:
             # This shouldn't happen, there is a timestamp in the backup_dir name
-            self.app.exit(f"backup already exists at: {self.destination_dir}.")
+            logging.warning(f"Backup already exists at: {destination_dir}.")
+        return destination_dir
 
 
 class RestoreTask(BackupBase):
     def __init__(self, app: App) -> None:
-        super().__init__(app)
-        self.mode = 'restore'
+        super().__init__(app, 'restore')
 
     def run(self) -> None:
         """Run the restore task."""
-        if self.source_dir is None:
-            self._set_source_dir()
-        self._set_dest_dir()
-
-        self.app.status(f"Restoring backup from: {self.source_dir}")
         self._run()
 
-    def set_source_dir(self, src_dir: Path | str) -> None:
-        """Explicitly set dir path to restore from"""
-        self._set_source_dir(src_dir)
+    def _get_destination_dir(self) -> Path:
+        if self.app.conf._logos_appdata_dir is None:
+            self.app.exit("Cannot backup when product is not installed.")
+        return Path(self.app.conf._logos_appdata_dir).expanduser().resolve()
 
-    def _set_dest_dir(self) -> None:
-        # TODO: Use faithlife_product here? Ensure file exists?
-        if not self.app.conf.logos_exe:
-            self.app.exit("Logos is not installed.")
-        self.destination_dir = Path(self.app.conf.logos_exe).parent
+    def _get_source_dir(self) -> Path:
+        all_backups = self._get_all_backups()
+        latest = all_backups.pop(-1)
 
-    def _set_source_dir(self, src_dir: Path = None) -> None:
-        if src_dir is None:
-            all_backups = self._get_all_backups()
-            latest = all_backups.pop(-1)
+        # Offer to restore the most recent backup.
+        options = [latest, *all_backups]
+        src_dir = self.app.ask("Choose backup folder to restore: ", options)
 
-            # Offer to restore the most recent backup.
-            options = [latest, *all_backups]
-            src_dir = self.app.ask("Choose backup folder to restore: ", options)
-
-        if not isinstance(src_dir, Path):
-            src_dir = Path(src_dir)
-        self.source_dir = src_dir
+        return Path(src_dir)
 
 
 def backup(app: App) -> None:
