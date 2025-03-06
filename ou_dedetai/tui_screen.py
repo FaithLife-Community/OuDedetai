@@ -129,7 +129,6 @@ class FooterScreen(CursesScreen):
         self.stdscr.erase()
 
         footer_text = "By the FaithLife Community"
-        footer_hr = "---"
 
         if isinstance(self.app.active_screen, MenuScreen):
             page_info = f"Page {self.app.current_page + 1}/{self.app.total_pages} | Selected Option: {self.app.current_option + 1}/{len(self.app.options)}" #noqa: E501

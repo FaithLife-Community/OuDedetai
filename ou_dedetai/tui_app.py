@@ -75,7 +75,7 @@ class TUI(App):
 
         # Default height and width to something reasonable so these values are always
         # ints, on each loop these values will be updated to their real values
-        self.window_height_min = 20
+        self.window_height_min = 11
         self.window_height = self.window_width = 80
         self.header_window_height = self.header_window_width = 80
         self.console_window_height = self.console_window_width = 80
@@ -110,7 +110,7 @@ class TUI(App):
         # corresponding @property functions
         self._main_screen: Optional[tui_screen.MenuScreen] = None
         self._active_screen: Optional[tui_screen.Screen] = None
-        self._header: Optional[tui_screen.ConsoleScreen] = None
+        self._header: Optional[tui_screen.HeaderScreen] = None
         self._console: Optional[tui_screen.ConsoleScreen] = None
         self._footer: Optional[tui_screen.FooterScreen] = None
         # End internal property values
@@ -263,7 +263,7 @@ class TUI(App):
         header_window_start = 0
         console_window_start = self.header_window_height
         main_window_start = self.header_window_height + self.console_window_height + 1
-        footer_window_start = self.header_window_height + self.console_window_height + self.main_window_height + 2
+        footer_window_start = self.window_height - self.footer_window_height - 1
 
         self.header_window = curses.newwin(self.header_window_height, curses.COLS, header_window_start, 0)
         self.console_window = curses.newwin(self.console_window_height, curses.COLS, console_window_start, 0)
