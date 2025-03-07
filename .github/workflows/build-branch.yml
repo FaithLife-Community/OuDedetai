@@ -76,6 +76,6 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: oudedetai-${{ matrix.arch }}
+        name: oudedetai-${{ matrix.arch }}-${{ github.run_id }}
         path: dist/oudedetai-${{ matrix.arch }}
         compression-level: 0
