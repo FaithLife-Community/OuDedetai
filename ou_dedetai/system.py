@@ -522,6 +522,18 @@ def get_package_manager() -> PackageManager | None:
                 "libxslt sqlite "  # misc
             )
         incompatible_packages = ""  # appimagelauncher handled separately
+    elif shutil.which('pkg') is not None:  # freebsd ghostbsd
+        install_command = ["pkg", "-y", "install"]  # noqa: E501
+        download_command = ["pkg", "fetch", "-d"]  # noqa: E501
+        remove_command = ["pkg", "-y", "delete"]  # noqa: E501
+        query_command = ["pkg", "info"]
+        query_prefix = ''
+        packages = (
+            "cabextract 7-zip samba416 "  # wine
+            "wget gsed gnugrep gawk curl "  # other
+        )  # noqa: E501
+        logos_9_packages = ""  # FIXME: Missing Logos 9 Packages
+        incompatible_packages = ""  # appimagelauncher handled separately
     elif os_name == "org.freedesktop.platform":
         # Flatpak
         # Dependencies are managed by the flatpak
