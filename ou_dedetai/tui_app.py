@@ -212,10 +212,11 @@ class TUI(App):
         return self.console_log[-self.console_log_lines:]
 
     def set_header_window_dimensions(self):
-        self.header_window_height_min = 2
-        self.header_window_height = min(max(
-            int(self.window_height * self.header_window_ratio), self.header_window_height_min
-        ), 4)
+        self.header_window_height_min = 3
+        self.header_window_height = 3
+        # self.header_window_height = min(max(
+        #     int(self.window_height * self.header_window_ratio), self.header_window_height_min
+        # ), 4)
 
     def set_console_window_dimensions(self):
         if self.console_log:

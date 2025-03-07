@@ -108,7 +108,8 @@ class HeaderScreen(CursesScreen):
                             "Please report this incident to the developers")
         self.stdscr.erase()
         subtitle_start = tui_curses.title(self.app, self.stdscr, self.title, self.title_start_y)
-        tui_curses.title(self.app, self.stdscr, self.subtitle, subtitle_start + 1)
+        if self.app.window_width > 37:
+            tui_curses.title(self.app, self.stdscr, self.subtitle, subtitle_start + 1)
 
         self.stdscr.noutrefresh()
         curses.doupdate()
