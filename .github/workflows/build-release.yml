@@ -24,8 +24,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        runner: [ubuntu-latest, ubuntu-24.04-arm]
-        arch: [x86_64, arm]
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm
     needs: build
     permissions:
       contents: write
