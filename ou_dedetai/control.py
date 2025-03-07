@@ -161,17 +161,6 @@ def copy_data(src_dirs, dst_dir):
         shutil.copytree(src, Path(dst_dir) / src.name)
 
 
-def remove_install_dir(app: App):
-    folder = Path(app.conf.install_dir)
-    question = f'Delete "{folder}" and all its contents?'
-    if not folder.is_dir():
-        logging.info(f"Folder doesn't exist: {folder}")
-        return
-    if app.approve(question):
-        shutil.rmtree(folder)
-        logging.info(f"Deleted folder and all its contents: {folder}")
-
-
 def remove_all_index_files(app: App):
     if not app.conf.logos_exe:
         app.exit("Cannot remove index files, Logos is not installed")
@@ -207,6 +196,44 @@ def remove_library_catalog(app: App):
             logging.info(f"Removed: {file_to_remove}")
         except OSError as e:
             logging.error(f"Error removing {file_to_remove}: {e}")
+
+
+def uninstall(app: App):
+    """Completely uninstalls both this app and the installed product"""
+    app.status("Uninstalling…")
+    delete_paths = [
+        app.conf.config_file_path,
+        app.conf.install_dir,
+    ]
+
+    question = "Are you sure you want to uninstall?"
+    context = (
+        "We're about to run:\n\n"
+        "rm -rf " + 
+        " ".join(delete_paths)
+    )
+    if not app.approve(question, context):
+        logging.debug("User refused to uninstall")
+        return
+    if app.approve(
+        "Do you also want to clear the cache and logs?",
+        "If you're debugging make sure you've already hit the \"Get Support\" button; "
+        "we wouldn't want to loose those logs."
+    ):
+        delete_paths += [constants.CACHE_DIR, constants.STATE_DIR]
+
+    for del_path in delete_paths:
+        path = Path(del_path)
+        if not path.exists():
+            continue
+        if path.is_file():
+            os.remove(path)
+        elif path.is_dir():
+            shutil.rmtree(path)
+
+    app.status("Uninstalled")
+
+    app.conf.reload()
 
 
 def get_support(app: App) -> str:

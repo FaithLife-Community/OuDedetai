@@ -48,8 +48,8 @@ class CLI(App):
     def remove_index_files(self):
         control.remove_all_index_files(self)
 
-    def remove_install_dir(self):
-        control.remove_install_dir(self)
+    def uninstall(self):
+        control.uninstall(self)
 
     def remove_library_catalog(self):
         control.remove_library_catalog(self)

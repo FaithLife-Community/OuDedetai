@@ -172,8 +172,8 @@ def get_parser():
         help='[re-]create app shortcuts',
     )
     cmd.add_argument(
-        '--remove-install-dir', action='store_true',
-        help='delete the current installation folder',
+        '--uninstall', action='store_true',
+        help='Completely delete the faithlife software from your system',
     )
     cmd.add_argument(
         '--dirlink', action='store_true',
@@ -280,7 +280,7 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
         'install_dependencies',
         'install_icu',
         'remove_index_files',
-        'remove_install_dir',
+        'uninstall',
         'remove_library_catalog',
         'restore',
         'run_indexing',

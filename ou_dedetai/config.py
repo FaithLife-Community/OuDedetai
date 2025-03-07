@@ -541,14 +541,7 @@ class Config:
         self._raw = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
         self._overrides = ephemeral_config
 
-        def _network_cache_hook():
-            self.app._config_updated_event.set()
-
-        self._network = network.NetworkRequests(
-            ephemeral_config.check_updates_now,
-            hook=_network_cache_hook
-        )
-
+        self._network = self._create_network_requests_with_hook()
         logging.debug("Current persistent config:")
         for k, v in self._raw.__dict__.items():
             logging.debug(f"{k}: {v}")
@@ -560,6 +553,15 @@ class Config:
             logging.debug(f"{k}: {v}")
         logging.debug("End config dump")
 
+    def _create_network_requests_with_hook(self) -> network.NetworkRequests:
+        def _network_cache_hook():
+            self.app._config_updated_event.set()
+
+        return network.NetworkRequests(
+            self._overrides.check_updates_now,
+            hook=_network_cache_hook
+        )
+ 
     def _ask_if_not_found(self, parameter: str, question: str, options: list[str], dependent_parameters: Optional[list[str]] = None) -> str:  #noqa: E501
         if not getattr(self._raw, parameter):
             if dependent_parameters is not None:
@@ -610,12 +612,14 @@ class Config:
         return str(path)
 
     def reload(self):
-        """Re-loads the configuration file on disk"""
+        """Re-loads the configuration from disk"""
         self._raw = PersistentConfiguration.load_from_path(self._overrides.config_path)
+        self._network = self._create_network_requests_with_hook()
         # Also clear out our cached values
         self._logos_exe = self._download_dir = self._wine_output_encoding = None
         self._installed_faithlife_product_release = self._wine_binary_files = None
-        self._wine_appimage_files = None
+        self._wine_appimage_files = self._wine_user = None
+        self._wine64_path = self._user_download_dir = None
 
         self.app._config_updated_event.set()
 
