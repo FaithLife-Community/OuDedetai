@@ -63,19 +63,22 @@ jobs:
       id: pyinstaller
       run: |
         ARCH=${{ matrix.arch }}
+        BIN_NAME="oudedetai-${ARCH}-${{ github.run_id }}"
         ./scripts/build-binary.sh $ARCH
-        if [[ "$ARCH" == "x86_64" ]]; then
-          BIN_NAME="oudedetai-x86_64"
-          echo "bin_name_x86_64=$BIN_NAME" >> $GITHUB_OUTPUT
-        else
-          BIN_NAME="oudedetai-arm"
-          echo "bin_name_arm=$BIN_NAME" >> $GITHUB_OUTPUT
-        fi
         mv dist/oudedetai "dist/$BIN_NAME"
+        
+        # Ensure both outputs are always set, avoiding null issues
+        if [[ "$ARCH" == "x86_64" ]]; then
+          echo "bin_name_x86_64=$BIN_NAME" >> $GITHUB_OUTPUT
+          echo "bin_name_arm=" >> $GITHUB_OUTPUT  # Ensure this output exists
+        else
+          echo "bin_name_arm=$BIN_NAME" >> $GITHUB_OUTPUT
+          echo "bin_name_x86_64=" >> $GITHUB_OUTPUT  # Ensure this output exists
+        fi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: oudedetai-${{ matrix.arch }}-${{ github.run_id }}
-        path: dist/oudedetai-${{ matrix.arch }}
+        name: ${{ steps.pyinstaller.outputs.bin_name_x86_64 || steps.pyinstaller.outputs.bin_name_arm }}
+        path: dist/${{ steps.pyinstaller.outputs.bin_name_x86_64 || steps.pyinstaller.outputs.bin_name_arm }}
         compression-level: 0
