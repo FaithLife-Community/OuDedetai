@@ -1,9 +1,9 @@
 import curses
 import logging
 import time
+from queue import Queue
+from threading import Event
 from typing import Optional
-
-from ou_dedetai.app import App
 
 from . import installer
 from . import system
@@ -11,9 +11,10 @@ from . import tui_curses
 if system.have_dep("dialog"):
     from . import tui_dialog
 
+from ou_dedetai.app import App
 
 class Screen:
-    def __init__(self, app: App, screen_id, queue, event):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event):
         from ou_dedetai.tui_app import TUI
         if not isinstance(app, TUI):
             raise ValueError("Cannot start TUI screen with non-TUI app")
@@ -64,7 +65,7 @@ class DialogScreen(Screen):
 
 
 class ConsoleScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, start_y):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, start_y: int):
         super().__init__(app, screen_id, queue, event)
         self.stdscr: Optional[curses.window] = self.app.console_window
         self.start_y = start_y
@@ -91,7 +92,7 @@ class ConsoleScreen(CursesScreen):
 
 
 class HeaderScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, title, subtitle, title_start_y):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, title: str, subtitle: str, title_start_y: int):
         super().__init__(app, screen_id, queue, event)
         self.stdscr: Optional[curses.window] = self.app.header_window
         self.title = title
@@ -114,7 +115,7 @@ class HeaderScreen(CursesScreen):
 
 
 class FooterScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, start_y):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, start_y: int):
         super().__init__(app, screen_id, queue, event)
         self.stdscr: Optional[curses.window] = self.app.footer_window
         self.start_y = start_y
@@ -140,7 +141,7 @@ class FooterScreen(CursesScreen):
 
 
 class MenuScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, question, options, height=None, width=None, menu_height=8): #noqa: E501
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, question: str, options: list, height: int=None, width: int=None, menu_height: int=8): #noqa: E501
         super().__init__(app, screen_id, queue, event)
         self.stdscr = self.app.get_main_window()
         self.question = question
@@ -176,7 +177,7 @@ class MenuScreen(CursesScreen):
 
 
 class ConfirmScreen(MenuScreen):
-    def __init__(self, app, screen_id, queue, event, question, no_text, secondary, options=["Yes", "No"]): #noqa: E501
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, question: str, no_text: str, secondary: str, options: list=["Yes", "No"]): #noqa: E501
         super().__init__(app, screen_id, queue, event, question, options,
                          height=None, width=None, menu_height=8)
         self.no_text = no_text
@@ -204,7 +205,7 @@ class ConfirmScreen(MenuScreen):
 
 
 class InputScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, question: str, default):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, question: str, default: str):
         super().__init__(app, screen_id, queue, event)
         self.stdscr = self.app.get_main_window()
         self.question = question
@@ -237,7 +238,7 @@ class InputScreen(CursesScreen):
 
 
 class PasswordScreen(InputScreen):
-    def __init__(self, app, screen_id, queue, event, question, default):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, question: str, default: str):
         super().__init__(app, screen_id, queue, event, question, default)
         # Update type for type linting
         from ou_dedetai.tui_app import TUI
@@ -265,7 +266,7 @@ class PasswordScreen(InputScreen):
 
 
 class TextScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, text, wait):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, text: str, wait: bool):
         super().__init__(app, screen_id, queue, event)
         self.stdscr = self.app.get_main_window()
         self.text = text
