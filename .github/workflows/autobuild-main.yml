@@ -27,17 +27,16 @@ jobs:
     - name: Download artifact from build job
       uses: actions/download-artifact@v4
       with:
-        name: oudedetai-${{ matrix.arch }}-${{ github.run_id }}
+        name: oudedetai-${{ matrix.arch }}
 
     - name: Make binary executable
-      run: chmod +x oudedetai-${{ matrix.arch }}-${{ github.run_id }}
+      run: chmod +x oudedetai-${{ matrix.arch }}
 
     - name: Upload release to test repo
       uses: softprops/action-gh-release@v1
       with:
         tag_name: main-latest
         prerelease: true
-        files: oudedetai-${{ matrix.arch }}-${{ github.run_id }}
+        files: oudedetai-${{ matrix.arch }}
         repository: FaithLife-Community/test-builds
         token: ${{ secrets.N8MARTI_ACCESS_TOKEN }}
-        
