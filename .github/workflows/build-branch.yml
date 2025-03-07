@@ -32,8 +32,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        runner: [ubuntu-latest, ubuntu-24.04-arm]
-        arch: [x86_64, arm]
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm
     outputs:
       bin_name_x86_64: ${{ steps.pyinstaller.outputs.bin_name_x86_64 }}
       bin_name_arm: ${{ steps.pyinstaller.outputs.bin_name_arm }}
@@ -66,18 +69,10 @@ jobs:
       id: pyinstaller
       run: |
         ARCH=${{ matrix.arch }}
-        BIN_NAME="oudedetai-${ARCH}-${{ github.run_id }}"
         ./scripts/build-binary.sh $ARCH
+        BIN_NAME="oudedetai-${ARCH}"
+        echo "bin_name_${ARCH}=$BIN_NAME" >> $GITHUB_OUTPUT
         mv dist/oudedetai "dist/$BIN_NAME"
-        
-        # Ensure both outputs are always set, avoiding null issues
-        if [[ "$ARCH" == "x86_64" ]]; then
-          echo "bin_name_x86_64=$BIN_NAME" >> $GITHUB_OUTPUT
-          echo "bin_name_arm=" >> $GITHUB_OUTPUT  # Ensure this output exists
-        else
-          echo "bin_name_arm=$BIN_NAME" >> $GITHUB_OUTPUT
-          echo "bin_name_x86_64=" >> $GITHUB_OUTPUT  # Ensure this output exists
-        fi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
