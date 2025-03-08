@@ -13,6 +13,7 @@
 	- Fixes misc bugs where versions we not being compared properly, resulted in a failed install for one user (#359) [N. Shaaban]
 	- Fixes Manjaro 7zip package name (#361) [T. H. Wright]
 	- Fixes bug where a custom XDG_DATA_DIR wasn't creating the FaithLife-Community subfolder (#358) [N. Shaaban]
+	- Adds extra line to the footer of the TUI (also refactor TUI splitting into header/footer) (#343, #342) [T. H. Wright]
 - 4.0.0-beta.9
 	- **Change default install dir to $XDG_DATA_HOME/FaithLife-Community/oudedetai (this will be ~/.local/share/FaithLife-Community/oudedetai on most systems). To restore the old behavior: `export INSTALLDIR=$HOME/LogosBible10` (#323) [T. H. Wright]**
 	- **Fixes crash in "Copy Bible Verse" and when first hitting "Continue" due to missing arial font (#335) [N. Shaaban]**
