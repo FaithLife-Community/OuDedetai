@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import logging
+from math import ceil
 import os
 import time
 from typing import Callable, Optional
@@ -379,7 +380,7 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
     logging.debug(f"Download destination: {target}")
     target_props = FileProps(target)  # sets path and size attribs
     if app and target_props.path:
-        app.status(f"Downloading {target_props.path.name}…")
+        app.status(f"Downloading {target_props.path.name}…", 0)
     parsed_url = urlparse(url)
     domain = parsed_url.netloc  # Gets the requested domain
     url_props = UrlProps(url)  # uses requests to set headers, size, md5 attribs
@@ -433,12 +434,22 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
                 try:
                     r.raise_for_status()
                 except requests.exceptions.HTTPError as e:
-                    if domain == "github.com":
+                    if domain in ["github.com", "api.github.com"]:
                         if (
                             e.response.status_code == 403
                             or e.response.status_code == 429
                         ):
-                            logging.error("GitHub API rate limit exceeded. Please wait before trying again.")  # noqa: E501
+                            message = "GitHub API rate limit exceeded. Please wait "
+                            if "x-ratelimit-reset" in r.headers:
+                                epoch_to_reset: str = r.headers["x-ratelimit-reset"]
+                                seconds_until_reset = ceil(int(epoch_to_reset) - time.time()) #noqa: E501
+                                if seconds_until_reset < 120:
+                                    message += f"{seconds_until_reset} seconds "
+                                else:
+                                    # More human readable to display in minutes
+                                    message += f"{ceil(seconds_until_reset / 60)} minutes " #noqa: E501
+                            message += "before trying again."
+                            logging.error(message)
                     else:
                         logging.error(f"HTTP error occurred: {e.response.status_code}")  # noqa: E501
                     return None
@@ -456,14 +467,18 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
                         f.write(chunk)
                         local_size = os.fstat(f.fileno()).st_size
                         if type(total_size) is int:
-                            percent = round(local_size / total_size * 10)
+                            percent = local_size / total_size
                             # if None not in [app, evt]:
                             if app:
-                                # Show dots corresponding to show download progress
-                                # While we could use percent, it's likely to interfere
-                                # With whatever install step we are on
-                                message = "Downloading" + "." * percent + "\r"
-                                app.status(message)
+                                # This assumes that there is a 1:1 relationship between
+                                # steps and download jobs, which is presently true
+                                # If at some point in the future it is no longer true
+                                # the worst that'll happen is the progress bar will
+                                # appear to go backwards.
+                                app.status(
+                                    f"Downloading {target_props.path.name}…",
+                                    percent
+                                )
     except requests.exceptions.RequestException as e:
         logging.error(f"Error occurred during HTTP request: {e}")
         return None  # Return None values to indicate an error condition
@@ -585,7 +600,9 @@ def _get_faithlife_product_releases(
         #    break
 
     #Filtering not needed at the moment but left here in case we want it later.
-    #filtered_releases = utils.filter_versions(releases, 40, 1)
+    #Double check this works before releasing.
+    #from packaging.versions import Version
+    #filtered_releases = [version for version in releases if Version("40.0.0.0") > Version(version)] # noqa: E501
     #logging.debug(f"Available releases: {', '.join(releases)}")
     #logging.debug(f"Filtered releases: {', '.join(filtered_releases)}")
 

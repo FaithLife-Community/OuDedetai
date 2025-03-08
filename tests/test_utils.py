@@ -146,14 +146,6 @@ class TestGeneralUtils(unittest.TestCase):
         # TODO: Need to add test for v1 appimage.
         self.assertTrue(utils.check_appimage(self.tiny_appimage))
 
-    def test_check_logos_release_version_false(self):
-        result = utils.check_logos_release_version('1.1.1', 1, 3)
-        self.assertFalse(result)
-
-    def test_check_logos_release_version_true(self):
-        result = utils.check_logos_release_version('1.1.1', 2, 3)
-        self.assertTrue(result)
-
     @unittest.skip("Not testing simple shell command.")
     def test_clean_all(self):
         pass
@@ -191,11 +183,6 @@ class TestGeneralUtils(unittest.TestCase):
     def test_file_exists_true(self):
         self.assertTrue(utils.file_exists('~/.bashrc'))
 
-    def test_filter_versions(self):
-        allvers = ['1.0', '1.1', '1.2', '1.3', '1.4', '1.5']
-        valvers = ['1.0', '1.1', '1.2', '1.3',]
-        filvers = utils.filter_versions(allvers, 4, 2)
-        self.assertEqual(valvers, filvers)
 
     def test_find_installed_product_exists(self):
         name = 'Logos'
@@ -329,8 +316,4 @@ class TestGeneralUtils(unittest.TestCase):
 
     @unittest.skip("Test requires oudedetai binary.")
     def test_update_to_latest_lli_release(self):
-        pass
-
-    @unittest.skip("Test not feasible.")
-    def test_watch_db(self):
         pass
