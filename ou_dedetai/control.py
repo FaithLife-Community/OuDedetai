@@ -218,7 +218,7 @@ def uninstall(app: App):
     if app.approve(
         "Do you also want to clear the cache and logs?",
         "If you're debugging make sure you've already hit the \"Get Support\" button; "
-        "we wouldn't want to loose those logs."
+        "we wouldn't want to lose those logs."
     ):
         delete_paths += [constants.CACHE_DIR, constants.STATE_DIR]
 
