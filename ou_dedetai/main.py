@@ -139,13 +139,11 @@ def get_parser():
     )
     cmd.add_argument(
         '--backup', action='store_true',
-        # help='perform backup',
-        help=argparse.SUPPRESS,
+        help='backup current data',
     )
     cmd.add_argument(
         '--restore', action='store_true',
-        # help='perform restore',
-        help=argparse.SUPPRESS,
+        help='restore data from backup',
     )
     cmd.add_argument(
         '--update-self', '-u', action='store_true',
