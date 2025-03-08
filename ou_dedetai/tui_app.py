@@ -980,9 +980,17 @@ class TUI(App):
                 "Remove Library Catalog",
                 "Remove All Index Files",
                 "Install ICU",
-                "Uninstall"
             ]
             labels.extend(labels_catalog)
+        
+        # FIXME: #367 rework uninstall to work without a successful install
+        if self.is_installed():
+            label_user_data_utilities = [
+                "Uninstall"
+                # "Back Up Data",
+                # "Restore Data"
+            ]
+            labels.extend(label_user_data_utilities)
 
         labels_utilities = ["Install Dependencies", "Edit Config", "Reload Config"]
         labels.extend(labels_utilities)
@@ -991,8 +999,6 @@ class TUI(App):
             labels_utils_installed = [
                 "Change Logos Release Channel",
                 f"Change {constants.APP_NAME} Release Channel",
-                # "Back Up Data",
-                # "Restore Data"
             ]
             labels.extend(labels_utils_installed)
 
