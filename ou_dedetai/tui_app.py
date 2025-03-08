@@ -477,9 +477,17 @@ class TUI(App):
                                 self.tui_screens.pop()
 
                     if len(self.tui_screens) == 0:
-                        self.active_screen = self.main_screen
+                        if self.active_screen != self.menu_screen:
+                            self.current_option = 0
+                            self.current_page = 0
+                            self.total_pages = 0
+                            self.active_screen = self.menu_screen
                     else:
-                        self.active_screen = self.tui_screens[-1]
+                        if self.active_screen != self.tui_screens[-1]:
+                            self.current_option = 0
+                            self.current_page = 0
+                            self.total_pages = 0
+                            self.active_screen = self.tui_screens[-1]
 
                     if not isinstance(self.active_screen, tui_screen.DialogScreen):
                         run_monitor, last_time = utils.stopwatch(last_time, 2.5)

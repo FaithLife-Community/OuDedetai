@@ -498,7 +498,7 @@ def get_package_manager() -> PackageManager | None:
             "fuse2 "  # appimages
             "samba wget "  # wine
             "curl gawk grep "  # other
-            "p7zip cabextract "  # winetricks (this will likely rename to 7zip shortly)
+            "7zip cabextract "  # winetricks (this will likely rename to 7zip shortly)
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('pacman') is not None:  # arch, steamOS

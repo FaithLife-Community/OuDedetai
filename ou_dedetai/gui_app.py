@@ -108,7 +108,7 @@ class GuiApp(App):
     def approve(self, question: str, context: str | None = None) -> bool:
         if context is None:
             context = ""
-        message = f"{context}\n{question}"
+        message = f"{question}\n{context}"
         return messagebox.askquestion(question, message.strip()) == 'yes'
 
     def _exit(self, reason: str, intended: bool = False):

@@ -21,16 +21,27 @@ jobs:
       branch: main
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm
     needs: build
     permissions:
       contents: write
     steps:
-    - name: download
+    - name: Download artifact from build job
       uses: actions/download-artifact@v4
       with:
-        name: oudedetai
-    - name: release
+        name: oudedetai-${{ matrix.arch }}
+
+    - name: Make binary executable
+      run: chmod +x oudedetai-${{ matrix.arch }}
+
+    - name: Upload release to GitHub
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -38,4 +49,4 @@ jobs:
         tag_name: ${{ inputs.tag }}
         draft: true
         prerelease: ${{ inputs.prerelease }}
-        files: ${{ needs.build.outputs.bin_name }}
+        files: oudedetai-${{ matrix.arch }}

@@ -490,6 +490,18 @@ def get_logos_appdata_dir(
     return f'{wine_prefix}/drive_c/users/{wine_user}/AppData/Local/{faithlife_product}'
 
 
+def get_logos_user_id(
+    logos_appdata_dir: str
+) -> Optional[str]:
+    logos_data_path = Path(logos_appdata_dir) / "Data"
+    contents = os.listdir(logos_data_path)
+    children = [logos_data_path / child for child in contents]
+    file_children = [child for child in children if child.is_dir()]
+    if file_children and len(file_children) > 0:
+        return file_children[0].name
+    else:
+        return None
+
 class Config:
     """Set of configuration values. 
     
@@ -789,6 +801,14 @@ class Config:
         )
 
     @property
+    def _logos_user_id(self) -> Optional[str]:
+        """Name of the Logos user id throughout the app"""
+        logos_appdata_dir = self._logos_appdata_dir
+        if logos_appdata_dir is None:
+            return None
+        return get_logos_user_id(logos_appdata_dir)
+
+    @property
     # This used to be called WINEPREFIX
     def wine_prefix(self) -> str:
         if self._overrides.wine_prefix is not None:
@@ -810,7 +830,16 @@ class Config:
         # Return the full path so we the callee doesn't need to think about it
         if self._raw.wine_binary is not None and not Path(self._raw.wine_binary).exists() and (Path(self.install_dir) / self._raw.wine_binary).exists(): # noqa: E501
             return str(Path(self.install_dir) / self._raw.wine_binary)
-        if not Path(output).exists():
+        # Output a warning if the path doesn't exist and isn't relative to
+        # the install dir.
+        # In the case of appimage, this won't exist for part of the 
+        # installation, but still is valid. And the appimage uses a relative
+        # path or an absolute that's relative to the install dir
+        if (
+            not Path(output).exists()
+            and Path(output).is_absolute()
+            and not Path(output).is_relative_to(self.install_dir)
+        ):
             logging.warning(f"Wine binary {output} doesn't exist")
         return output
 
