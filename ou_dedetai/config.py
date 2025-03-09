@@ -1099,19 +1099,20 @@ class Config:
     @property
     def logos_cef_exe(self) -> Optional[str]:
         if self.wine_user is not None:
-            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\Logos\\System\\LogosCEF.exe'  # noqa: E501
+            # This name is the same even in Verbum
+            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\LogosCEF.exe'  # noqa: E501
         return None
 
     @property
     def logos_indexer_exe(self) -> Optional[str]:
         if self.wine_user is not None:
-            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\Logos\\System\\LogosIndexer.exe'  # noqa: E501
+            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\{self.faithlife_product}Indexer.exe'  # noqa: E501
         return None
 
     @property
     def logos_login_exe(self) -> Optional[str]:
         if self.wine_user is not None:
-            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\Logos\\System\\Logos.exe'  # noqa: E501
+            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\{self.faithlife_product}.exe'  # noqa: E501
         return None
 
     @property
