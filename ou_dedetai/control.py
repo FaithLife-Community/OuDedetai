@@ -97,7 +97,7 @@ def backup_and_restore(mode: str, app: App):
         while t.is_alive():
             i += 1
             i = i % 20
-            app.status(f"{message}{'.' * i}\r")
+            app.status(f"\r{message}{'.' * i}")
             time.sleep(0.5)
     except KeyboardInterrupt:
         print()

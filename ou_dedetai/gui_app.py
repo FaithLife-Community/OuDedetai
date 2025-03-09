@@ -89,7 +89,7 @@ class GuiApp(App):
         InfoPopUp(message)
 
     def _status(self, message, percent = None):
-        message = message.lstrip("\r")
+        message = message.strip("\r")
         if percent is not None:
             self._status_gui.progress.stop()
             self._status_gui.progress.state(['disabled'])
