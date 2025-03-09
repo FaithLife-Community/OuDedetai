@@ -19,12 +19,12 @@ grade: stable
 confinement: strict
 icon: ou_dedetai/img/icon.svg # or post-build: snap/img/icon.svg
 license: MIT
-source-code: https://github.com/FaithLife-Community/LogosLinuxInstaller
-issues: https://github.com/FaithLife-Community/LogosLinuxInstaller/issues
+source-code: https://github.com/FaithLife-Community/OuDedetai
+issues: https://github.com/FaithLife-Community/OuDedetai/issues
 contact:
   - https://t.me/linux_logos
   - https://matrix.to/#/#logosbible:matrix.org
-website: https://github.com/FaithLife-Community/LogosLinuxInstaller/wiki
+website: https://github.com/FaithLife-Community/OuDedetai/wiki
 
 
 platforms:
@@ -98,7 +98,7 @@ parts:
       - libxkbregistry0
 
   oudedetai:
-    source: https://github.com/FaithLife-Community/LogosLinuxInstaller.git
+    source: https://github.com/FaithLife-Community/OuDedetai.git
     plugin: python
     override-pull: |
       craftctl default
@@ -111,7 +111,7 @@ parts:
       - python3-tk
 
   oudedetai-dump:
-    source: https://github.com/FaithLife-Community/LogosLinuxInstaller.git
+    source: https://github.com/FaithLife-Community/OuDedetai.git
     plugin: dump
     organize:
       snap/bin/run.sh: bin/run.sh

@@ -9,9 +9,9 @@ python_exec_ver="${python_ver%.*}"
 python_exec_path="${prefix}/bin/python${python_exec_ver}"
 
 # Check parent dir.
-if [[ ! $(basename "$PWD") == 'LogosLinuxInstaller' ]]; then
-    echo "Error: PWD needs to be './LogosLinuxInstaller'"
-    echo "LogosLinuxInstaller can be cloned from https://github.com/FaithLife-Community/LogosLinuxInstaller.git"
+if [[ ! $(basename "$PWD") == 'LogosLinuxInstaller' ]] || [[ ! $(basename "$PWD") == 'OuDedetai' ]]; then
+    echo "Error: PWD needs to be './OuDedetai'"
+    echo "OuDedetai can be cloned from https://github.com/FaithLife-Community/OuDedetai.git"
     exit 1
 fi
 
