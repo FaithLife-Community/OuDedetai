@@ -140,6 +140,7 @@ def run_command(command, retries=1, delay=0, **kwargs) -> Optional[subprocess.Co
     return None
 
 
+# FIXME: #300 refactor this to either return Popen or raise. No None.
 def popen_command(command, retries=1, delay=0, **kwargs) -> Optional[subprocess.Popen[bytes]]: #noqa: E501
     shell = kwargs.get("shell", False)
     env = kwargs.get("env", None)
