@@ -33,9 +33,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu-20.04
             arch: x86_64
-          - runner: ubuntu-24.04-arm
+          - runner: ubuntu-22.04-arm
             arch: arm
     outputs:
       bin_name_x86_64: ${{ steps.pyinstaller.outputs.bin_name_x86_64 }}
