@@ -208,7 +208,7 @@ class EphemeralConfiguration:
     wine_appimage_path: Optional[str]
     """Path to the selected appimage"""
 
-    # FIXME: consider using PATH instead? (and storing this legacy env in PATH for this process) # noqa: E501
+    # FIXME: consider using PATH instead? (and storing this legacy env in PATH for this process)
     custom_binary_path: Optional[str]
     """Additional path to look for when searching for binaries."""
 
@@ -257,7 +257,7 @@ class EphemeralConfiguration:
         wine_debug = legacy.WINEDEBUG
         if legacy.DEBUG:
             log_level = logging.DEBUG
-            # FIXME: shouldn't this leave it untouched or fall back to default: `fixme-all,err-all`? # noqa: E501
+            # FIXME: shouldn't this leave it untouched or fall back to default: `fixme-all,err-all`?
             wine_debug = ""
         elif legacy.VERBOSE:
             log_level = logging.INFO
@@ -305,7 +305,7 @@ class EphemeralConfiguration:
 
     @classmethod
     def load_from_path(cls, path: str) -> "EphemeralConfiguration":
-        return EphemeralConfiguration.from_legacy(LegacyConfiguration.load_from_path(path)) # noqa: E501
+        return EphemeralConfiguration.from_legacy(LegacyConfiguration.load_from_path(path))
 
 
 @dataclass
@@ -355,7 +355,7 @@ class PersistentConfiguration:
     def load_from_path(cls, config_file_path: str) -> "PersistentConfiguration":
         # First read in the legacy configuration
         legacy = LegacyConfiguration.load_from_path(config_file_path)
-        new_config: PersistentConfiguration = PersistentConfiguration.from_legacy(legacy) #noqa: E501
+        new_config: PersistentConfiguration = PersistentConfiguration.from_legacy(legacy) 
 
         new_keys = new_config.__dict__.keys()
 
@@ -379,7 +379,7 @@ class PersistentConfiguration:
             logging.info("Not reading new values from non-existent config")
 
         # Now override with values from ENV
-        config_env = PersistentConfiguration.from_legacy(LegacyConfiguration.load_from_env()) #noqa: E501
+        config_env = PersistentConfiguration.from_legacy(LegacyConfiguration.load_from_env()) 
         for k, v in config_env.__dict__.items():
             if v is not None:
                 config_dict[k] = v
@@ -434,7 +434,7 @@ class PersistentConfiguration:
                     if v is not None:
                         output[k] = str(v)
                     continue
-                if (isinstance(v, str) and v.startswith(self.install_dir)): #noqa: E501
+                if (isinstance(v, str) and v.startswith(self.install_dir)): 
                     output[k] = utils.get_relative_path(v, self.install_dir)
         return output
 
@@ -453,11 +453,11 @@ class PersistentConfiguration:
                     config_file.write(json_str)
                     config_file.write('\n')
             except IOError as e:
-                logging.error(f"Error writing to file {config_file_path}: {e}")  # noqa: E501
+                logging.error(f"Error writing to file {config_file_path}: {e}")
                 # Continue, the installer can still operate even if it fails to write.
 
         if self.install_dir is not None:
-            portable_config_path = os.path.expanduser(self.install_dir + f"/{constants.BINARY_NAME}.json") #noqa: E501
+            portable_config_path = os.path.expanduser(self.install_dir + f"/{constants.BINARY_NAME}.json") 
             write_json_file(portable_config_path)
 
         write_json_file(config_file_path)
@@ -574,14 +574,20 @@ class Config:
             hook=_network_cache_hook
         )
  
-    def _ask_if_not_found(self, parameter: str, question: str, options: list[str], dependent_parameters: Optional[list[str]] = None) -> str:  #noqa: E501
+    def _ask_if_not_found(
+        self,
+        parameter: str,
+        question: str,
+        options: list[str],
+        dependent_parameters: Optional[list[str]] = None
+    ) -> str:  
         if not getattr(self._raw, parameter):
             if dependent_parameters is not None:
                 for dependent_config_key in dependent_parameters:
                     setattr(self._raw, dependent_config_key, None)
             answer = self.app.ask(question, options)
             # Use the setter on this class if found, otherwise set in self._user
-            if getattr(Config, parameter) and getattr(Config, parameter).fset is not None: # noqa: E501
+            if getattr(Config, parameter) and getattr(Config, parameter).fset is not None:
                 getattr(Config, parameter).fset(self, answer)
             else:
                 setattr(self._raw, parameter, answer)
@@ -641,9 +647,17 @@ class Config:
 
     @property
     def faithlife_product(self) -> str:
-        question = "Choose which FaithLife product the script should install: "  # noqa: E501
+        question = "Choose which FaithLife product the script should install: "
         options = constants.FAITHLIFE_PRODUCTS
-        return self._ask_if_not_found("faithlife_product", question, options, ["faithlife_product_version", "faithlife_product_release"]) # noqa: E501
+        return self._ask_if_not_found(
+            "faithlife_product",
+            question,
+            options,
+            [
+                "faithlife_product_version",
+                "faithlife_product_release"
+            ]
+        )
 
     @faithlife_product.setter
     def faithlife_product(self, value: Optional[str]):
@@ -662,9 +676,9 @@ class Config:
             return self._raw.faithlife_product_version
         return "10"
         # Keep following in case we need to prompt for additional versions in the future
-        #question = f"Which version of {self.faithlife_product} should the script install?: "  # noqa: E501
+        #question = f"Which version of {self.faithlife_product} should the script install?: "
         #options = constants.FAITHLIFE_PRODUCT_VERSIONS
-        #return self._ask_if_not_found("faithlife_product_version", question, options, []) # noqa: E501
+        #return self._ask_if_not_found("faithlife_product_version", question, options, [])
 
     @faithlife_product_version.setter
     def faithlife_product_version(self, value: Optional[str]):
@@ -692,7 +706,9 @@ class Config:
 
     @property
     def faithlife_product_release(self) -> str:
-        question = f"Which version of {self.faithlife_product} {self.faithlife_product_version} do you want to install?: "  # noqa: E501
+        question = (
+            f"Which version of {self.faithlife_product} {self.faithlife_product_version} do you want to install?: "
+        )
         options = self.faithlife_product_releases
         return self._ask_if_not_found("faithlife_product_release", question, options)
 
@@ -731,8 +747,8 @@ class Config:
     def faithlife_installer_download_url(self) -> str:
         if self._overrides.faithlife_installer_download_url is not None:
             return self._overrides.faithlife_installer_download_url
-        after_version_url_part = "/Verbum/" if self.faithlife_product == "Verbum" else "/" # noqa: E501
-        return f"https://downloads.logoscdn.com/LBS{self.faithlife_product_version}{after_version_url_part}Installer/{self.faithlife_product_release}/{self.faithlife_product}-x64.msi"  # noqa: E501
+        after_version_url_part = "/Verbum/" if self.faithlife_product == "Verbum" else "/"
+        return f"https://downloads.logoscdn.com/LBS{self.faithlife_product_version}{after_version_url_part}Installer/{self.faithlife_product_release}/{self.faithlife_product}-x64.msi"
 
     @property
     def faithlife_product_release_channel(self) -> str:
@@ -758,14 +774,14 @@ class Config:
 
     @property
     def install_dir_default(self) -> str:
-        return f"{constants.DATA_HOME}/{constants.BINARY_NAME}"  # noqa: E501
+        return f"{constants.DATA_HOME}/{constants.BINARY_NAME}"
 
     @property
     def install_dir(self) -> str:
         if self._overrides.install_dir:
             return self._overrides.install_dir
         default = self.install_dir_default
-        question = f"Where should {self.faithlife_product} files be installed to?: "  # noqa: E501
+        question = f"Where should {self.faithlife_product} files be installed to?: "
         options = [default, PROMPT_OPTION_DIRECTORY]
         output = self._ask_if_not_found("install_dir", question, options)
         return output
@@ -824,7 +840,10 @@ class Config:
         """Returns absolute path to the wine binary"""
         output = self._raw.wine_binary
         if output is None:
-            question = f"Which Wine AppImage or binary should the script use to install {self.faithlife_product} v{self.faithlife_product_version} in {self.install_dir}?: "  # noqa: E501
+            question = (
+                f"Which Wine AppImage or binary should the script use to install {self.faithlife_product} "
+                f"v{self.faithlife_product_version} in {self.install_dir}?: "
+            )
             options = utils.get_wine_options(self.app)
 
             choice = self.app.ask(question, options)
@@ -832,7 +851,11 @@ class Config:
             output = choice
             self.wine_binary = choice
         # Return the full path so we the callee doesn't need to think about it
-        if self._raw.wine_binary is not None and not Path(self._raw.wine_binary).exists() and (Path(self.install_dir) / self._raw.wine_binary).exists(): # noqa: E501
+        if (
+            self._raw.wine_binary is not None 
+            and not Path(self._raw.wine_binary).exists() 
+            and (Path(self.install_dir) / self._raw.wine_binary).exists()
+        ):
             return str(Path(self.install_dir) / self._raw.wine_binary)
         # Output a warning if the path doesn't exist and isn't relative to
         # the install dir.
@@ -887,7 +910,7 @@ class Config:
         
         One of: Recommended, AppImage, System, Proton, PlayOnLinux, Custom"""
         if self._raw.wine_binary_code is None:
-            self._raw.wine_binary_code = utils.get_winebin_code_and_desc(self.app, self.wine_binary)[0]  # noqa: E501
+            self._raw.wine_binary_code = utils.get_winebin_code_and_desc(self.app, self.wine_binary)[0]
             self._write()
         return self._raw.wine_binary_code
 
@@ -922,7 +945,7 @@ class Config:
                 self._wine64_path = str(wine_path)
             elif file_output.startswith("ELF 32-bit LSB pie executable,"):
                 # Woah there, we only have a 32 bit binary.
-                self.app.exit("Could not find a 64 bit wine binary, please install a 64bit wine") # noqa: E501
+                self.app.exit("Could not find a 64 bit wine binary, please install a 64bit wine")
             else:
                 # We don't want to fail here since file might behave differently on
                 # different systems or maybe different on BSD
@@ -955,7 +978,7 @@ class Config:
         Returns:
             Path if wine is set to use an appimage, otherwise returns None"""
         if self._overrides.wine_appimage_path is not None:
-            return Path(self._absolute_from_install_dir(self._overrides.wine_appimage_path)) #noqa: E501
+            return Path(self._absolute_from_install_dir(self._overrides.wine_appimage_path)) 
         if self.wine_binary.lower().endswith(".appimage"):
             return Path(self._absolute_from_install_dir(self.wine_binary))
         return None
@@ -1063,12 +1086,15 @@ class Config:
     @curses_color_scheme.setter
     def curses_color_scheme(self, value: Optional[str]):
         if value is not None and value not in self._curses_color_scheme_valid_values:
-            raise ValueError(f"Invalid curses theme, expected one of: {", ".join(self._curses_color_scheme_valid_values)} but got: {value}") # noqa: E501
+            raise ValueError(
+                "Invalid curses theme, expected one of: "
+                f"{", ".join(self._curses_color_scheme_valid_values)} but got: {value}"
+            )
         self._raw.curses_color_scheme = value
         self._write()
     
     def cycle_curses_color_scheme(self):
-        new_index = self._curses_color_scheme_valid_values.index(self.curses_color_scheme) + 1 # noqa: E501
+        new_index = self._curses_color_scheme_valid_values.index(self.curses_color_scheme) + 1
         if new_index == len(self._curses_color_scheme_valid_values):
             new_index = 0
         self.curses_color_scheme = self._curses_color_scheme_valid_values[new_index]
@@ -1098,19 +1124,21 @@ class Config:
     def logos_cef_exe(self) -> Optional[str]:
         if self.wine_user is not None:
             # This name is the same even in Verbum
-            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\LogosCEF.exe'  # noqa: E501
+            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\LogosCEF.exe'
         return None
 
     @property
     def logos_indexer_exe(self) -> Optional[str]:
         if self.wine_user is not None:
-            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\{self.faithlife_product}Indexer.exe'  # noqa: E501
+            return (f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\'
+                    f'{self.faithlife_product}Indexer.exe')
         return None
 
     @property
     def logos_login_exe(self) -> Optional[str]:
         if self.wine_user is not None:
-            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\{self.faithlife_product}.exe'  # noqa: E501
+            return (f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\'
+                    f'{self.faithlife_product}.exe')
         return None
 
     @property
@@ -1144,7 +1172,7 @@ class Config:
         if self._raw.install_dir is None:
             return None
         if self._installed_faithlife_product_release is None:
-            self._installed_faithlife_product_release = utils.get_current_logos_version(self._logos_appdata_dir) # noqa: E501
+            self._installed_faithlife_product_release = utils.get_current_logos_version(self._logos_appdata_dir)
         return self._installed_faithlife_product_release
 
     @property

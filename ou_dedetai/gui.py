@@ -133,7 +133,7 @@ class InstallerGui(Frame):
 
         # Skip Dependencies row.
         self.skipdeps_label = Label(self, text="Install Dependencies: ")
-        self.skipdepsvar = BooleanVar(value=not self.app.conf.skip_install_system_dependencies) #noqa: E501
+        self.skipdepsvar = BooleanVar(value=not self.app.conf.skip_install_system_dependencies) 
         self.skipdeps_checkbox = Checkbutton(self, variable=self.skipdepsvar)
 
         # Cancel/Okay buttons row.
@@ -151,7 +151,7 @@ class InstallerGui(Frame):
         self.release_dropdown.grid(column=1, row=row, sticky='w', pady=2)
         row += 1
         self.wine_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.wine_dropdown.grid(column=1, row=row, columnspan=3, sticky='we', pady=2)  # noqa: E501
+        self.wine_dropdown.grid(column=1, row=row, columnspan=3, sticky='we', pady=2)
         row += 1
         self.skipdeps_label.grid(column=0, row=row, sticky='nws', pady=2)
         self.skipdeps_checkbox.grid(column=1, row=row, sticky='w', pady=2)
@@ -167,7 +167,7 @@ class StatusGui(Frame):
         self.grid(row=0, column=0, sticky='nwes')
 
         self.statusvar = StringVar()
-        self.message_label = Label(self, textvariable=self.statusvar, wraplength=350, justify="left") #noqa: E501
+        self.message_label = Label(self, textvariable=self.statusvar, wraplength=350, justify="left") 
         # Progress bar
         self.progressvar = IntVar(value=0)
         self.progress = Progressbar(
@@ -204,7 +204,7 @@ class ControlGui(StatusGui):
 
         self.app_install_advancedvar = StringVar()
         self.app_install_advancedvar.set("Advanced Install")
-        self.app_install_advanced = Button(self, textvariable=self.app_install_advancedvar) #noqa: E501
+        self.app_install_advanced = Button(self, textvariable=self.app_install_advancedvar) 
 
         # Installed app actions
         # -> Run indexing, Remove library catalog, Remove all index files
@@ -257,7 +257,7 @@ class ControlGui(StatusGui):
         self.restore_button = Button(self, text="Restore")
         # The normal text has three lines. Make this the same 
         # in order for tkinker to know how large to draw it
-        self.update_lli_label = Label(self, text=f"Update {constants.APP_NAME}\n\n")  # noqa: E501
+        self.update_lli_label = Label(self, text=f"Update {constants.APP_NAME}\n\n")
         self.update_lli_button = Button(self, text="Update")
         # AppImage buttons
         self.latest_appimage_label = Label(
@@ -287,16 +287,16 @@ class ControlGui(StatusGui):
         s1.grid(column=0, row=1, columnspan=3, sticky='we', pady=2)
         row += 1
         self.actions_label.grid(column=0, row=row, sticky='e', padx=20, pady=2)
-        self.run_indexing_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)  # noqa: E501
+        self.run_indexing_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
         row += 1
-        self.remove_library_catalog_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)  # noqa: E501
+        self.remove_library_catalog_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
         row += 1
-        self.actions_button.grid(column=0, row=row, sticky='e', padx=20, pady=2)  # noqa: E501
-        self.remove_index_files_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)  # noqa: E501
+        self.actions_button.grid(column=0, row=row, sticky='e', padx=20, pady=2)
+        self.remove_index_files_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
         row += 1
-        self.uninstall_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)  # noqa: E501
+        self.uninstall_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
         row += 1
-        self.install_icu_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)  # noqa: E501
+        self.install_icu_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
         row += 1
         s2.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)
         row += 1
@@ -327,9 +327,9 @@ class ControlGui(StatusGui):
         row += 1
         s3.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)
         row += 1
-        self.message_label.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)  # noqa: E501
+        self.message_label.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)
         row += 1
-        self.progress.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)  # noqa: E501
+        self.progress.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)
 
     def show_advanced_install_button(self):
         self.app_install_advanced.grid(column=2, row=0, sticky='w', pady=2)
@@ -348,7 +348,7 @@ class ToolTip:
     def show_tooltip(self, event=None):
         if not self.tooltip_visible:
             x, y, _, _ = self.widget.bbox("insert")
-            x += self.widget.winfo_rootx() + self.widget.winfo_width() // 2 - 200  # noqa: E501
+            x += self.widget.winfo_rootx() + self.widget.winfo_width() // 2 - 200
             y += self.widget.winfo_rooty() - 25
 
             self.tooltip_window = Toplevel(self.widget)
@@ -397,7 +397,7 @@ class PromptGui(Frame):
         store_button.pack(pady=20)
 
 
-def show_error(message, fatal=True, detail=None, app=None, parent=None):  # noqa: E501
+def show_error(message, fatal=True, detail=None, app=None, parent=None):
     title = "Error"
     if fatal:
         title = "Fatal Error"

@@ -201,7 +201,7 @@ def get_parser():
     return parser
 
 
-def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]: #noqa: E501
+def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]: 
     if args.config:
         ephemeral_config = EphemeralConfiguration.load_from_path(args.config)
     else:
@@ -243,11 +243,12 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
             # Set legacy environment variable for config to pick up
             os.environ["CUSTOMBINPATH"] = args.custom_binary_path
         else:
-            message = f"Custom binary path does not exist: \"{args.custom_binary_path}\"\n"  # noqa: E501
+            message = f"Custom binary path does not exist: \"{args.custom_binary_path}\"\n"
             parser.exit(status=1, message=message)
 
     if args.assume_yes and not args.i_agree_to_faithlife_terms:
-        message = "Non-interactive installations MUST also agree to the EULA https://faithlife.com/terms via the flag --i-agree-to-faithlife-terms\n"  # noqa: E501
+        message = ("Non-interactive installations MUST also agree to the EULA https://faithlife.com/terms "
+                   "via the flag --i-agree-to-faithlife-terms\n")
         parser.exit(status=1, message=message)
 
     if args.assume_yes:
@@ -299,7 +300,7 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
             if arg == "set_appimage":
                 ephemeral_config.wine_appimage_path = getattr(args, arg)[0]
                 if not utils.file_exists(ephemeral_config.wine_appimage_path):
-                    e = f"Invalid file path: '{ephemeral_config.wine_appimage_path}'. File does not exist."  # noqa: E501
+                    e = f"Invalid file path: '{ephemeral_config.wine_appimage_path}'. File does not exist."
                     raise argparse.ArgumentTypeError(e)
                 if not utils.check_appimage(ephemeral_config.wine_appimage_path):
                     e = f"{ephemeral_config.wine_appimage_path} is not an AppImage."
@@ -346,7 +347,7 @@ def install_app(ephemeral_config: EphemeralConfiguration):
         cli.CLI(ephemeral_config).install_app()
 
 
-def setup_config() -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]: #noqa: E501
+def setup_config() -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]: 
     parser = get_parser()
     cli_args = parser.parse_args()  # parsing early lets 'help' run immediately
 
@@ -368,15 +369,15 @@ def setup_config() -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfigura
 
 
 def is_app_installed(ephemeral_config: EphemeralConfiguration):
-    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path) #noqa: E501
-    if persistent_config.faithlife_product is None or persistent_config.install_dir is None: #noqa: E501
+    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path) 
+    if persistent_config.faithlife_product is None or persistent_config.install_dir is None: 
         # Not enough information stored to find the product
         return False
-    wine_prefix = ephemeral_config.wine_prefix or get_wine_prefix_path(str(persistent_config.install_dir)) #noqa: E501
-    return utils.find_installed_product(persistent_config.faithlife_product, wine_prefix) #noqa: E501
+    wine_prefix = ephemeral_config.wine_prefix or get_wine_prefix_path(str(persistent_config.install_dir)) 
+    return utils.find_installed_product(persistent_config.faithlife_product, wine_prefix) 
 
 
-def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralConfiguration], None]): #noqa: E501
+def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralConfiguration], None]): 
     # Attempt to repair installation if it is broken.
     # Must be done before calling the action to avoid errosly thinking the app isn't
     # installed when it's broken
@@ -412,10 +413,10 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
     elif is_app_installed(ephemeral_config):  # install_required; checking for app
         # wine.set_logos_paths()
         # Run the desired Logos action.
-        logging.info(f"Running function: {action.__name__}")  # noqa: E501
+        logging.info(f"Running function: {action.__name__}")
         action(ephemeral_config)
     else:  # install_required, but app not installed
-        print("App is not installed, but required for this operation. Consider installing first.", file=sys.stderr) #noqa: E501
+        print("App is not installed, but required for this operation. Consider installing first.", file=sys.stderr) 
         sys.exit(1)
 
 
@@ -440,11 +441,12 @@ def main():
     # program.
     # utils.die_if_running()
     if os.getuid() == 0 and not ephemeral_config.app_run_as_root_permitted:
-        print("Running Wine/winetricks as root is highly discouraged. Use -f|--force-root if you must run as root. See https://wiki.winehq.org/FAQ#Should_I_run_Wine_as_root.3F", file=sys.stderr)  # noqa: E501
+        print("Running Wine/winetricks as root is highly discouraged. Use -f|--force-root if you must run as root. "
+              "See https://wiki.winehq.org/FAQ#Should_I_run_Wine_as_root.3F", file=sys.stderr)
         sys.exit(1)
 
     # Print terminal banner
-    logging.info(f"{constants.APP_NAME}, {constants.LLI_CURRENT_VERSION} by {constants.LLI_AUTHOR}.")  # noqa: E501
+    logging.info(f"{constants.APP_NAME}, {constants.LLI_CURRENT_VERSION} by {constants.LLI_AUTHOR}.")
 
     try:
         run(ephemeral_config, action)

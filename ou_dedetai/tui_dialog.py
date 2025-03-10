@@ -8,7 +8,7 @@ except ImportError:
 
 
 
-def text(screen, text, height=None, width=None, title=None, backtitle=None, colors=True): # noqa: E501
+def text(screen, text, height=None, width=None, title=None, backtitle=None, colors=True):
     dialog = Dialog()
     dialog.autowidgetsize = True
     options = {'colors': colors}
@@ -23,7 +23,7 @@ def text(screen, text, height=None, width=None, title=None, backtitle=None, colo
     dialog.infobox(text, **options)
 
 
-def progress_bar(screen, text, percent, height=None, width=None, title=None, backtitle=None, colors=True): # noqa: E501
+def progress_bar(screen, text, percent, height=None, width=None, title=None, backtitle=None, colors=True):
     screen.dialog = Dialog()
     screen.dialog.autowidgetsize = True
     options = {'colors': colors}
@@ -50,7 +50,17 @@ def stop_progress_bar(screen):
     screen.dialog.gauge_stop()
 
 
-def tasklist_progress_bar(screen, text, percent, elements, height=None, width=None, title=None, backtitle=None, colors=None): # noqa: E501
+def tasklist_progress_bar(
+    screen,
+    text,
+    percent,
+    elements,
+    height=None,
+    width=None,
+    title=None,
+    backtitle=None,
+    colors=None
+):
     dialog = Dialog()
     dialog.autowidgetsize = True
     options = {'colors': colors}
@@ -74,7 +84,7 @@ def tasklist_progress_bar(screen, text, percent, elements, height=None, width=No
         raise
 
 
-def input(screen, question_text, height=None, width=None, init="",  title=None, backtitle=None, colors=True): # noqa: E501
+def input(screen, question_text, height=None, width=None, init="",  title=None, backtitle=None, colors=True):
     dialog = Dialog()
     dialog.autowidgetsize = True
     options = {'colors': colors}
@@ -90,7 +100,7 @@ def input(screen, question_text, height=None, width=None, init="",  title=None, 
     return code, input
 
 
-def password(screen, question_text, height=None, width=None, init="",  title=None, backtitle=None, colors=True): # noqa: E501
+def password(screen, question_text, height=None, width=None, init="",  title=None, backtitle=None, colors=True):
     dialog = Dialog()
     dialog.autowidgetsize = True
     options = {'colors': colors}
@@ -102,7 +112,7 @@ def password(screen, question_text, height=None, width=None, init="",  title=Non
         options['title'] = title
     if backtitle is not None:
         options['backtitle'] = backtitle
-    code, password = dialog.passwordbox(question_text, init=init, insecure=True, **options) # noqa: E501
+    code, password = dialog.passwordbox(question_text, init=init, insecure=True, **options)
     return code, password
 
 
@@ -119,11 +129,19 @@ def confirm(screen, question_text, yes_label="Yes", no_label="No",
         options['title'] = title
     if backtitle is not None:
         options['backtitle'] = backtitle
-    check = dialog.yesno(question_text, height, width, yes_label=yes_label, no_label=no_label, **options) # noqa: E501
+    check = dialog.yesno(question_text, height, width, yes_label=yes_label, no_label=no_label, **options)
     return check  # Returns "ok" or "cancel"
 
 
-def directory_picker(screen, path_dir, height=None, width=None, title=None, backtitle=None, colors=True) -> Optional[str]: # noqa: E501
+def directory_picker(
+    screen,
+    path_dir,
+    height=None,
+    width=None,
+    title=None,
+    backtitle=None,
+    colors=True
+) -> Optional[str]:
     str_dir = str(path_dir)
 
     path = None
@@ -150,7 +168,17 @@ def directory_picker(screen, path_dir, height=None, width=None, title=None, back
     return path
 
 
-def menu(screen, question_text, choices, height=None, width=None, menu_height=8, title=None, backtitle=None, colors=True): # noqa: E501
+def menu(
+    screen,
+    question_text,
+    choices,
+    height=None,
+    width=None,
+    menu_height=8,
+    title=None,
+    backtitle=None,
+    colors=True
+):
     tag_to_description = {tag: description for tag, description in choices}
     dialog = Dialog(dialog="dialog")
     dialog.autowidgetsize = True
@@ -161,7 +189,7 @@ def menu(screen, question_text, choices, height=None, width=None, menu_height=8,
         options['backtitle'] = backtitle
 
     menu_options = [(tag, description) for i, (tag, description) in enumerate(choices)]
-    code, tag = dialog.menu(question_text, height, width, menu_height, menu_options, **options) # noqa: E501
+    code, tag = dialog.menu(question_text, height, width, menu_height, menu_options, **options)
     selected_description = tag_to_description.get(tag)
 
     if code == dialog.OK:
@@ -170,7 +198,17 @@ def menu(screen, question_text, choices, height=None, width=None, menu_height=8,
         return None, None, "Return to Main Menu"
 
 
-def buildlist(screen, text, items=[], height=None, width=None, list_height=None, title=None, backtitle=None, colors=True):  # noqa: E501
+def buildlist(
+    screen,
+    text,
+    items=[],
+    height=None,
+    width=None,
+    list_height=None,
+    title=None,
+    backtitle=None,
+    colors=True
+):
     # items is an interable of (tag, item, status)
     dialog = Dialog(dialog="dialog")
     dialog.autowidgetsize = True
@@ -192,7 +230,17 @@ def buildlist(screen, text, items=[], height=None, width=None, list_height=None,
         return None
 
 
-def checklist(screen, text, items=[], height=None, width=None, list_height=None, title=None, backtitle=None, colors=True): # noqa: E501
+def checklist(
+    screen,
+    text,
+    items=[],
+    height=None,
+    width=None,
+    list_height=None,
+    title=None,
+    backtitle=None,
+    colors=True
+):
     # items is an iterable of (tag, item, status)
     dialog = Dialog(dialog="dialog")
     dialog.autowidgetsize = True
@@ -206,7 +254,7 @@ def checklist(screen, text, items=[], height=None, width=None, list_height=None,
     if backtitle is not None:
         options['backtitle'] = backtitle
 
-    code, tags = dialog.checklist(text, choices=items, list_height=list_height, **options) # noqa: E501
+    code, tags = dialog.checklist(text, choices=items, list_height=list_height, **options)
 
     if code == dialog.OK:
         return code, tags

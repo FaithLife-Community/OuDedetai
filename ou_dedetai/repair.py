@@ -55,11 +55,11 @@ def detect_broken_install(
 
     # Recovery is best-effort we don't want to crash the app on account of failures here
     try:
-        with ou_dedetai.database.LocalUserPreferencesManager(logos_app_dir, logos_user_id) as db: #noqa: E501
+        with ou_dedetai.database.LocalUserPreferencesManager(logos_app_dir, logos_user_id) as db: 
             app_local_preferences = db.app_local_preferences
             if (
                 app_local_preferences
-                and 'FirstRunDialogWizardState="ResourceBundleSelection"' in db.app_local_preferences #noqa: E501
+                and 'FirstRunDialogWizardState="ResourceBundleSelection"' in db.app_local_preferences 
             ):
                 # We're in first-run state.
                 first_run = True
@@ -68,7 +68,7 @@ def detect_broken_install(
         pass
 
     if first_run:
-        logging.warning(f"Detected a failed resource download.\n{ou_dedetai.constants.SUPPORT_MESSAGE}") #noqa: E501
+        logging.warning(f"Detected a failed resource download.\n{ou_dedetai.constants.SUPPORT_MESSAGE}") 
 
     return None
 
@@ -77,7 +77,7 @@ def detect_broken_install(
 # As running the control panel in addition to the base python app logic
 # are distinct operations
 # It's possible to add a control panel function to app and make this generic
-def run_under_app(ephemeral_config: EphemeralConfiguration, func: Callable[[App], None]): #noqa: E501
+def run_under_app(ephemeral_config: EphemeralConfiguration, func: Callable[[App], None]): 
     dialog = ephemeral_config.dialog or ou_dedetai.system.get_dialog()
     if dialog == 'tk':
         return ou_dedetai.gui_app.start_gui_app(ephemeral_config, func)
@@ -86,7 +86,7 @@ def run_under_app(ephemeral_config: EphemeralConfiguration, func: Callable[[App]
         func(app)
 
 def detect_and_recover(ephemeral_config: EphemeralConfiguration):
-    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path) #noqa: E501
+    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path) 
     if (
         persistent_config.install_dir is None
         or persistent_config.faithlife_product is None
@@ -117,7 +117,7 @@ def detect_and_recover(ephemeral_config: EphemeralConfiguration):
         return
 
     if detected_failure == FailureType.FailedUpgrade:
-        logging.info(f"{persistent_config.faithlife_product_release=}") #noqa: E501
+        logging.info(f"{persistent_config.faithlife_product_release=}") 
         # Ensure that the target release is unset before installing
         # This will force the user to install the latest version
         # rather than the version they initially installed at (which may be very old)
@@ -125,7 +125,7 @@ def detect_and_recover(ephemeral_config: EphemeralConfiguration):
         persistent_config.write_config()
 
         def _run(app: App):
-            app.status(f"Recovering {persistent_config.faithlife_product} after failed upgrade") #noqa: E501
+            app.status(f"Recovering {persistent_config.faithlife_product} after failed upgrade") 
             # Wait for a second so user can see this message
             time.sleep(1)
             ou_dedetai.installer.install(app)
