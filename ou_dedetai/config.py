@@ -490,6 +490,18 @@ def get_logos_appdata_dir(
     return f'{wine_prefix}/drive_c/users/{wine_user}/AppData/Local/{faithlife_product}'
 
 
+def get_logos_user_id(
+    logos_appdata_dir: str
+) -> Optional[str]:
+    logos_data_path = Path(logos_appdata_dir) / "Data"
+    contents = os.listdir(logos_data_path)
+    children = [logos_data_path / child for child in contents]
+    file_children = [child for child in children if child.is_dir()]
+    if file_children and len(file_children) > 0:
+        return file_children[0].name
+    else:
+        return None
+
 class Config:
     """Set of configuration values. 
     
@@ -541,14 +553,7 @@ class Config:
         self._raw = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
         self._overrides = ephemeral_config
 
-        def _network_cache_hook():
-            self.app._config_updated_event.set()
-
-        self._network = network.NetworkRequests(
-            ephemeral_config.check_updates_now,
-            hook=_network_cache_hook
-        )
-
+        self._network = self._create_network_requests_with_hook()
         logging.debug("Current persistent config:")
         for k, v in self._raw.__dict__.items():
             logging.debug(f"{k}: {v}")
@@ -560,6 +565,15 @@ class Config:
             logging.debug(f"{k}: {v}")
         logging.debug("End config dump")
 
+    def _create_network_requests_with_hook(self) -> network.NetworkRequests:
+        def _network_cache_hook():
+            self.app._config_updated_event.set()
+
+        return network.NetworkRequests(
+            self._overrides.check_updates_now,
+            hook=_network_cache_hook
+        )
+ 
     def _ask_if_not_found(self, parameter: str, question: str, options: list[str], dependent_parameters: Optional[list[str]] = None) -> str:  #noqa: E501
         if not getattr(self._raw, parameter):
             if dependent_parameters is not None:
@@ -610,12 +624,14 @@ class Config:
         return str(path)
 
     def reload(self):
-        """Re-loads the configuration file on disk"""
+        """Re-loads the configuration from disk"""
         self._raw = PersistentConfiguration.load_from_path(self._overrides.config_path)
+        self._network = self._create_network_requests_with_hook()
         # Also clear out our cached values
         self._logos_exe = self._download_dir = self._wine_output_encoding = None
         self._installed_faithlife_product_release = self._wine_binary_files = None
-        self._wine_appimage_files = None
+        self._wine_appimage_files = self._wine_user = None
+        self._wine64_path = self._user_download_dir = None
 
         self.app._config_updated_event.set()
 
@@ -789,6 +805,14 @@ class Config:
         )
 
     @property
+    def _logos_user_id(self) -> Optional[str]:
+        """Name of the Logos user id throughout the app"""
+        logos_appdata_dir = self._logos_appdata_dir
+        if logos_appdata_dir is None:
+            return None
+        return get_logos_user_id(logos_appdata_dir)
+
+    @property
     # This used to be called WINEPREFIX
     def wine_prefix(self) -> str:
         if self._overrides.wine_prefix is not None:
@@ -810,7 +834,16 @@ class Config:
         # Return the full path so we the callee doesn't need to think about it
         if self._raw.wine_binary is not None and not Path(self._raw.wine_binary).exists() and (Path(self.install_dir) / self._raw.wine_binary).exists(): # noqa: E501
             return str(Path(self.install_dir) / self._raw.wine_binary)
-        if not Path(output).exists():
+        # Output a warning if the path doesn't exist and isn't relative to
+        # the install dir.
+        # In the case of appimage, this won't exist for part of the 
+        # installation, but still is valid. And the appimage uses a relative
+        # path or an absolute that's relative to the install dir
+        if (
+            not Path(output).exists()
+            and Path(output).is_absolute()
+            and not Path(output).is_relative_to(self.install_dir)
+        ):
             logging.warning(f"Wine binary {output} doesn't exist")
         return output
 

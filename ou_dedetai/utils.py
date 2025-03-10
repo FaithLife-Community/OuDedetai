@@ -6,8 +6,6 @@ import json
 import logging
 import os
 import queue
-import sqlite3
-import inotify.adapters # type: ignore
 import psutil
 import re
 import shutil
@@ -119,7 +117,7 @@ def install_dependencies(app: App):
         targetversion = int(app.conf.faithlife_product_version)
     else:
         targetversion = 10
-    app.status(f"Checking {app.conf.faithlife_product} {str(targetversion)} dependencies…")
+    app.status(f"Checking {app.conf.faithlife_product} {str(targetversion)} dependencies…") #noqa: E501
 
     if targetversion == 10:
         system.install_dependencies(app, target_version=10)  # noqa: E501
@@ -161,18 +159,6 @@ def get_current_logos_version(logos_appdata_dir: Optional[str]) -> Optional[str]
             logging.debug("Couldn't determine installed Logos version.")
             return None
     return None
-
-
-def check_logos_release_version(version, threshold, check_version_part):
-    if version is not None:
-        version_parts = list(map(int, version.split('.')))
-        return version_parts[check_version_part - 1] < threshold
-    else:
-        return False
-
-
-def filter_versions(versions, threshold, check_version_part):
-    return [version for version in versions if check_logos_release_version(version, threshold, check_version_part)]  # noqa: E501
 
 
 def get_winebin_code_and_desc(app: App, binary) -> Tuple[str, str | None]:
@@ -441,7 +427,7 @@ def check_appimage(filestr):
 
 
 def find_appimage_files(app: App) -> list[str]:
-    release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_version #noqa: E501
+    release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release #noqa: E501
     appimages = []
     directories = [
         app.conf.installer_binary_dir,
@@ -658,59 +644,3 @@ def get_timestamp():
 def parse_bool(string: str) -> bool:
     return string.lower() in ['true', '1', 'y', 'yes']
 
-
-def watch_db(path: str, sql_statements: list[str]):
-    """Runs SQL statements against a sqlite db once to start with, then again every time
-    The sqlite db is written to.
-    
-    Handles -wal/-shm as well
-
-    This function may run infinitely, spawn it on it's own thread
-    """
-    # Silence inotify logs
-    logging.getLogger('inotify').setLevel(logging.CRITICAL)
-    i = inotify.adapters.Inotify()
-    i.add_watch(path)
-
-    def execute_sql(cur):
-        # logging.debug(f"Executing SQL against {path}: {sql_statements}")
-        for statement in sql_statements:
-            try:
-                cur.execute(statement)
-            # Database may be locked, keep trying later.
-            except sqlite3.OperationalError:
-                logging.exception("Best-effort db update failed")
-                pass
-
-    with sqlite3.connect(path, autocommit=True) as con:
-        cur = con.cursor()
-
-        # Execute once before we start the loop
-        execute_sql(cur)
-        swallow_one = True
-
-        # Keep track of if we've added -wal and -shm are added yet
-        # They may not exist when we start
-        watching_wal_and_shm = False
-        for event in i.event_gen(yield_nones=False):
-            (_, type_names, _, _) = event
-            # These files may not exist when it's executes for the first time
-            if (
-                not watching_wal_and_shm
-                and Path(path + "-wal").exists()
-                and Path(path + "-shm").exists()
-            ):
-                i.add_watch(path + "-wal")
-                i.add_watch(path + "-shm")
-                watching_wal_and_shm = True
-
-            if 'IN_MODIFY' in type_names or 'IN_CLOSE_WRITE' in type_names:
-                # Check to make sure that we aren't responding to our own write
-                if swallow_one:
-                    swallow_one = False
-                    continue
-                execute_sql(cur)
-                swallow_one = True
-        # Shouldn't be possible to get here, but on the off-chance it happens, 
-        # we'd like to know and cleanup
-        logging.debug(f"Stopped watching {path}")

@@ -11,7 +11,15 @@ jobs:
       branch: main
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm
+
     needs: build
     permissions:
       contents: write
@@ -19,18 +27,16 @@ jobs:
     - name: Download artifact from build job
       uses: actions/download-artifact@v4
       with:
-        name: ${{ needs.build.outputs.bin_name }}
-    - name: Run shell tasks
-      run: |
-        find -name oudedetai -type f -exec chmod +x {} \;
+        name: oudedetai-${{ matrix.arch }}
+
+    - name: Make binary executable
+      run: chmod +x oudedetai-${{ matrix.arch }}
+
     - name: Upload release to test repo
       uses: softprops/action-gh-release@v1
       with:
         tag_name: main-latest
-        # target_commitish: ${{ needs.build.outputs.sha }}
-        body: ''
         prerelease: true
-        files: ${{ needs.build.outputs.bin_name }}
+        files: oudedetai-${{ matrix.arch }}
         repository: FaithLife-Community/test-builds
         token: ${{ secrets.N8MARTI_ACCESS_TOKEN }}
-        

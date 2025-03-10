@@ -71,26 +71,6 @@ apps:
     plugs: *allplugs
 
 parts:
-  bin:
-    source: snap/bin
-    plugin: dump
-    organize:
-      run.sh: bin/run.sh
-  #   stage-packages:
-  #     - jq
-
-  assets:
-    source: ou_dedetai/assets
-    plugin: dump
-    organize:
-      '*': assets/
-
-  img:
-    source: ou_dedetai/img
-    plugin: dump
-    organize:
-      '*': img/
-
   # wine-apt:  # installs most recent devel version
   #   plugin: nil
   #   build-packages: [wget]
@@ -129,6 +109,18 @@ parts:
       - libncurses6
       - libncursesw6
       - python3-tk
+
+  oudedetai-dump:
+    source: https://github.com/FaithLife-Community/LogosLinuxInstaller.git
+    plugin: dump
+    organize:
+      snap/bin/run.sh: bin/run.sh
+      ou_dedetai/assets: assets/
+      ou_dedetai/img: img/
+    stage:
+      - bin/run.sh
+      - assets/
+      - img
 
   cleanup:
     after:

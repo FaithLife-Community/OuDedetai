@@ -229,6 +229,12 @@ class ControlGui(StatusGui):
             variable=self.actionsvar,
             value='remove-index-files',
         )
+        self.uninstall_radio = Radiobutton(
+            self,
+            text="Uninstall",
+            variable=self.actionsvar,
+            value='uninstall',
+        )
         self.install_icu_radio = Radiobutton(
             self,
             text="Install/Update ICU files",
@@ -287,6 +293,8 @@ class ControlGui(StatusGui):
         row += 1
         self.actions_button.grid(column=0, row=row, sticky='e', padx=20, pady=2)  # noqa: E501
         self.remove_index_files_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)  # noqa: E501
+        row += 1
+        self.uninstall_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)  # noqa: E501
         row += 1
         self.install_icu_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)  # noqa: E501
         row += 1

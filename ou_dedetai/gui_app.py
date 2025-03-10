@@ -109,7 +109,7 @@ class GuiApp(App):
     def approve(self, question: str, context: str | None = None) -> bool:
         if context is None:
             context = ""
-        message = f"{context}\n{question}"
+        message = f"{question}\n\n{context}"
         return messagebox.askquestion(question, message.strip()) == 'yes'
 
     def _exit(self, reason: str, intended: bool = False):
@@ -444,6 +444,9 @@ class ControlWindow(GuiApp):
         self.gui.remove_index_files_radio.config(
             command=self.on_action_radio_clicked
         )
+        self.gui.uninstall_radio.config(
+            command=self.on_action_radio_clicked
+        )
         self.gui.install_icu_radio.config(
             command=self.on_action_radio_clicked
         )
@@ -521,6 +524,8 @@ class ControlWindow(GuiApp):
                 self.actioncmd = self.remove_indexes
             elif self.gui.actionsvar.get() == 'install-icu':
                 self.actioncmd = self.install_icu
+            elif self.gui.actionsvar.get() == 'uninstall':
+                self.actioncmd = self.uninstall
 
     def run_indexing(self):
         self.start_thread(self.logos.index)
@@ -535,6 +540,13 @@ class ControlWindow(GuiApp):
     def install_icu(self):
         self.gui.statusvar.set("Installing ICU files…")
         self.start_thread(wine.enforce_icu_data_files, app=self)
+
+    def uninstall(self):
+        def _run():
+            control.uninstall(self)
+            self.clear_status()
+            self.populate_defaults()
+        self.start_thread(_run)
 
     def run_backup(self, evt=None):
         # Prepare progress bar.
@@ -615,10 +627,13 @@ class ControlWindow(GuiApp):
             self.gui.app_button.config(command=self.run_logos)
             self.gui.logging_button.state(['!disabled'])
             self.gui.app_install_advanced.grid_forget()
+            self.gui.actions_button.state(['!disabled'])
         else:
+            self.gui.app_buttonvar.set("Install")
             self.gui.app_button.config(command=self.run_install)
             self.gui.app_install_advanced.config(command=self.run_installer)
             self.gui.show_advanced_install_button()
+            self.gui.actions_button.state(['disabled'])
             # Make sure the product/version/channel/release is non-None
             if None not in [
                 self.conf._raw.faithlife_product,

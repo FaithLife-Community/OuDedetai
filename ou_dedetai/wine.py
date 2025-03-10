@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from packaging.version import Version
 import tempfile
 from typing import Optional
 
@@ -122,7 +123,7 @@ def check_wine_rules(
     # commits in time.
     logging.debug(f"Checking {wine_release} for {release_version}.")
     if faithlife_product_version == "10":
-        if release_version is not None and utils.check_logos_release_version(release_version, 30, 1): #noqa: E501
+        if release_version is not None and Version(release_version) < Version("30.0.0.0"): #noqa: E501
             required_wine_minimum = [7, 18]
         else:
             required_wine_minimum = [9, 10]
@@ -404,8 +405,8 @@ def install_msi(app: App):
             exe_args.append("/passive")
 
     # Add MST transform if needed
-    release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_version  # noqa: E501
-    if release_version is not None and utils.check_logos_release_version(release_version, 39, 1): #noqa: E501
+    release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release  # noqa: E501
+    if release_version is not None and Version(release_version) > Version("39.0.0.0"): #noqa: E501
         # Define MST path and transform to windows path.
         mst_path = constants.APP_ASSETS_DIR / "LogosStubFailOK.mst"
         transform_winpath = run_wine_proc_completed_process(
@@ -418,7 +419,13 @@ def install_msi(app: App):
 
     # Log the msiexec command and run the process
     logging.info(f"Running: {wine_exe} msiexec {' '.join(exe_args)}")
-    return run_wine_proc(wine_exe, app, exe="msiexec", exe_args=exe_args)
+    result = run_wine_proc(wine_exe, app, exe="msiexec", exe_args=exe_args)
+    if result is not None:
+        # Wait in order to get the exit status.
+        result.wait()
+    if result is None or result.returncode != 0:
+        app.exit("Logos Installer failed.") #noqa: E501
+    return result
 
 
 def run_winetricks(app: App, *args):

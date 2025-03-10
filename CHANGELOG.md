@@ -1,5 +1,19 @@
 # Changelog
 
+- 4.0.0-beta.10
+	- Fixes bug where advanced GUI install failed (#354) [N. Shaaban]
+	- Adds a new option: "Get Support" to create a zip and display our social groups (#353, #274, #103) [N. Shaaban]
+	- Adds a new option: "Uninstall" to remove all the directories/files we use. **Replaces the cli option --remove-install-dir with --uninstall.** Requires a successful install for option to be present on TUI/GUI for now. (#233, #362) [N. Shaaban]
+	- Fixes bug with latest staging wine that doesn't include a wine64 binary (#350, #352) [N. Shaaban]
+	- Fixes legacy config migration (#320) [N. Shaaban]
+	- Allows user to go back to the main menu in some circumstances (#355) [N. Shaaban]
+	- Add Github actions for snap build (#343) [N. Shaaban]
+	- Move progress bar as files are downloaded (#364) [N. Shaaban]
+	- Add a simple Install option to the TUI to match GUI (#341) [T. H. Wright]
+	- Fixes misc bugs where versions we not being compared properly, resulted in a failed install for one user (#359) [N. Shaaban]
+	- Fixes Manjaro 7zip package name (#361) [T. H. Wright]
+	- Fixes bug where a custom XDG_DATA_DIR wasn't creating the FaithLife-Community subfolder (#358) [N. Shaaban]
+	- Adds extra line to the footer of the TUI (also refactor TUI splitting into header/footer) (#343, #342) [T. H. Wright]
 - 4.0.0-beta.9
 	- **Change default install dir to $XDG_DATA_HOME/FaithLife-Community/oudedetai (this will be ~/.local/share/FaithLife-Community/oudedetai on most systems). To restore the old behavior: `export INSTALLDIR=$HOME/LogosBible10` (#323) [T. H. Wright]**
 	- **Fixes crash in "Copy Bible Verse" and when first hitting "Continue" due to missing arial font (#335) [N. Shaaban]**

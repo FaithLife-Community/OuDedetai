@@ -61,7 +61,7 @@ if RUNMODE == 'snap':
 else:
     CACHE_DIR = str(Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache' / 'FaithLife-Community'))) #noqa: E501
 
-DATA_HOME = str(Path(os.getenv('XDG_DATA_HOME', Path.home() / '.local/share' / 'FaithLife-Community'))) #noqa: E501
+DATA_HOME = str(Path(os.getenv('XDG_DATA_HOME', str(Path.home() / '.local/share'))) / 'FaithLife-Community') #noqa: E501
 CONFIG_DIR = os.getenv("XDG_CONFIG_HOME", "~/.config") + "/FaithLife-Community"
 STATE_DIR = os.getenv("XDG_STATE_HOME", "~/.local/state") + "/FaithLife-Community"
 
@@ -79,7 +79,7 @@ LEGACY_CONFIG_FILES = [
     os.path.expanduser("~/.config/Logos_on_Linux/Logos_on_Linux.conf")
 ]
 LLI_AUTHOR = "Ferion11, John Goodman, T. H. Wright, N. Marti, N. Shaaban"
-LLI_CURRENT_VERSION = "4.0.0-beta.9"
+LLI_CURRENT_VERSION = "4.0.0-beta.10"
 # This SHOULD match the version of winetricks we ship in the latest appimage
 WINETRICKS_VERSION = '20250102'
 DEFAULT_LOG_LEVEL = logging.WARNING
@@ -91,7 +91,7 @@ PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
 FAITHLIFE_PRODUCT_VERSIONS = ["10"] # This used to include 9
 
-SUPPORT_MESSAGE = f"If you need help, please consult:\n{WIKI_LINK}\nIf that doesn't answer your question, please use the \"Get Support\" option"  # noqa: E501
+SUPPORT_MESSAGE = f"If you need help, please consult:\n{WIKI_LINK}\nIf the install failed, use the \"Get Support\" operation"  # noqa: E501
 DEFAULT_SUPPORT_FILE_NAME = "FaithlifeCommunitySupport.zip"
 
 # Strings for choosing a follow up file or directory

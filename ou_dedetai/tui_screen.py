@@ -1,9 +1,9 @@
 import curses
 import logging
 import time
+from queue import Queue
+from threading import Event
 from typing import Optional
-
-from ou_dedetai.app import App
 
 from . import installer
 from . import system
@@ -11,9 +11,10 @@ from . import tui_curses
 if system.have_dep("dialog"):
     from . import tui_dialog
 
+from ou_dedetai.app import App
 
 class Screen:
-    def __init__(self, app: App, screen_id, queue, event):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event):
         from ou_dedetai.tui_app import TUI
         if not isinstance(app, TUI):
             raise ValueError("Cannot start TUI screen with non-TUI app")
@@ -64,12 +65,10 @@ class DialogScreen(Screen):
 
 
 class ConsoleScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, title, subtitle, title_start_y):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, start_y: int):
         super().__init__(app, screen_id, queue, event)
-        self.stdscr: Optional[curses.window] = self.app.main_window
-        self.title = title
-        self.subtitle = subtitle
-        self.title_start_y = title_start_y
+        self.stdscr: Optional[curses.window] = self.app.console_window
+        self.start_y = start_y
 
     def __str__(self):
         return "Curses Console Screen"
@@ -79,28 +78,73 @@ class ConsoleScreen(CursesScreen):
             raise Exception("stdscr should be set at this point in the console screen."
                             "Please report this incident to the developers")
         self.stdscr.erase()
-        subtitle_start = tui_curses.title(self.app, self.title, self.title_start_y)
-        tui_curses.title(self.app, self.subtitle, subtitle_start + 1)
-
-        console_start_y = len(tui_curses.wrap_text(self.app, self.title)) + len(
-            tui_curses.wrap_text(self.app, self.subtitle)) + 1
-        tui_curses.write_line(self.app, self.stdscr, console_start_y, self.app.terminal_margin, "---Console---", self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
+        tui_curses.write_line(self.app, self.stdscr, self.start_y, self.app.terminal_margin, "---Console---", self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
         recent_messages = self.app.recent_console_log
         for i, message in enumerate(recent_messages, 1):
             message_lines = tui_curses.wrap_text(self.app, message)
             for j, line in enumerate(message_lines):
                 if 2 + j < self.app.window_height:
                     truncated = message[:self.app.window_width - (self.app.terminal_margin * 2)] #noqa: E501
-                    tui_curses.write_line(self.app, self.stdscr, console_start_y + i, self.app.terminal_margin, truncated, self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
+                    tui_curses.write_line(self.app, self.stdscr, self.start_y + i, self.app.terminal_margin, truncated, self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
+
+
+class HeaderScreen(CursesScreen):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, title: str, subtitle: str, title_start_y: int):
+        super().__init__(app, screen_id, queue, event)
+        self.stdscr: Optional[curses.window] = self.app.header_window
+        self.title = title
+        self.subtitle = subtitle
+        self.title_start_y = title_start_y
+
+    def __str__(self):
+        return "Curses Header Screen"
+
+    def display(self):
+        if self.stdscr is None:
+            raise Exception("stdscr should be set at this point in the header screen."
+                            "Please report this incident to the developers")
+        self.stdscr.erase()
+        subtitle_start = tui_curses.title(self.app, self.stdscr, self.title, self.title_start_y)
+        if self.app.window_width > 37:
+            tui_curses.title(self.app, self.stdscr, self.subtitle, subtitle_start + 1)
+
+        self.stdscr.noutrefresh()
+        curses.doupdate()
+
+
+class FooterScreen(CursesScreen):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, start_y: int):
+        super().__init__(app, screen_id, queue, event)
+        self.stdscr: Optional[curses.window] = self.app.footer_window
+        self.start_y = start_y
+
+    def __str__(self):
+        return "Curses Footer Screen"
+
+    def display(self):
+        if self.stdscr is None:
+            raise Exception("stdscr should be set at this point in the footer screen."
+                            "Please report this incident to the developers")
+        self.stdscr.erase()
+
+        footer_text = "By the FaithLife Community"
+
+        if isinstance(self.app.active_screen, MenuScreen):
+            page_info = f"Page {self.app.current_page + 1}/{self.app.total_pages} | Selected Option: {self.app.current_option + 1}/{len(self.app.options)}" #noqa: E501
+            tui_curses.write_line(self.app, self.stdscr, self.start_y, 2, page_info, self.app.window_width, curses.A_BOLD) #noqa: E501
+        tui_curses.write_line(self.app, self.stdscr, self.app.footer_window_height - 1, self.app.terminal_margin, footer_text, self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
 
         self.stdscr.noutrefresh()
         curses.doupdate()
 
 
 class MenuScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, question, options, height=None, width=None, menu_height=8): #noqa: E501
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, question: str, options: list, height: int=None, width: int=None, menu_height: int=8): #noqa: E501
         super().__init__(app, screen_id, queue, event)
-        self.stdscr = self.app.get_menu_window()
+        self.stdscr = self.app.get_main_window()
         self.question = question
         self.options = options
         self.height = height
@@ -134,7 +178,7 @@ class MenuScreen(CursesScreen):
 
 
 class ConfirmScreen(MenuScreen):
-    def __init__(self, app, screen_id, queue, event, question, no_text, secondary, options=["Yes", "No"]): #noqa: E501
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, question: str, no_text: str, secondary: str, options: list=["Yes", "No"]): #noqa: E501
         super().__init__(app, screen_id, queue, event, question, options,
                          height=None, width=None, menu_height=8)
         self.no_text = no_text
@@ -162,9 +206,9 @@ class ConfirmScreen(MenuScreen):
 
 
 class InputScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, question: str, default):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, question: str, default: str):
         super().__init__(app, screen_id, queue, event)
-        self.stdscr = self.app.get_menu_window()
+        self.stdscr = self.app.get_main_window()
         self.question = question
         self.default = default
         self.dialog = tui_curses.UserInputDialog(
@@ -195,7 +239,7 @@ class InputScreen(CursesScreen):
 
 
 class PasswordScreen(InputScreen):
-    def __init__(self, app, screen_id, queue, event, question, default):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, question: str, default: str):
         super().__init__(app, screen_id, queue, event, question, default)
         # Update type for type linting
         from ou_dedetai.tui_app import TUI
@@ -223,9 +267,9 @@ class PasswordScreen(InputScreen):
 
 
 class TextScreen(CursesScreen):
-    def __init__(self, app, screen_id, queue, event, text, wait):
+    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, text: str, wait: bool):
         super().__init__(app, screen_id, queue, event)
-        self.stdscr = self.app.get_menu_window()
+        self.stdscr = self.app.get_main_window()
         self.text = text
         self.wait = wait
         self.spinner_index = 0
@@ -238,9 +282,9 @@ class TextScreen(CursesScreen):
             raise Exception("stdscr should be set at this point in the console screen."
                             "Please report this incident to the developers")
         self.stdscr.erase()
-        text_start_y, text_lines = tui_curses.text_centered(self.app, self.text)
+        text_start_y, text_lines = tui_curses.text_centered(self.app, self.stdscr, self.text)
         if self.wait:
-            self.spinner_index = tui_curses.spinner(self.app, self.spinner_index, text_start_y + len(text_lines) + 1) #noqa: E501
+            self.spinner_index = tui_curses.spinner(self.app, self.stdscr, self.spinner_index, text_start_y + len(text_lines) + 1) #noqa: E501
             time.sleep(0.1)
         self.stdscr.noutrefresh()
         curses.doupdate()
@@ -252,7 +296,7 @@ class TextScreen(CursesScreen):
 class MenuDialog(DialogScreen):
     def __init__(self, app, screen_id, queue, event, question, options, height=None, width=None, menu_height=8): #noqa: E501
         super().__init__(app, screen_id, queue, event)
-        self.stdscr = self.app.get_menu_window()
+        self.stdscr = self.app.get_main_window()
         self.question = question
         self.options = options
         self.height = height
@@ -280,7 +324,7 @@ class MenuDialog(DialogScreen):
 class InputDialog(DialogScreen):
     def __init__(self, app, screen_id, queue, event, question, default):
         super().__init__(app, screen_id, queue, event)
-        self.stdscr = self.app.get_menu_window()
+        self.stdscr = self.app.get_main_window()
         self.question = question
         self.default = default
 
@@ -322,7 +366,7 @@ class PasswordDialog(InputDialog):
 class ConfirmDialog(DialogScreen):
     def __init__(self, app, screen_id, queue, event, question, no_text, secondary, yes_label="Yes", no_label="No"): #noqa: E501
         super().__init__(app, screen_id, queue, event)
-        self.stdscr = self.app.get_menu_window()
+        self.stdscr = self.app.get_main_window()
         self.question = question
         self.no_text = no_text
         self.secondary = secondary
@@ -352,7 +396,7 @@ class TextDialog(DialogScreen):
     def __init__(self, app, screen_id, queue, event, text, wait=False, percent=None, 
                  height=None, width=None, title=None, backtitle=None, colors=True):
         super().__init__(app, screen_id, queue, event)
-        self.stdscr = self.app.get_menu_window()
+        self.stdscr = self.app.get_main_window()
         self.text = text
         self.percent = percent
         self.wait = wait
@@ -405,7 +449,7 @@ class TaskListDialog(DialogScreen):
     def __init__(self, app, screen_id, queue, event, text, elements, percent,
                  height=None, width=None, title=None, backtitle=None, colors=True):
         super().__init__(app, screen_id, queue, event)
-        self.stdscr = self.app.get_menu_window()
+        self.stdscr = self.app.get_main_window()
         self.text = text
         self.elements = elements if elements is not None else {}
         self.percent = percent
@@ -452,7 +496,7 @@ class TaskListDialog(DialogScreen):
 class BuildListDialog(DialogScreen):
     def __init__(self, app, screen_id, queue, event, question, options, list_height=None, height=None, width=None): #noqa: E501
         super().__init__(app, screen_id, queue, event)
-        self.stdscr = self.app.get_menu_window()
+        self.stdscr = self.app.get_main_window()
         self.question = question
         self.options = options
         self.height = height
@@ -480,7 +524,7 @@ class BuildListDialog(DialogScreen):
 class CheckListDialog(DialogScreen):
     def __init__(self, app, screen_id, queue, event, question, options, list_height=None, height=None, width=None): #noqa: E501
         super().__init__(app, screen_id, queue, event)
-        self.stdscr = self.app.get_menu_window()
+        self.stdscr = self.app.get_main_window()
         self.question = question
         self.options = options
         self.height = height

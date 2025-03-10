@@ -6,9 +6,12 @@ on:
         required: true
         type: string
     outputs:
-      bin_name:
-        description: "name of built binary"
-        value: ${{ jobs.build.outputs.bin_name }}
+      bin_name_x86_64:
+        description: "name of x86_64 built binary"
+        value: ${{ jobs.build.outputs.bin_name_x86_64 }}
+      bin_name_arm:
+        description: "name of ARM built binary"
+        value: ${{ jobs.build.outputs.bin_name_arm }}
       sha:
         value: ${{ github.sha }}
       sha_short:
@@ -26,9 +29,17 @@ jobs:
     uses: ./.github/workflows/run-tests.yml
 
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm
     outputs:
-      bin_name: ${{ steps.pyinstaller.outputs.bin_name }}
+      bin_name_x86_64: ${{ steps.pyinstaller.outputs.bin_name_x86_64 }}
+      bin_name_arm: ${{ steps.pyinstaller.outputs.bin_name_arm }}
       sha_short: ${{ steps.sha.outputs.sha_short }}
     steps:
     - uses: actions/checkout@v4
@@ -57,12 +68,15 @@ jobs:
     - name: Build with pyinstaller
       id: pyinstaller
       run: |
-        ./scripts/build-binary.sh
-        echo "bin_name=oudedetai" >> $GITHUB_OUTPUT
+        ARCH=${{ matrix.arch }}
+        ./scripts/build-binary.sh $ARCH
+        BIN_NAME="oudedetai-${ARCH}"
+        echo "bin_name_${ARCH}=$BIN_NAME" >> $GITHUB_OUTPUT
+        mv dist/oudedetai "dist/$BIN_NAME"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: oudedetai
-        path: dist/oudedetai
+        name: ${{ steps.pyinstaller.outputs.bin_name_x86_64 || steps.pyinstaller.outputs.bin_name_arm }}
+        path: dist/${{ steps.pyinstaller.outputs.bin_name_x86_64 || steps.pyinstaller.outputs.bin_name_arm }}
         compression-level: 0

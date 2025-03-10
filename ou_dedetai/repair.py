@@ -14,6 +14,7 @@ import ou_dedetai.cli
 from ou_dedetai.config import EphemeralConfiguration, PersistentConfiguration
 import ou_dedetai.config
 import ou_dedetai.constants
+import ou_dedetai.database
 import ou_dedetai.gui_app
 import ou_dedetai.installer
 import ou_dedetai.msg
@@ -44,6 +45,31 @@ def detect_broken_install(
         and not (logos_app_dir / (faithlife_product + ".exe")).exists()
     ):
         return FailureType.FailedUpgrade
+    
+    # Begin checks that require a user id
+    first_run = False
+    logos_user_id = ou_dedetai.config.get_logos_user_id(logos_appdata_dir)
+    if not logos_user_id:
+        # No other checks we can preform without the logos_user_id
+        return None
+
+    # Recovery is best-effort we don't want to crash the app on account of failures here
+    try:
+        with ou_dedetai.database.LocalUserPreferencesManager(logos_app_dir, logos_user_id) as db: #noqa: E501
+            app_local_preferences = db.app_local_preferences
+            if (
+                app_local_preferences
+                and 'FirstRunDialogWizardState="ResourceBundleSelection"' in db.app_local_preferences #noqa: E501
+            ):
+                # We're in first-run state.
+                first_run = True
+    except Exception:
+        logging.exception("Failed to check to see if we needed to recover")
+        pass
+
+    if first_run:
+        logging.warning(f"Detected a failed resource download.\n{ou_dedetai.constants.SUPPORT_MESSAGE}") #noqa: E501
+
     return None
 
 
@@ -76,10 +102,17 @@ def detect_and_recover(ephemeral_config: EphemeralConfiguration):
         wine_user,
         persistent_config.faithlife_product
     )
-    detected_failure = detect_broken_install(
-        logos_appdata_dir,
-        persistent_config.faithlife_product
-    )
+    # Recovery detection is best-effort.
+    # Since it runs very early in the app and may be complex, we don't want a
+    # bug here to interfere with normal operations.
+    try:
+        detected_failure = detect_broken_install(
+            logos_appdata_dir,
+            persistent_config.faithlife_product
+        )
+    except Exception:
+        logging.exception("Failed to check to see if installation is broken.")
+        return
     if not detected_failure:
         return
 
