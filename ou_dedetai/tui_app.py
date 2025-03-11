@@ -90,9 +90,9 @@ class TUI(App):
 
         self.header_window_ratio: float = 0.10
         self.console_window_ratio: float = 0.15
-        self.main_window_ratio: float = 0.10
+        self.main_window_ratio: float = 0.55
         # Intentionally short this by 10% to avoid hidden lines
-        self.footer_window_ratio: float = 0.55
+        self.footer_window_ratio: float = 0.10
 
         self.header_window: Optional[curses.window] = None
         self.console_window: Optional[curses.window] = None
