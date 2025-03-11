@@ -73,18 +73,18 @@ class FaithlifeDatabase(contextlib.AbstractContextManager):
 
 class LocalUserPreferencesManager(FaithlifeDatabase):
     def _database_path(self):
-        return self.logos_app_dir / "Documents" / self.logos_user_id / "LocalUserPreferences" / "PreferencesManager.db" #noqa: E501
+        return self.logos_app_dir / "Documents" / self.logos_user_id / "LocalUserPreferences" / "PreferencesManager.db" 
     
     @property
     def app_local_preferences(self) -> Optional[str]:
         return self.fetch_one(
-            "SELECT Data FROM Preferences WHERE `Type`='AppLocalPreferences' LIMIT 1" #noqa: E501
+            "SELECT Data FROM Preferences WHERE `Type`='AppLocalPreferences' LIMIT 1" 
         )
     
     @app_local_preferences.setter
     def app_local_preferences(self, value: str):
         self.execute_sql(
-            "UPDATE Preferences SET Data= ? WHERE `Type`='AppLocalPreferences'", #noqa: E501
+            "UPDATE Preferences SET Data= ? WHERE `Type`='AppLocalPreferences'", 
             [value]
         )
     

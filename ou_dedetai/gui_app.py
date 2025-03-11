@@ -1,7 +1,7 @@
 
 # References:
 #   - https://tkdocs.com/
-#   - https://github.com/thw26/LogosLinuxInstaller/blob/master/LogosLinuxInstaller.sh  # noqa: E501
+#   - https://github.com/thw26/LogosLinuxInstaller/blob/master/LogosLinuxInstaller.sh
 
 import logging
 from pathlib import Path
@@ -40,7 +40,7 @@ class GuiApp(App):
 
     _exit_option: Optional[str] = None
 
-    def __init__(self, root: "Root", gui: gui.StatusGui, ephemeral_config: EphemeralConfiguration, **kwargs): #noqa: E501
+    def __init__(self, root: "Root", gui: gui.StatusGui, ephemeral_config: EphemeralConfiguration, **kwargs): 
         super().__init__(ephemeral_config)
         self.root = root
         self._status_gui = gui
@@ -129,7 +129,7 @@ class GuiApp(App):
         if shutil.which('pkexec'):
             return "pkexec"
         else:
-            raise system.SuperuserCommandNotFound("No superuser command found. Please install pkexec.")  # noqa: E501
+            raise system.SuperuserCommandNotFound("No superuser command found. Please install pkexec.")
     
     def populate_defaults(self) -> None:
         """If any prompt is unset, set it to it's default value
@@ -141,7 +141,7 @@ class GuiApp(App):
         if self.conf._raw.faithlife_product is None:
             self.conf.faithlife_product = constants.FAITHLIFE_PRODUCTS[0]
         if self.conf._raw.faithlife_product_version is None:
-            self.conf.faithlife_product_version = constants.FAITHLIFE_PRODUCT_VERSIONS[0] #noqa: E501
+            self.conf.faithlife_product_version = constants.FAITHLIFE_PRODUCT_VERSIONS[0] 
 
         # Now that we know product and version are set we can download the releases
         # And use the first one
@@ -152,7 +152,7 @@ class GuiApp(App):
             self.conf._raw.faithlife_product_release_channel,
         ):
             if self.conf._raw.faithlife_product_release is None:
-                self.conf.faithlife_product_release = self.conf.faithlife_product_releases[0] #noqa: E501
+                self.conf.faithlife_product_release = self.conf.faithlife_product_releases[0] 
         else:
             # Spawn a thread that does this, as the download takes a second
             def _populate_product_release_default():
@@ -201,7 +201,14 @@ class Toplevel(TkToplevel):
 
 class ChoicePopUp:
     """Creates a pop-up with a choice"""
-    def __init__(self, question: str, options: list[str], answer_q: Queue[Optional[str]], answer_event: Event, **kwargs): #noqa: E501
+    def __init__(
+        self,
+        question: str,
+        options: list[str],
+        answer_q: Queue[Optional[str]],
+        answer_event: Event,
+        **kwargs
+    ):
         self.root = Toplevel()
         # Set root parameters.
         self.gui = gui.ChoiceGui(self.root, question, options)
@@ -308,13 +315,13 @@ class InstallerWindow:
         self._config_updated_hook()
 
     def _config_updated_hook(self):
-        """Update the GUI to reflect changes in the configuration/network""" #noqa: E501
+        """Update the GUI to reflect changes in the configuration/network""" 
 
         self.app.populate_defaults()
 
         # Fill in the UI elements from the config
         self.gui.productvar.set(self.conf.faithlife_product)
-        self.gui.versionvar.set(self.conf.faithlife_product_version) # noqa: E501
+        self.gui.versionvar.set(self.conf.faithlife_product_version)
 
         # Now that we know product and version are set we can download the releases
         self.gui.release_dropdown['values'] = self.conf.faithlife_product_releases
@@ -381,8 +388,8 @@ class InstallerWindow:
         self._post_dropdown_change()
 
     def set_skip_dependencies(self, evt=None):
-        self.conf.skip_install_system_dependencies = self.gui.skipdepsvar.get()  # invert True/False  # noqa: E501
-        logging.debug(f"> {self.conf.skip_install_system_dependencies=}") #noqa: E501
+        self.conf.skip_install_system_dependencies = self.gui.skipdepsvar.get()  # invert True/False
+        logging.debug(f"> {self.conf.skip_install_system_dependencies=}") 
 
     def on_okay_released(self, evt=None):
         # Update desktop panel icon.
@@ -426,10 +433,10 @@ class ControlWindow(GuiApp):
         self.actioncmd: Optional[Callable[[], None]] = None
 
         ver = constants.LLI_CURRENT_VERSION
-        text = f"Update {constants.APP_NAME}\ncurrent: v{ver}\nlatest: ..." #noqa: E501
+        text = f"Update {constants.APP_NAME}\ncurrent: v{ver}\nlatest: ..." 
         # Spawn a thread to update the label with the current version
         def _update_lli_version():
-            text = f"Update {constants.APP_NAME}\ncurrent: v{ver}\nlatest: v{self.conf.app_latest_version}" #noqa: E501
+            text = f"Update {constants.APP_NAME}\ncurrent: v{ver}\nlatest: v{self.conf.app_latest_version}" 
             self.gui.update_lli_label.config(text=text)
             self.update_latest_lli_release_button()
         self.gui.update_lli_button.state(['disabled'])
@@ -503,7 +510,7 @@ class ControlWindow(GuiApp):
     def run_installer(self, evt=None):
         classname = constants.BINARY_NAME
         installer_window_top = Toplevel()
-        InstallerWindow(installer_window_top, self.root, app=self, class_=classname) #noqa: E501
+        InstallerWindow(installer_window_top, self.root, app=self, class_=classname) 
 
     def run_logos(self, evt=None):
         self.start_thread(self.logos.start)
@@ -575,7 +582,7 @@ class ControlWindow(GuiApp):
         return file_path
 
     def update_to_latest_lli_release(self, evt=None):
-        self.status(f"Updating to latest {constants.APP_NAME} version…")  # noqa: E501
+        self.status(f"Updating to latest {constants.APP_NAME} version…")
         self.start_thread(utils.update_to_latest_lli_release, app=self)
 
     def set_appimage_symlink(self):
@@ -654,15 +661,15 @@ class ControlWindow(GuiApp):
         result = utils.compare_logos_linux_installer_version(self)
         if constants.RUNMODE != 'binary':
             state = 'disabled'
-            msg = f"This button is disabled. Can't run self-update from {constants.RUNMODE}."  # noqa: E501
+            msg = f"This button is disabled. Can't run self-update from {constants.RUNMODE}."
         elif result == utils.VersionComparison.OUT_OF_DATE:
             state = '!disabled'
         elif result == utils.VersionComparison.UP_TO_DATE:
             state = 'disabled'
-            msg = f"This button is disabled. {constants.APP_NAME} is up-to-date."  # noqa: E501
+            msg = f"This button is disabled. {constants.APP_NAME} is up-to-date."
         elif result == utils.VersionComparison.DEVELOPMENT:
             state = 'disabled'
-            msg = f"This button is disabled. {constants.APP_NAME} is newer than the latest release."  # noqa: E501
+            msg = f"This button is disabled. {constants.APP_NAME} is newer than the latest release."
         if msg:
             gui.ToolTip(self.gui.update_lli_button, msg)
         self.clear_status()
@@ -674,13 +681,13 @@ class ControlWindow(GuiApp):
         if not self.is_installed():
             state = "disabled"
             msg = "Please install first"
-        elif self.conf._raw.wine_binary_code not in ["Recommended", "AppImage", None]:  # noqa: E501
+        elif self.conf._raw.wine_binary_code not in ["Recommended", "AppImage", None]:
             state = 'disabled'
-            msg = "This button is disabled. The configured install was not created using an AppImage."  # noqa: E501
+            msg = "This button is disabled. The configured install was not created using an AppImage."
             self.gui.set_appimage_button.state(['disabled'])
             gui.ToolTip(
                 self.gui.set_appimage_button,
-                "This button is disabled. The configured install was not created using an AppImage."  # noqa: E501
+                "This button is disabled. The configured install was not created using an AppImage."
             )
         elif self.conf._raw.wine_binary is not None:
             status, _ = utils.compare_recommended_appimage_version(self)
@@ -688,10 +695,10 @@ class ControlWindow(GuiApp):
                 state = '!disabled'
             elif status == 1:
                 state = 'disabled'
-                msg = "This button is disabled. The AppImage is already set to the latest recommended."  # noqa: E501
+                msg = "This button is disabled. The AppImage is already set to the latest recommended."
             elif status == 2:
                 state = 'disabled'
-                msg = "This button is disabled. The AppImage version is newer than the latest recommended."  # noqa: E501
+                msg = "This button is disabled. The AppImage version is newer than the latest recommended."
             else:
                 # Failed to check
                 state = '!disabled'

@@ -127,23 +127,26 @@ def check_wine_rules(
     # commits in time.
     logging.debug(f"Checking {wine_release} for {release_version}.")
     if faithlife_product_version == "10":
-        if release_version is not None and Version(release_version) < Version("30.0.0.0"): #noqa: E501
+        if release_version is not None and Version(release_version) < Version("30.0.0.0"): 
             required_wine_minimum = [7, 18]
         else:
             required_wine_minimum = [9, 10]
     elif faithlife_product_version == "9":
         required_wine_minimum = [7, 0]
     else:
-        raise ValueError(f"Invalid target version, expecting 9 or 10 but got: {faithlife_product_version} ({type(faithlife_product_version)})")  # noqa: E501
+        raise ValueError(
+            "Invalid target version, expecting 9 or 10 but got: "
+            f"{faithlife_product_version} ({type(faithlife_product_version)})"
+        )
 
     rules: list[WineRule] = [
-        # Proton release tend to use the x.0 release, but can include changes found in devel/staging  # noqa: E501
+        # Proton release tend to use the x.0 release, but can include changes found in devel/staging
         # exceptions to minimum
         WineRule(major=7, proton=True, minor_bad=[], allowed_releases=["staging"]),
         # devel permissible at this point
-        WineRule(major=8, proton=False, minor_bad=[0], allowed_releases=["staging"], devel_allowed=16), #noqa: E501
-        WineRule(major=9, proton=False, minor_bad=[], allowed_releases=["devel", "staging"]),  #noqa: E501
-        WineRule(major=10, proton=False, minor_bad=[], allowed_releases=["stable", "devel", "staging"]) #noqa: E501
+        WineRule(major=8, proton=False, minor_bad=[0], allowed_releases=["staging"], devel_allowed=16), 
+        WineRule(major=9, proton=False, minor_bad=[], allowed_releases=["devel", "staging"]),  
+        WineRule(major=10, proton=False, minor_bad=[], allowed_releases=["stable", "devel", "staging"]) 
     ]
 
     major_min, minor_min = required_wine_minimum
@@ -170,7 +173,7 @@ def check_wine_rules(
                         result = (
                             False,
                             (
-                                f"Wine release needs to be {rule.allowed_releases}. "  # noqa: E501
+                                f"Wine release needs to be {rule.allowed_releases}. "
                                 f"Current release: {release_type}."
                             )
                         )
@@ -193,7 +196,7 @@ def check_wine_rules(
                             False,
                             (
                                 f"Wine version {major}.{minor} is "
-                                f"below minimum required ({major_min}.{minor_min}).")  # noqa: E501
+                                f"below minimum required ({major_min}.{minor_min}).")
                         )
                         break
         logging.debug(f"Result: {result}")
@@ -258,7 +261,7 @@ def set_win_version(app: App, exe: str, windows_version: str):
         )
 
     elif exe == "indexer":
-        reg = f"HKCU\\Software\\Wine\\AppDefaults\\{app.conf.faithlife_product}Indexer.exe"  # noqa: E501
+        reg = f"HKCU\\Software\\Wine\\AppDefaults\\{app.conf.faithlife_product}Indexer.exe"
         exe_args = [
             'add',
             reg,
@@ -288,7 +291,7 @@ def wine_reg_query(app: App, key_name: str, value_name: str) -> Optional[str]:
         Arial (TrueType)    REG_SZ    Z:\\usr\\share\\fonts\\truetype\\msttcorefonts\\Arial.ttf
 
     ```
-    """ #noqa: E501
+    """
     process = run_wine_completed_process(
         app=app,
         wine_binary=app.conf.wine64_binary,
@@ -314,7 +317,7 @@ def wine_reg_query(app: App, key_name: str, value_name: str) -> Optional[str]:
             if line.lstrip().startswith(value_name) and "REG_SZ" in line:
                 # This is the line in question
                 return line.split(value_name)[1].split("REG_SZ")[1].strip()
-        logging.warning(f"Failed to parse the registry query: {process.stdout.rstrip()}") #noqa: E501
+        logging.warning(f"Failed to parse the registry query: {process.stdout.rstrip()}") 
         return None
     else:
         # Unknown exit code
@@ -391,7 +394,7 @@ def install_msi(app: App):
     app.status(f"Running MSI installer: {app.conf.faithlife_installer_name}.")
     # Define the Wine executable and initial arguments for msiexec
     wine_binary = app.conf.wine64_binary
-    exe_args = ["/i", f"{app.conf.install_dir}/data/{app.conf.faithlife_installer_name}"]  # noqa: E501
+    exe_args = ["/i", f"{app.conf.install_dir}/data/{app.conf.faithlife_installer_name}"]
 
     # Add passive mode if specified
     if app.conf._overrides.faithlife_install_passive is True:
@@ -403,8 +406,8 @@ def install_msi(app: App):
             exe_args.append("/passive")
 
     # Add MST transform if needed
-    release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release  # noqa: E501
-    if release_version is not None and Version(release_version) > Version("39.0.0.0"): #noqa: E501
+    release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release
+    if release_version is not None and Version(release_version) > Version("39.0.0.0"): 
         # Define MST path and transform to windows path.
         mst_path = constants.APP_ASSETS_DIR / "LogosStubFailOK.mst"
         transform_winpath = run_wine_completed_process(
@@ -422,7 +425,7 @@ def install_msi(app: App):
         # Wait in order to get the exit status.
         result.wait()
     if result is None or result.returncode != 0:
-        app.exit("Logos Installer failed.") #noqa: E501
+        app.exit("Logos Installer failed.") 
     return result
 
 
@@ -456,12 +459,12 @@ def install_fonts(app: App):
     for i, f in enumerate(fonts):
         registry_key = wine_reg_query(
             app,
-            "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts", #noqa: E501
+            "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts", 
             f"{f.capitalize()} (TrueType)"
         )
         if registry_key is not None and registry_key != f"{f}.ttf":
             # Can hit this case with the debian package ttf-mscorefonts-installer
-            logging.debug(f"Found font {f} already installed by other means, no need to install.") #noqa: E501
+            logging.debug(f"Found font {f} already installed by other means, no need to install.") 
             continue
         # This case doesn't happen normally, but still good to check.
         # Now we need to check to see if there is a registry key saying it's in Fonts
@@ -470,7 +473,7 @@ def install_fonts(app: App):
             logging.debug(f"Found font {f} already in fonts dir, no need to install.")
             continue
         # Font isn't installed, continue to install with winetricks.
-        app.status(f"Configuring font: {f}…", i / len(fonts)) # noqa: E501
+        app.status(f"Configuring font: {f}…", i / len(fonts))
         args = [f]
         run_winetricks(app, *args)
 
@@ -688,7 +691,7 @@ def enforce_icu_data_files(app: App):
 
 def get_registry_value(reg_path, name, app: App):
     logging.debug(f"Get value for: {reg_path=}; {name=}")
-    # FIXME: consider breaking run_wine_proc into a helper function before decoding is attempted # noqa: E501
+    # FIXME: consider breaking run_wine_proc into a helper function before decoding is attempted
     # NOTE: Can't use run_wine_proc here because of infinite recursion while
     # trying to determine wine_output_encoding.
     value = None
@@ -723,7 +726,7 @@ def get_registry_value(reg_path, name, app: App):
     return value
 
 
-def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) -> dict[str, str]: #noqa: E501
+def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) -> dict[str, str]: 
     logging.debug("Getting wine environment.")
     wine_env = os.environ.copy()
     winepath = Path(app.conf.wine_binary)
@@ -741,7 +744,7 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
         wine_env[k] = v
 
     if additional_wine_dll_overrides is not None:
-        wine_env["WINEDLLOVERRIDES"] += ";" + additional_wine_dll_overrides # noqa: E501
+        wine_env["WINEDLLOVERRIDES"] += ";" + additional_wine_dll_overrides
 
     updated_env = {k: wine_env.get(k) for k in wine_env_defaults.keys()}
     logging.debug(f"Wine env: {updated_env}")

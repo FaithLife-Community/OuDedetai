@@ -26,7 +26,7 @@ class BackupBase(abc.ABC):
         self.data_size = 1
         self.destination_disk_used_init: Optional[int] = None
         self.q: queue.Queue[int] = queue.Queue()
-        if not self.app.approve(f"Use existing backups folder \"{self.app.conf.backup_dir}\"?"): # noqa: E501
+        if not self.app.approve(f"Use existing backups folder \"{self.app.conf.backup_dir}\"?"):
             # Reset backup dir.
             # The app will re-prompt next time the backup_dir is accessed
             app.conf._raw.backup_dir = None
@@ -36,7 +36,7 @@ class BackupBase(abc.ABC):
         except PermissionError:
             m = f"folder not accessible: {self.backup_dir}"
             if constants.RUNMODE == 'snap':
-                m += f"{m}\n\nTry connecting removable media:\nsnap connect {constants.BINARY_NAME}:removable-media\n"  # noqa: E501
+                m += f"{m}\n\nTry connecting removable media:\nsnap connect {constants.BINARY_NAME}:removable-media\n"
             self.app.exit(m)
 
     def _copy_dirs(
@@ -52,7 +52,11 @@ class BackupBase(abc.ABC):
             shutil.copytree(src, Path(dst_dir) / src.name)
 
     def _get_all_backups(self) -> List[str]:
-        all_backups = [str(d) for d in self.backup_dir.glob('*') if d.is_dir() and d.name.startswith(self.app.conf.faithlife_product)]  # noqa: E501
+        all_backups = [
+            str(d) 
+            for d in self.backup_dir.glob('*') 
+            if d.is_dir() and d.name.startswith(self.app.conf.faithlife_product)
+        ]
         all_backups.sort()
         logging.debug(all_backups)
         return all_backups
@@ -80,7 +84,7 @@ class BackupBase(abc.ABC):
         return size
 
     def _get_source_subdirs(self) -> List[Path]:
-        dirs = [self.source_dir / d for d in self.DATA_DIRS if (self.source_dir / d).is_dir()]  # noqa: E501
+        dirs = [self.source_dir / d for d in self.DATA_DIRS if (self.source_dir / d).is_dir()]
         if not dirs:
             self.app.exit(f"there are no files to {self.mode}")
         return dirs
@@ -93,7 +97,7 @@ class BackupBase(abc.ABC):
                 shutil.rmtree(dst)
 
     def _run(self) -> None:
-        self.app.status(f"Running {self.mode} from {self.source_dir} to {self.destination_dir}") #noqa: E501
+        self.app.status(f"Running {self.mode} from {self.source_dir} to {self.destination_dir}") 
         if self.source_dir is None:
             self.app.exit("source directory not set")
         elif self.destination_dir is None:
@@ -124,7 +128,7 @@ class BackupBase(abc.ABC):
             try:
                 self.destination_dir.rmdir()
             except OSError:  # folder not empty
-                logging.error(f"Tried to remove non-empty folder: {self.destination_dir}")  # noqa: E501
+                logging.error(f"Tried to remove non-empty folder: {self.destination_dir}")
             self.app.exit(f"not enough free disk space for {self.mode}.")
         logging.debug(f"Sufficient space verified on {self.destination_dir} disk.")
 

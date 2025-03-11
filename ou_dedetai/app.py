@@ -105,7 +105,7 @@ class App(abc.ABC):
                     return option
 
         passed_options: list[str] | str = options
-        if len(passed_options) == 1 and passed_options[0] in constants.PROMPT_OPTION_SIGILS: #noqa: E501
+        if len(passed_options) == 1 and passed_options[0] in constants.PROMPT_OPTION_SIGILS: 
             # Set the only option to be the follow up prompt
             passed_options = options[0]
         elif passed_options is not None and self._exit_option is not None:
@@ -123,7 +123,7 @@ class App(abc.ABC):
             answer = validate_result(answer, options)
             if answer is None:
                 # Huh? coding error, this should have been checked earlier
-                logging.critical("An invalid response slipped by, please report this incident to the developers") #noqa: E501
+                logging.critical("An invalid response slipped by, please report this incident to the developers") 
                 self.exit("Failed to get a valid value from user")
 
         return answer
@@ -172,7 +172,7 @@ class App(abc.ABC):
         if intended:
             sys.exit(0)
         else:
-            logging.critical(f"Cannot continue because {reason}\n{constants.SUPPORT_MESSAGE}") #noqa: E501
+            logging.critical(f"Cannot continue because {reason}\n{constants.SUPPORT_MESSAGE}") 
             sys.exit(1)
 
     _exit_option: Optional[str] = "Exit"
@@ -223,7 +223,7 @@ class App(abc.ABC):
         if self.installer_step_count != 0:
             current_step_percent = percent or 0
             # We're further than the start of our current step, percent more
-            installer_percent = round((self.installer_step * 100 + current_step_percent) / self.installer_step_count) # noqa: E501
+            installer_percent = round((self.installer_step * 100 + current_step_percent) / self.installer_step_count)
             logging.debug(f"Install {installer_percent}%: {message}")
             self._status(message, percent=installer_percent)
         else:

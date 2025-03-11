@@ -216,7 +216,7 @@ class TestGeneralUtils(unittest.TestCase):
         self.assertEqual(p.parent.name, constants.REPO_NAME)
 
     def test_get_downloaded_file_path_notfound(self):
-        self.assertIsNone(utils.get_downloaded_file_path(REPODIR, 'NothingToFind.exe'))  # noqa: E501
+        self.assertIsNone(utils.get_downloaded_file_path(REPODIR, 'NothingToFind.exe'))
 
     def test_get_folder_group_size_queuebad(self):
         q = queue.Queue()
