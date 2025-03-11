@@ -174,7 +174,8 @@ class CLI(App):
             chars_remaining = progress_bar_length - chars_of_progress
             progress_str = "[" + "-" * chars_of_progress + ">" + " " * chars_remaining + "]" #noqa: E501
 
-        self.print(message)
+        if message != self._last_status:
+            self.print(message)
         # Write my progress then carriage return
         # (so we're back at the beginning for the next log line)
         if progress_str:
