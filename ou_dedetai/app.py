@@ -231,6 +231,8 @@ class App(abc.ABC):
             self._status(message, percent)
         self._last_status = message
 
+    # FIXME: This implementation is overridden in every implementation
+    # Perhaps this should just raise NotImplementedError to avoid confusion?
     @abc.abstractmethod
     def _status(self, message: str, percent: Optional[int] = None):
         """Implementation for updating status pre-front end
@@ -242,7 +244,6 @@ class App(abc.ABC):
                 Feel free to implement a spinner
         """
 
-        # XXX: this isn't used in any App..
         def get_progressbar(pct, w=10, suffix=''):
             suffix = f" {int(pct):>3}%"
             # end = '\r'
