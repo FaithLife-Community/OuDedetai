@@ -16,6 +16,7 @@ from ou_dedetai.constants import (
 )
 from ou_dedetai.config import EphemeralConfiguration
 
+from . import backup
 from . import control
 from . import constants
 from . import installer
@@ -87,10 +88,12 @@ class TUI(App):
         self.main_window_height_min: int = 0
         self.footer_window_height_min: int = 0
 
-        self.header_window_ratio: Optional[float] = None
-        self.console_window_ratio: Optional[float] = None
-        self.main_window_ratio: Optional[float] = None
-        self.footer_window_ratio: Optional[float] = None
+        self.header_window_ratio: float = 0.10
+        self.console_window_ratio: float = 0.15
+        self.main_window_ratio: float = 0.55
+        # Intentionally short this by 10% to avoid hidden lines
+        self.footer_window_ratio: float = 0.10
+
         self.header_window: Optional[curses.window] = None
         self.console_window: Optional[curses.window] = None
         self.main_window: Optional[curses.window] = None
@@ -215,7 +218,8 @@ class TUI(App):
         self.header_window_height_min = 3
         self.header_window_height = 3
         # self.header_window_height = min(max(
-        #     int(self.window_height * self.header_window_ratio), self.header_window_height_min
+        #     int(self.window_height * self.header_window_ratio),
+        #     self.header_window_height_min
         # ), 4)
 
     def set_console_window_dimensions(self):
@@ -229,29 +233,27 @@ class TUI(App):
             + min_console_height
         )
         self.console_window_height = max(
-            int(self.window_height * self.console_window_ratio), self.console_window_height_min
+            int(self.window_height * self.console_window_ratio), self.console_window_height_min #noqa: E501
         )  # noqa: E501
-        self.console_log_lines = max(self.console_window_height - self.console_window_height_min, 1)
+        self.console_log_lines = max(self.console_window_height - self.console_window_height_min, 1) #noqa: E501
 
     def set_footer_window_dimensions(self):
         self.footer_window_height_min = 3
         self.footer_window_height = 3
         #self.footer_window_height = max(
-        #    int(self.window_height * self.footer_window_ratio), self.footer_window_height_min
+        #    int(self.window_height * self.footer_window_ratio),
+        #    self.footer_window_height_min
         #)
 
     def set_main_window_dimensions(self):
         self.main_window_height_min = 5
         self.main_window_height = max(
-            int(self.window_height * self.main_window_ratio), self.main_window_height_min,
+            int(self.window_height * self.main_window_ratio),
+            self.main_window_height_min 
         )  # noqa: E501
 
     def set_window_dimensions(self):
         curses.resizeterm(self.window_height, self.window_width)
-        self.header_window_ratio = 0.10
-        self.console_window_ratio = 0.15
-        self.footer_window_ratio = 0.10
-        self.main_window_ratio = 0.55  # Intentionally short this by 10% to avoid hidden lines
 
         self.set_header_window_dimensions()
         self.set_console_window_dimensions()
@@ -259,17 +261,24 @@ class TUI(App):
         self.set_main_window_dimensions()
 
     def set_windows(self):
-        self.options_per_page = max(self.window_height - self.header_window_height - self.console_window_height - self.main_window_height_min - self.footer_window_height, 1)
+        self.options_per_page = max(
+            self.window_height 
+            - self.header_window_height 
+            - self.console_window_height 
+            - self.main_window_height_min 
+            - self.footer_window_height,
+            1
+        )
 
         header_window_start = 0
         console_window_start = self.header_window_height
         main_window_start = self.header_window_height + self.console_window_height + 1
         footer_window_start = self.window_height - self.footer_window_height - 1
 
-        self.header_window = curses.newwin(self.header_window_height, curses.COLS, header_window_start, 0)
-        self.console_window = curses.newwin(self.console_window_height, curses.COLS, console_window_start, 0)
-        self.main_window = curses.newwin(self.main_window_height, curses.COLS, main_window_start, 0)
-        self.footer_window = curses.newwin(self.footer_window_height, curses.COLS, footer_window_start, 0)
+        self.header_window = curses.newwin(self.header_window_height, curses.COLS, header_window_start, 0) #noqa: E501
+        self.console_window = curses.newwin(self.console_window_height, curses.COLS, console_window_start, 0) #noqa: E501
+        self.main_window = curses.newwin(self.main_window_height, curses.COLS, main_window_start, 0) #noqa: E501
+        self.footer_window = curses.newwin(self.footer_window_height, curses.COLS, footer_window_start, 0) #noqa: E501
 
         resize_lines = tui_curses.wrap_text(self, "Screen too small.")
         self.resize_window = curses.newwin(len(resize_lines) + 1, curses.COLS, 0, 0)
@@ -477,11 +486,11 @@ class TUI(App):
                                 self.tui_screens.pop()
 
                     if len(self.tui_screens) == 0:
-                        if self.active_screen != self.menu_screen:
+                        if self.active_screen != self.main_screen:
                             self.current_option = 0
                             self.current_page = 0
                             self.total_pages = 0
-                            self.active_screen = self.menu_screen
+                            self.active_screen = self.main_screen
                     else:
                         if self.active_screen != self.tui_screens[-1]:
                             self.current_option = 0
@@ -935,9 +944,9 @@ class TUI(App):
         self.todo_e.wait()
         self.todo_e.clear()
         if self.tmp == "backup":
-            control.backup(self)
+            backup.backup(self)
         else:
-            control.restore(self)
+            backup.restore(self)
         self.go_to_main_menu()
 
     def report_waiting(self, text):

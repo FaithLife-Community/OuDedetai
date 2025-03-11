@@ -21,7 +21,7 @@ sudo apt-get install git build-essential gdb lcov pkg-config \
 
 ### Clone this repository
 ```
-git clone 'https://github.com/FaithLife-Community/LogosLinuxInstaller.git'
+git clone 'https://github.com/FaithLife-Community/OuDedetai.git'
 ```
 
 ### Install Python 3.12 and Tcl/Tk
@@ -40,7 +40,7 @@ versions.
 
 **Install & build python 3.12 using the script:**
 ```
-./LogosLinuxInstaller/scripts/ensure-python.sh
+./OuDedetai/scripts/ensure-python.sh
 ```
 
 **Install & build python 3.12 manually:**
@@ -60,8 +60,8 @@ Both methods install python into `/opt` to avoid interfering with system python 
 
 ### Enter the repository folder
 ```
-$ cd LogosLinuxInstaller
-LogosLinuxInstaller$
+$ cd OuDedetai
+OuDedetai$
 ```
 
 ### Set up and use a virtual environment
@@ -76,22 +76,22 @@ up a virtual environment for running and/or building locally.
 **Manual setup:**
 
 ```
-LogosLinuxInstaller$ LD_LIBRARY_PATH=/opt/lib /opt/bin/python3.12 -m venv env # create a virtual env folder called "env" using python3.12's path
-LogosLinuxInstaller$ echo "LD_LIBRARY_PATH=/opt/lib" >> env/bin/activate # tell python where to find libs
-LogosLinuxInstaller$ echo "export LD_LIBRARY_PATH" >> env/bin/activate
-LogosLinuxInstaller$ source env/bin/activate # activate the env
-(env) LogosLinuxInstaller$ python --version # verify python version
+OuDedetai$ LD_LIBRARY_PATH=/opt/lib /opt/bin/python3.12 -m venv env # create a virtual env folder called "env" using python3.12's path
+OuDedetai$ echo "LD_LIBRARY_PATH=/opt/lib" >> env/bin/activate # tell python where to find libs
+OuDedetai$ echo "export LD_LIBRARY_PATH" >> env/bin/activate
+OuDedetai$ source env/bin/activate # activate the env
+(env) OuDedetai$ python --version # verify python version
 Python 3.12.5
-(env) LogosLinuxInstaller$ python -m tkinter # verify that tkinter test window opens
-(env) LogosLinuxInstaller$ pip install -r .[build] # install python packages
-(env) LogosLinuxInstaller$ python -m ou_dedetai.main --help # run the script
+(env) OuDedetai$ python -m tkinter # verify that tkinter test window opens
+(env) OuDedetai$ pip install -r .[build] # install python packages
+(env) OuDedetai$ python -m ou_dedetai.main --help # run the script
 ```
 
 ### Building using docker
 
 ```bash
-$ git clone 'https://github.com/FaithLife-Community/LogosLinuxInstaller.git'
-$ cd LogosLinuxInstaller
+$ git clone 'https://github.com/FaithLife-Community/OuDedetai.git'
+$ cd OuDedetai
 # docker build -t logosinstaller .
 # docker run --rm -v $(pwd):/usr/src/app logosinstaller
 ```

@@ -12,6 +12,7 @@ from ou_dedetai.config import EphemeralConfiguration
 from ou_dedetai.system import SuperuserCommandNotFound
 from ou_dedetai.logos import State as LogosRunningState
 
+from . import backup
 from . import control
 from . import installer
 from . import wine
@@ -31,7 +32,7 @@ class CLI(App):
         self.start_thread(self.user_input_processor)
 
     def backup(self):
-        control.backup(app=self)
+        backup.backup(app=self)
 
     def create_shortcuts(self):
         installer.create_launcher_shortcuts(self)
@@ -59,7 +60,7 @@ class CLI(App):
         control.remove_library_catalog(self)
 
     def restore(self):
-        control.restore(app=self)
+        backup.restore(app=self)
 
     def run_indexing(self):
         self.logos.index()

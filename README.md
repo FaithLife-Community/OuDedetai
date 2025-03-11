@@ -1,6 +1,6 @@
-[![GitHub All Releases](https://img.shields.io/github/downloads/FaithLife-Community/LogosLinuxInstaller/total.svg)]()
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/f730f74748c348cb9b3ff2fa1654c84b)](https://app.codacy.com/manual/FaithLife-Community/LogosLinuxInstaller?utm_source=github.com&utm_medium=referral&utm_content=FaithLife-Community/LogosLinuxInstaller&utm_campaign=Badge_Grade_Dashboard)
-[![Automation testing](https://img.shields.io/badge/Automation-testing-sucess)](https://github.com/FaithLife-Community/LogosLinuxInstallTests) [![Installer LogosBible](https://img.shields.io/badge/Installer-LogosBible-blue)](https://www.logos.com) [![LastRelease](https://img.shields.io/github/v/release/FaithLife-Community/LogosLinuxInstaller)](https://github.com/FaithLife-Community/LogosLinuxInstaller/releases)
+[![GitHub All Releases](https://img.shields.io/github/downloads/FaithLife-Community/OuDedetai/total.svg)]()
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/f730f74748c348cb9b3ff2fa1654c84b)](https://app.codacy.com/manual/FaithLife-Community/OuDedetai?utm_source=github.com&utm_medium=referral&utm_content=FaithLife-Community/OuDedetai&utm_campaign=Badge_Grade_Dashboard)
+[![Automation testing](https://img.shields.io/badge/Automation-testing-sucess)](https://github.com/FaithLife-Community/LogosLinuxInstallTests) [![Installer LogosBible](https://img.shields.io/badge/Installer-LogosBible-blue)](https://www.logos.com) [![LastRelease](https://img.shields.io/github/v/release/FaithLife-Community/OuDedetai)](https://github.com/FaithLife-Community/OuDedetai/releases)
 
 # Ou Dedetai
 
@@ -31,18 +31,18 @@ See below.
 
 ## Install Guide (for users)
 
-For an installation guide with pictures and video, see the wiki's [Install Guide](https://github.com/FaithLife-Community/LogosLinuxInstaller/wiki/Install-Guide).
+For an installation guide with pictures and video, see the wiki's [Install Guide](https://github.com/FaithLife-Community/OuDedetai/wiki/Install-Guide).
 
 In Summary:
 ```bash
-wget https://github.com/FaithLife-Community/LogosLinuxInstaller/releases/latest/download/oudedetai
+wget https://github.com/FaithLife-Community/OuDedetai/releases/latest/download/oudedetai
 chmod +x ./oudedetai
 DIALOG=tk ./oudedetai
 ```
 
 NOTE: You can run **Ou Dedetai** using the Steam Proton Experimental binary, which often has the latest and greatest updates to make Logos run even smoother. The script should be able to find the binary automatically, unless your Steam install is located outside of your HOME directory.
 
-If you want to install your distro's dependencies outside of the script, please see the [System Dependencies wiki page](https://github.com/FaithLife-Community/LogosLinuxInstaller/wiki/System-Dependencies).
+If you want to install your distro's dependencies outside of the script, please see the [System Dependencies wiki page](https://github.com/FaithLife-Community/OuDedetai/wiki/System-Dependencies).
 
 ---
 

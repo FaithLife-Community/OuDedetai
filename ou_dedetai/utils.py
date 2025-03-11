@@ -262,31 +262,37 @@ def find_installed_product(faithlife_product: str, wine_prefix: str) -> Optional
     return None
 
 
-def enough_disk_space(dest_dir, bytes_required):
+def enough_disk_space(dest_dir, bytes_required: int) -> bool:
     free_bytes = shutil.disk_usage(dest_dir).free
     logging.debug(f"{free_bytes=}; {bytes_required=}")
     return free_bytes > bytes_required
 
 
-def get_path_size(file_path):
+def get_path_size(file_path: Path|str) -> int:
     file_path = Path(file_path)
     if not file_path.exists():
-        path_size = None
+        path_size = 0
     else:
         path_size = sum(f.stat().st_size for f in file_path.rglob('*')) + file_path.stat().st_size  # noqa: E501
     return path_size
 
 
-def get_folder_group_size(src_dirs: list[Path], q: queue.Queue[int]):
+def get_folder_group_size(
+    src_dirs: List[Path] | Tuple[Path],
+    q: queue.Queue[int] | None = None,
+) ->  int:
     src_size = 0
     for d in src_dirs:
         if not d.is_dir():
             continue
         src_size += get_path_size(d)
-    q.put(src_size)
+    if q is not None:
+        q.put(src_size)
+
+    return src_size
 
 
-def get_latest_folder(folder_path):
+def get_latest_folder(folder_path: Path|str) -> Optional[Path]:
     folders = [f for f in Path(folder_path).glob('*')]
     if not folders:
         logging.warning(f"No folders found in {folder_path}")

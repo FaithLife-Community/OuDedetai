@@ -306,7 +306,7 @@ class NetworkRequests:
 
     def app_latest_version(self, channel: str) -> SoftwareReleaseInfo:
         if channel == "stable":
-            repo = "FaithLife-Community/LogosLinuxInstaller"
+            repo = "FaithLife-Community/OuDedetai"
         else:
             repo = "FaithLife-Community/test-builds"
         return self._repo_latest_version(repo)

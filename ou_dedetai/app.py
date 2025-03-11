@@ -243,12 +243,40 @@ class App(abc.ABC):
                 if None that signifies we can't track the progress.
                 Feel free to implement a spinner
         """
+
+        def get_progressbar(pct, w=10, suffix=''):
+            suffix = f" {int(pct):>3}%"
+            # end = '\r'
+
+            ci = '\u23b8'
+            cf = '\u23b9'
+            d = '█'
+            u = ' '
+            d_ct = min(int(w*pct/100), w)
+            u_ct = min(int(w - d_ct - 1), w - 1)
+
+            bar = ''
+            if d_ct == 0:
+                bar += ci + u*(u_ct - 1) + cf
+            elif d_ct < w:
+                bar += str(d*d_ct) + str(u*u_ct) + cf
+            else:
+                bar += str(d*d_ct)
+            bar += suffix #+ end
+            return bar
+
         # De-dup
         if message != self._last_status:
+            bar = ''
+            if percent is not None:
+                bar = f"{get_progressbar(percent)}"
             if message.endswith("\r"):
-                print(f"{message}", end="\r")
+                print(f"{bar}{message}", end="\r")
             else:
                 print(f"{message}")
+                if bar:
+                    print(bar)
+        
 
     @property
     def superuser_command(self) -> str:

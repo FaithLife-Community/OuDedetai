@@ -82,7 +82,7 @@ class LogosManager:
             self.existing_processes[app.conf.logos_exe] = system.get_pids(app.conf.logos_exe) # noqa: E501
         if app.conf.wine_user:
             # Also look for the system's Logos.exe (this may be the login window)
-            logos_system_exe = f"C:\\users\\{app.conf.wine_user}\\AppData\\Local\\Logos\\System\\Logos.exe" #noqa: E501
+            logos_system_exe = f"C:\\users\\{app.conf.wine_user}\\AppData\\Local\\{app.conf.faithlife_product}\\System\\{app.conf.faithlife_product}.exe" #noqa: E501
             self.existing_processes[logos_system_exe] = system.get_pids(logos_system_exe) # noqa: E501
         if app.conf.logos_indexer_exe:
             self.existing_processes[app.conf.logos_indexer_exe] = system.get_pids(app.conf.logos_indexer_exe)  # noqa: E501

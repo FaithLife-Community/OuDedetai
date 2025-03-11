@@ -26,6 +26,7 @@ from ou_dedetai.constants import (
 )
 from ou_dedetai.config import EphemeralConfiguration
 
+from . import backup
 from . import constants
 from . import control
 from . import gui
@@ -553,12 +554,12 @@ class ControlWindow(GuiApp):
         self.gui.progress.config(mode='determinate')
         self.gui.progressvar.set(0)
         # Start backup thread.
-        self.start_thread(control.backup, app=self)
+        self.start_thread(backup.backup, app=self)
 
     def run_restore(self, evt=None):
         # FIXME: Allow user to choose restore source?
         # Start restore thread.
-        self.start_thread(control.restore, app=self)
+        self.start_thread(backup.restore, app=self)
 
     def install_deps(self, evt=None):
         self.start_thread(utils.install_dependencies, self)

@@ -218,15 +218,23 @@ class TestGeneralUtils(unittest.TestCase):
     def test_get_downloaded_file_path_notfound(self):
         self.assertIsNone(utils.get_downloaded_file_path(REPODIR, 'NothingToFind.exe'))  # noqa: E501
 
-    def test_get_folder_group_size_bad(self):
+    def test_get_folder_group_size_queuebad(self):
         q = queue.Queue()
         utils.get_folder_group_size([Path('fake')], q)
         self.assertEqual(q.get(), 0)
 
-    def test_get_folder_group_size_good(self):
+    def test_get_folder_group_size_queuegood(self):
         q = queue.Queue()
         utils.get_folder_group_size([TESTDATADIR], q)
         self.assertIsNotNone(q.get())
+
+    def test_get_folder_group_size_returnbad(self):
+        r = utils.get_folder_group_size([Path('fake')])
+        self.assertEqual(r, 0)
+
+    def test_get_folder_group_size_returngood(self):
+        r = utils.get_folder_group_size([TESTDATADIR])
+        self.assertIsNotNone(r)
 
     @unittest.skip("Not tested; function just sorts names and returns last one.")
     def test_get_latest_folder(self):
@@ -243,8 +251,8 @@ class TestGeneralUtils(unittest.TestCase):
         size = size_du + size_dir
         self.assertEqual(size, utils.get_path_size(TESTDATADIR))
 
-    def test_get_path_size_none(self):
-        self.assertIsNone(utils.get_path_size('./no_dir'))
+    def test_get_path_size_notexists(self):
+        self.assertEqual(0, utils.get_path_size('./no_dir'))
 
     # @unittest.skip("Unused function")
     # def test_get_procs_using_file(self):
