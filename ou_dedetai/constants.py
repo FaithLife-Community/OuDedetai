@@ -70,7 +70,7 @@ DEFAULT_CONFIG_PATH = os.path.expanduser(f"{CONFIG_DIR}/{BINARY_NAME}.json")
 DEFAULT_APP_WINE_LOG_PATH = os.path.expanduser(f"{STATE_DIR}/wine.log")
 DEFAULT_APP_LOG_PATH = os.path.expanduser(f"{STATE_DIR}/{BINARY_NAME}.log")
 NETWORK_CACHE_PATH = f"{CACHE_DIR}/network.json"
-DEFAULT_WINEDEBUG = "fixme+all,err+all"
+DEFAULT_WINEDEBUG = "err+all"
 LEGACY_CONFIG_FILES = [
     # If the user didn't have XDG_CONFIG_HOME set before, but now does.
     os.path.expanduser("~/.config/FaithLife-Community/oudedetai"),
