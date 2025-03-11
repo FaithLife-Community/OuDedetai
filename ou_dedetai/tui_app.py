@@ -904,7 +904,7 @@ class TUI(App):
         self.ask_answer_event.clear()
 
     def _status(self, message: str, percent: int | None = None):
-        message = message.strip("\r")
+        message = message.strip()
         if self.console_log[-1] == message:
             return
         self.console_log.append(message)

@@ -208,8 +208,7 @@ class App(abc.ABC):
         """A status update
         
         Args:
-            message: str - if it ends with a \r that signifies that this message is
-                intended to be overrighten next time
+            message: str - message to send to user
             percent: Optional[int] - percent of the way through the current install step
                 (if installing)
         """
@@ -237,13 +236,13 @@ class App(abc.ABC):
         """Implementation for updating status pre-front end
         
         Args:
-            message: str - if it ends with a \r that signifies that this message is
-                intended to be overridden next time
+            message: str - message to send to user
             percent: Optional[int] - percent complete of the current overall operation
                 if None that signifies we can't track the progress.
                 Feel free to implement a spinner
         """
 
+        # XXX: this isn't used in any App..
         def get_progressbar(pct, w=10, suffix=''):
             suffix = f" {int(pct):>3}%"
             # end = '\r'

@@ -170,14 +170,6 @@ class CLI(App):
         if percent is not None and percent > 100:
             percent = 100
         progress_str = ""
-        # Carriage return at the start signifies we want to overwrite the last line.
-        if message.startswith("\r") or message == self._last_status:
-            # Go back up one line to re-write the line and progress
-            # This allows the current line to update
-            # Type is ignored on the following line due to supposed error in 
-            # curses.tparm, however the code works, and value is static. it is safe.
-            print((curses.tparm(curses.tigetstr("cuu")) + b"\r").decode(), end="") # type: ignore
-            message = message.lstrip("\r")
         # We don't want to display 100% as it doesn't print nicely.
         if percent is not None:
             # -2 is for the brackets, -1 is for the >
