@@ -1,6 +1,6 @@
 import math
+import os
 import queue
-import curses
 import shutil
 import threading
 import time
@@ -22,8 +22,6 @@ from . import utils
 class CLI(App):
     def __init__(self, ephemeral_config: EphemeralConfiguration):
         super().__init__(ephemeral_config)
-        curses.setupterm()
-        curses.initscr()
         self.running: bool = True
         self.choice_q: queue.Queue[str] = queue.Queue()
         self.input_q: queue.Queue[Tuple[str, list[str]] | None] = queue.Queue()
@@ -137,10 +135,8 @@ class CLI(App):
         """
         print(
             (
-                # Type is ignored on the following line due to supposed error in 
-                # curses.tparm, however the code works, and value is static. it is safe.
-                curses.tparm(curses.tigetstr("el")) # type: ignore
-                + b"\r"
+                # "\033[2K" is the ANSI code for clearing the current line
+                b"\033[2K\r"
                 + message.encode("utf-8")
                 + b"\n\r"
             ).decode(),
@@ -155,7 +151,6 @@ class CLI(App):
         self.running = False
         # We always want this to return regardless of level
         self.print(f"Closing {constants.APP_NAME} due to: {reason}")
-        curses.endwin()
         return super().exit(reason, intended)
     
     def _status(self, message: str, percent: Optional[int] = None):
@@ -173,7 +168,7 @@ class CLI(App):
         # We don't want to display 100% as it doesn't print nicely.
         if percent is not None:
             # -2 is for the brackets, -1 is for the >
-            progress_bar_length = curses.COLS - 2 -1
+            progress_bar_length = os.get_terminal_size().columns - 2 -1
             # Subtract one for the >
             chars_of_progress = math.floor(float(progress_bar_length) * percent / 100) #noqa: E501
             chars_remaining = progress_bar_length - chars_of_progress
