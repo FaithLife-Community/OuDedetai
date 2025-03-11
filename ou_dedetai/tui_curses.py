@@ -17,14 +17,14 @@ def wrap_text(app: App, text: str) -> list[str]:
     column_width = app.window_width - column_margin
     if "\n" in text:
         lines = text.splitlines()
-        wrapped_lines = [textwrap.fill(line, column_width).splitlines() for line in lines] #noqa: E501
+        wrapped_lines = [textwrap.fill(line, column_width).splitlines() for line in lines] 
         wrapped_text = [wrapped for sublist in wrapped_lines for wrapped in sublist]
     else:
         wrapped_text = textwrap.fill(text, column_width).splitlines()
     return wrapped_text
 
 
-def write_line(app: App, stdscr: curses.window, start_y, start_x, text, char_limit, attributes=curses.A_NORMAL): #noqa: E501
+def write_line(app: App, stdscr: curses.window, start_y, start_x, text, char_limit, attributes=curses.A_NORMAL): 
     from ou_dedetai.tui_app import TUI
     if not isinstance(app, TUI):
         raise ValueError("curses MUST be used with the TUI")
@@ -47,7 +47,7 @@ def title(app: App, stdscr: curses.window, title_text, title_start_y_adj):
     last_index = 0
     for i, line in enumerate(title_lines):
         if i < app.window_height:
-            write_line(app, stdscr, i + title_start_y_adj, 2, line, app.window_width, curses.A_BOLD) #noqa: E501
+            write_line(app, stdscr, i + title_start_y_adj, 2, line, app.window_width, curses.A_BOLD) 
         last_index = i
 
     return last_index
@@ -64,7 +64,16 @@ def text_centered(app: App, stdscr: curses.window, text: str, start_y=0) -> tupl
     for i, line in enumerate(text_lines):
         if text_start_y + i < app.window_height:
             x = app.window_width // 2 - text_width // 2
-            write_line(app, stdscr, text_start_y + i, max(column_margin, x), line, app.window_width - (column_margin * 2), curses.A_BOLD) #noqa: E501  # column_margin is doubled to account for the left side's column_margin
+            write_line(
+                app,
+                stdscr,
+                text_start_y + i,
+                max(column_margin, x),
+                line,
+                # column_margin is doubled to account for the left side's column_margin
+                app.window_width - (column_margin * 2),
+                curses.A_BOLD
+            )
 
     return text_start_y, text_lines
 
@@ -84,7 +93,7 @@ def confirm(app: App, question_text: str, height=None, width=None):
         raise ValueError("curses MUST be used with the TUI")
     stdscr = app.get_main_window()
     question_text = question_text + " [Y/n]: "
-    question_start_y, question_lines = text_centered(app, question_text)
+    question_start_y, question_lines = text_centered(app, stdscr, question_text)
 
     y = question_start_y + len(question_lines) + 2
 
@@ -97,7 +106,7 @@ def confirm(app: App, question_text: str, height=None, width=None):
         elif key.lower() == 'n':
             return False
 
-        write_line(app, stdscr, y, 0, "Type Y[es] or N[o]. ", app.window_width, curses.A_BOLD) #noqa: E501
+        write_line(app, stdscr, y, 0, "Type Y[es] or N[o]. ", app.window_width, curses.A_BOLD) 
 
 
 class CursesDialog:
@@ -127,7 +136,7 @@ class UserInputDialog(CursesDialog):
         self.user_input = default_text
         self.submit = False
 
-        self.question_start_y, self.question_lines = text_centered(self.app, self.stdscr, self.question_text) #noqa: E501
+        self.question_start_y, self.question_lines = text_centered(self.app, self.stdscr, self.question_text) 
 
 
     def __str__(self):
@@ -137,7 +146,7 @@ class UserInputDialog(CursesDialog):
         curses.echo()
         curses.curs_set(1)
         self.stdscr.clear()
-        self.question_start_y, self.question_lines = text_centered(self.app, self.stdscr, self.question_text) #noqa: E501
+        self.question_start_y, self.question_lines = text_centered(self.app, self.stdscr, self.question_text) 
         self.input()
         curses.curs_set(0)
         curses.noecho()
@@ -149,8 +158,15 @@ class UserInputDialog(CursesDialog):
         return self.user_input
 
     def input(self):
-        write_line(self.app, self.stdscr, self.question_start_y + len(self.question_lines) + 2, 10, self.show_text, self.app.window_width) #noqa: E501
-        key = self.stdscr.getch(self.question_start_y + len(self.question_lines) + 2, 10 + len(self.show_text)) #noqa: E501
+        write_line(
+            self.app,
+            self.stdscr,
+            self.question_start_y + len(self.question_lines) + 2,
+            10,
+            self.show_text,
+            self.app.window_width
+        ) 
+        key = self.stdscr.getch(self.question_start_y + len(self.question_lines) + 2, 10 + len(self.show_text)) 
 
         try:
             if key == -1:  # If key not found, keep processing.
@@ -174,7 +190,7 @@ class UserInputDialog(CursesDialog):
                         path_name = path.name
                     if dir_path.exists():
                         options = os.listdir(dir_path)
-                        options = [option for option in options if option.startswith(path_name)] #noqa: E501
+                        options = [option for option in options if option.startswith(path_name)] 
                         # Displaying all these options may be complicated, for now for
                         # now only display if there is only one option
                         if len(options) == 1:
@@ -231,7 +247,7 @@ class MenuDialog(CursesDialog):
             self.app.active_screen.set_options(self.app.options)
         self.app.total_pages = (len(self.app.options) - 1) // self.app.options_per_page + 1
 
-        self.question_start_y, self.question_lines = text_centered(self.app, self.stdscr, self.question_text) #noqa: E501
+        self.question_start_y, self.question_lines = text_centered(self.app, self.stdscr, self.question_text) 
         # Display the options, centered
         options_start_y = self.question_start_y + len(self.question_lines) + 1
         for i in range(self.app.options_per_page):
@@ -245,10 +261,10 @@ class MenuDialog(CursesDialog):
                         wine_binary_path = option[1]
                         wine_binary_description = option[2]
                         wine_binary_path_wrapped = textwrap.wrap(
-                            f"Binary Path: {wine_binary_path}", self.app.window_width - 4) #noqa: E501
+                            f"Binary Path: {wine_binary_path}", self.app.window_width - 4) 
                         option_lines.extend(wine_binary_path_wrapped)
                         wine_binary_desc_wrapped = textwrap.wrap(
-                            f"Description: {wine_binary_description}", self.app.window_width - 4) #noqa: E501
+                            f"Description: {wine_binary_description}", self.app.window_width - 4) 
                         option_lines.extend(wine_binary_desc_wrapped)
                     else:
                         wine_binary_path = option[1]
@@ -267,19 +283,22 @@ class MenuDialog(CursesDialog):
                     x = max(0, self.app.window_width // 2 - len(line) // 2)
                     if y < self.app.main_window_height:
                         if index == self.app.current_option:
-                            write_line(self.app, self.stdscr, y, x, line, self.app.window_width, curses.A_REVERSE) #noqa: E501
+                            write_line(self.app, self.stdscr, y, x, line, self.app.window_width, curses.A_REVERSE) 
                         else:
-                            write_line(self.app, self.stdscr, y, x, line, self.app.window_width) #noqa: E501
+                            write_line(self.app, self.stdscr, y, x, line, self.app.window_width) 
                 self.app.menu_bottom = y
 
                 if type(option) is list:
                     options_start_y += (len(option_lines))
 
     def do_menu_up(self):
-        if self.app.current_option == self.app.current_page * self.app.options_per_page and self.app.current_page > 0: #noqa: E501
+        if self.app.current_option == self.app.current_page * self.app.options_per_page and self.app.current_page > 0: 
             # Move to the previous page
             self.app.current_page -= 1
-            self.app.current_option = min(len(self.app.menu_options) - 1, (self.app.current_page + 1) * self.app.options_per_page - 1) #noqa: E501
+            self.app.current_option = min(
+                len(self.app.menu_options) - 1, 
+                (self.app.current_page + 1) * self.app.options_per_page - 1
+            )
         elif self.app.current_option == 0:
             if self.app.total_pages == 1:
                 self.app.current_option = len(self.app.menu_options) - 1
@@ -290,15 +309,21 @@ class MenuDialog(CursesDialog):
             self.app.current_option = max(0, self.app.current_option - 1)
 
     def do_menu_down(self):
-        if self.app.current_option == (self.app.current_page + 1) * self.app.options_per_page - 1 and self.app.current_page < self.app.total_pages - 1: #noqa: E501
+        if (
+            self.app.current_option == (self.app.current_page + 1) * self.app.options_per_page - 1
+            and self.app.current_page < self.app.total_pages - 1
+        ): 
             # Move to the next page
             self.app.current_page += 1
-            self.app.current_option = min(len(self.app.menu_options) - 1, self.app.current_page * self.app.options_per_page) #noqa: E501
+            self.app.current_option = min(
+                len(self.app.menu_options) - 1,
+                self.app.current_page * self.app.options_per_page
+            )
         elif self.app.current_option == len(self.app.menu_options) - 1:
             self.app.current_page = 0
             self.app.current_option = 0
         else:
-            self.app.current_option = min(len(self.app.menu_options) - 1, self.app.current_option + 1) #noqa: E501
+            self.app.current_option = min(len(self.app.menu_options) - 1, self.app.current_option + 1) 
 
     def input(self):
         if len(self.app.tui_screens) > 0:

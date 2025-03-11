@@ -37,6 +37,9 @@ where = ["."]
 [tool.setuptools.package-data]
 "ou_dedetai.img" = ["*icon.png"]
 
+[tool.ruff]
+line-length = 120
+
 [tool.ruff.lint]
 select = ["E", "F"]
 

@@ -27,8 +27,8 @@ class Screen:
         # running:
         # This var indicates either whether:
         # A CursesScreen has already submitted its choice to the choice_q, or
-        # The var indicates whether a Dialog has already started. If the dialog has already started, #noqa: E501
-        # then the program will not display the dialog again in order to prevent phantom key presses. #noqa: E501
+        # The var indicates whether a Dialog has already started. If the dialog has already started, 
+        # then the program will not display the dialog again in order to prevent phantom key presses. 
         # 0 = not submitted or not started
         # 1 = submitted or started
         # 2 = none or finished
@@ -78,21 +78,44 @@ class ConsoleScreen(CursesScreen):
             raise Exception("stdscr should be set at this point in the console screen."
                             "Please report this incident to the developers")
         self.stdscr.erase()
-        tui_curses.write_line(self.app, self.stdscr, self.start_y, self.app.terminal_margin, "---Console---", self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
+        tui_curses.write_line(
+            self.app,
+            self.stdscr,
+            self.start_y,
+            self.app.terminal_margin,
+            "---Console---",
+            self.app.window_width - (self.app.terminal_margin * 2)
+        ) 
         recent_messages = self.app.recent_console_log
         for i, message in enumerate(recent_messages, 1):
             message_lines = tui_curses.wrap_text(self.app, message)
             for j, line in enumerate(message_lines):
                 if 2 + j < self.app.window_height:
-                    truncated = message[:self.app.window_width - (self.app.terminal_margin * 2)] #noqa: E501
-                    tui_curses.write_line(self.app, self.stdscr, self.start_y + i, self.app.terminal_margin, truncated, self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
+                    truncated = message[:self.app.window_width - (self.app.terminal_margin * 2)] 
+                    tui_curses.write_line(
+                        self.app,
+                        self.stdscr,
+                        self.start_y + i,
+                        self.app.terminal_margin,
+                        truncated,
+                        self.app.window_width - (self.app.terminal_margin * 2)
+                    ) 
 
         self.stdscr.noutrefresh()
         curses.doupdate()
 
 
 class HeaderScreen(CursesScreen):
-    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, title: str, subtitle: str, title_start_y: int):
+    def __init__(
+        self,
+        app: App,
+        screen_id: int,
+        queue: Queue,
+        event: Event,
+        title: str,
+        subtitle: str,
+        title_start_y: int
+    ):
         super().__init__(app, screen_id, queue, event)
         self.stdscr: Optional[curses.window] = self.app.header_window
         self.title = title
@@ -133,16 +156,45 @@ class FooterScreen(CursesScreen):
         footer_text = "By the FaithLife Community"
 
         if isinstance(self.app.active_screen, MenuScreen):
-            page_info = f"Page {self.app.current_page + 1}/{self.app.total_pages} | Selected Option: {self.app.current_option + 1}/{len(self.app.options)}" #noqa: E501
-            tui_curses.write_line(self.app, self.stdscr, self.start_y, 2, page_info, self.app.window_width, curses.A_BOLD) #noqa: E501
-        tui_curses.write_line(self.app, self.stdscr, self.app.footer_window_height - 1, self.app.terminal_margin, footer_text, self.app.window_width - (self.app.terminal_margin * 2)) #noqa: E501
+            page_info = (
+                f"Page {self.app.current_page + 1}/{self.app.total_pages} | "
+                f"Selected Option: {self.app.current_option + 1}/{len(self.app.options)}"
+            )
+            tui_curses.write_line(
+                self.app,
+                self.stdscr,
+                self.start_y,
+                2,
+                page_info,
+                self.app.window_width,
+                curses.A_BOLD
+            )
+        tui_curses.write_line(
+            self.app,
+            self.stdscr,
+            self.app.footer_window_height - 1,
+            self.app.terminal_margin,
+            footer_text,
+            self.app.window_width - (self.app.terminal_margin * 2)
+        ) 
 
         self.stdscr.noutrefresh()
         curses.doupdate()
 
 
 class MenuScreen(CursesScreen):
-    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, question: str, options: list, height: int=None, width: int=None, menu_height: int=8): #noqa: E501
+    def __init__(
+        self,
+        app: App,
+        screen_id: int,
+        queue: Queue,
+        event: Event,
+        question: str,
+        options: list,
+        height: int=None,
+        width: int=None,
+        menu_height: int=8
+    ): 
         super().__init__(app, screen_id, queue, event)
         self.stdscr = self.app.get_main_window()
         self.question = question
@@ -164,7 +216,7 @@ class MenuScreen(CursesScreen):
             self.question,
             self.options
         ).run()
-        if self.choice is not None and not self.choice == "" and not self.choice == "Processing": #noqa: E501
+        if self.choice is not None and not self.choice == "" and not self.choice == "Processing": 
             self.submit_choice_to_queue()
         self.stdscr.noutrefresh()
         curses.doupdate()
@@ -178,7 +230,17 @@ class MenuScreen(CursesScreen):
 
 
 class ConfirmScreen(MenuScreen):
-    def __init__(self, app: App, screen_id: int, queue: Queue, event: Event, question: str, no_text: str, secondary: str, options: list=["Yes", "No"]): #noqa: E501
+    def __init__(
+        self,
+        app: App,
+        screen_id: int,
+        queue: Queue,
+        event: Event,
+        question: str,
+        no_text: str,
+        secondary: str,
+        options: list=["Yes", "No"]
+    ):
         super().__init__(app, screen_id, queue, event, question, options,
                          height=None, width=None, menu_height=8)
         self.no_text = no_text
@@ -197,7 +259,7 @@ class ConfirmScreen(MenuScreen):
             self.secondary + "\n" + self.question,
             self.options
         ).run()
-        if self.choice is not None and not self.choice == "" and not self.choice == "Processing": #noqa: E501
+        if self.choice is not None and not self.choice == "" and not self.choice == "Processing": 
             if self.choice == "No":
                 logging.critical(self.no_text)
             self.submit_choice_to_queue()
@@ -284,7 +346,12 @@ class TextScreen(CursesScreen):
         self.stdscr.erase()
         text_start_y, text_lines = tui_curses.text_centered(self.app, self.stdscr, self.text)
         if self.wait:
-            self.spinner_index = tui_curses.spinner(self.app, self.stdscr, self.spinner_index, text_start_y + len(text_lines) + 1) #noqa: E501
+            self.spinner_index = tui_curses.spinner(
+                self.app,
+                self.stdscr,
+                self.spinner_index,
+                text_start_y + len(text_lines) + 1
+            ) 
             time.sleep(0.1)
         self.stdscr.noutrefresh()
         curses.doupdate()
@@ -294,7 +361,7 @@ class TextScreen(CursesScreen):
 
 
 class MenuDialog(DialogScreen):
-    def __init__(self, app, screen_id, queue, event, question, options, height=None, width=None, menu_height=8): #noqa: E501
+    def __init__(self, app, screen_id, queue, event, question, options, height=None, width=None, menu_height=8): 
         super().__init__(app, screen_id, queue, event)
         self.stdscr = self.app.get_main_window()
         self.question = question
@@ -358,13 +425,13 @@ class PasswordDialog(InputDialog):
     def display(self):
         if self.running == 0:
             self.running = 1
-            _, self.choice = tui_dialog.password(self.app, self.question, init=self.default) #noqa: E501
+            _, self.choice = tui_dialog.password(self.app, self.question, init=self.default) 
             self.submit_choice_to_queue()
             self.app.installing_pw_waiting()
 
 
 class ConfirmDialog(DialogScreen):
-    def __init__(self, app, screen_id, queue, event, question, no_text, secondary, yes_label="Yes", no_label="No"): #noqa: E501
+    def __init__(self, app, screen_id, queue, event, question, no_text, secondary, yes_label="Yes", no_label="No"): 
         super().__init__(app, screen_id, queue, event)
         self.stdscr = self.app.get_main_window()
         self.question = question
@@ -415,7 +482,7 @@ class TextDialog(DialogScreen):
         if self.running == 0:
             if self.wait:
                 if self.app.installer_step_count > 0:
-                    self.percent = installer.get_progress_pct(self.app.installer_step, self.app.installer_step_count) #noqa: E501
+                    self.percent = installer.get_progress_pct(self.app.installer_step, self.app.installer_step_count) 
                 else:
                     self.percent = 0
 
@@ -427,7 +494,7 @@ class TextDialog(DialogScreen):
         elif self.running == 1:
             if self.wait:
                 if self.app.installer_step_count > 0:
-                    self.percent = installer.get_progress_pct(self.app.installer_step, self.app.installer_step_count) #noqa: E501
+                    self.percent = installer.get_progress_pct(self.app.installer_step, self.app.installer_step_count) 
                 else:
                     self.percent = 0
 
@@ -494,7 +561,7 @@ class TaskListDialog(DialogScreen):
 
 
 class BuildListDialog(DialogScreen):
-    def __init__(self, app, screen_id, queue, event, question, options, list_height=None, height=None, width=None): #noqa: E501
+    def __init__(self, app, screen_id, queue, event, question, options, list_height=None, height=None, width=None): 
         super().__init__(app, screen_id, queue, event)
         self.stdscr = self.app.get_main_window()
         self.question = question
@@ -522,7 +589,7 @@ class BuildListDialog(DialogScreen):
 
 
 class CheckListDialog(DialogScreen):
-    def __init__(self, app, screen_id, queue, event, question, options, list_height=None, height=None, width=None): #noqa: E501
+    def __init__(self, app, screen_id, queue, event, question, options, list_height=None, height=None, width=None): 
         super().__init__(app, screen_id, queue, event)
         self.stdscr = self.app.get_main_window()
         self.question = question

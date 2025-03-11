@@ -39,7 +39,7 @@ class TUI(App):
         self.stdscr = stdscr
         self.set_title()
         # else:
-        #    self.title = f"Welcome to {constants.APP_NAME} ({constants.LLI_CURRENT_VERSION})"  # noqa: E501
+        #    self.title = f"Welcome to {constants.APP_NAME} ({constants.LLI_CURRENT_VERSION})"
         self.console_message = "Starting TUI…"
         self.is_running = True
         self.active_progress = False
@@ -127,20 +127,20 @@ class TUI(App):
         # now it all respects use_python_dialog
         # some menus may open in dialog that didn't before.
         self.use_python_dialog: bool = False
-        if "dialog" in sys.modules and ephemeral_config.terminal_app_prefer_dialog is not False: #noqa: E501
+        if "dialog" in sys.modules and ephemeral_config.terminal_app_prefer_dialog is not False: 
             result = system.test_dialog_version()
 
             if result is None:
                 logging.debug(
                     "The 'dialog' package was not found. Falling back to Python Curses."
-                )  # noqa: E501
+                )
             elif result:
                 logging.debug("Dialog version is up-to-date.")
                 self.use_python_dialog = True
             else:
                 logging.error(
                     "Dialog version is outdated. The program will fall back to Curses."
-                )  # noqa: E501
+                )
         # FIXME: remove this hard-coding after considering whether we want to continue 
         # to support both
         self.use_python_dialog = False
@@ -151,10 +151,16 @@ class TUI(App):
         self.config_updated_hooks += [self._config_update_hook]
 
     def set_title(self):
-        self.title = f"Welcome to {constants.APP_NAME} {constants.LLI_CURRENT_VERSION} ({self.conf.app_release_channel})"  # noqa: E501
-        product_name = self.conf._raw.faithlife_product or constants.FAITHLIFE_PRODUCTS[0] #noqa: E501
+        self.title = (
+            f"Welcome to {constants.APP_NAME} {constants.LLI_CURRENT_VERSION} "
+            f"({self.conf.app_release_channel})"
+        )
+        product_name = self.conf._raw.faithlife_product or constants.FAITHLIFE_PRODUCTS[0] 
         if self.is_installed():
-            self.subtitle = f"{product_name} Version: {self.conf.installed_faithlife_product_release} ({self.conf.faithlife_product_release_channel})"  # noqa: E501
+            self.subtitle = (
+                f"{product_name} Version: {self.conf.installed_faithlife_product_release} "
+                f"({self.conf.faithlife_product_release_channel})"
+            )
         else:
             self.subtitle = f"{product_name} not installed"
         # Reset the console to force a re-draw
@@ -182,7 +188,7 @@ class TUI(App):
                 self.status_e,
                 "Main Menu",
                 self.set_tui_menu_options(),
-            )  # noqa: E501
+            )
         return self._main_screen
     
     @property
@@ -190,7 +196,7 @@ class TUI(App):
         if self._console is None:
             self._console = tui_screen.ConsoleScreen(
                 self, 0, self.status_q, self.status_e, 0
-            )  # noqa: E501
+            )
         return self._console
 
     @property
@@ -198,7 +204,7 @@ class TUI(App):
         if self._header is None:
             self._header = tui_screen.HeaderScreen(
                 self, 0, self.status_q, self.status_e, self.title, self.subtitle, 0
-            )  # noqa: E501
+            )
         return self._header
 
     @property
@@ -206,7 +212,7 @@ class TUI(App):
         if self._footer is None:
             self._footer = tui_screen.FooterScreen(
                 self, 0, self.status_q, self.status_e, 0
-            )  # noqa: E501
+            )
         return self._footer
 
     @property
@@ -233,9 +239,9 @@ class TUI(App):
             + min_console_height
         )
         self.console_window_height = max(
-            int(self.window_height * self.console_window_ratio), self.console_window_height_min #noqa: E501
-        )  # noqa: E501
-        self.console_log_lines = max(self.console_window_height - self.console_window_height_min, 1) #noqa: E501
+            int(self.window_height * self.console_window_ratio), self.console_window_height_min
+        )
+        self.console_log_lines = max(self.console_window_height - self.console_window_height_min, 1)
 
     def set_footer_window_dimensions(self):
         self.footer_window_height_min = 3
@@ -250,7 +256,7 @@ class TUI(App):
         self.main_window_height = max(
             int(self.window_height * self.main_window_ratio),
             self.main_window_height_min 
-        )  # noqa: E501
+        )
 
     def set_window_dimensions(self):
         curses.resizeterm(self.window_height, self.window_width)
@@ -263,10 +269,10 @@ class TUI(App):
     def set_windows(self):
         self.options_per_page = max(
             self.window_height 
-            - self.header_window_height 
-            - self.console_window_height 
-            - self.main_window_height_min 
-            - self.footer_window_height,
+                - self.header_window_height 
+                - self.console_window_height 
+                - self.main_window_height_min 
+                - self.footer_window_height,
             1
         )
 
@@ -361,9 +367,8 @@ class TUI(App):
                 self.status_e,
                 "Main Menu",
                 self.set_tui_menu_options(),
-            )  # noqa: E501
+            )
             self._footer = None
-            # self.main_screen = tui_screen.MenuDialog(self, 0, self.status_q, self.status_e, "Main Menu", self.set_tui_menu_options(dialog=True)) #noqa: E501
             self.refresh()
         except curses.error as e:
             logging.error(f"Curses error in init_curses: {e}")
@@ -458,7 +463,7 @@ class TUI(App):
         # Makes sure status stays shown
         timestamp = utils.get_timestamp()
         self.status_q.put(f"{timestamp} {self.console_message}")
-        self.report_waiting(f"{self.console_message}")  # noqa: E501
+        self.report_waiting(f"{self.console_message}")
 
         self.active_screen = self.main_screen
         check_resize_last_time = last_time = time.time()
@@ -518,8 +523,8 @@ class TUI(App):
             # time for this loop
             # If flashing is observed on a screen, it's possible this timer needs to be 
             # increased
-            check_resize, check_resize_last_time = utils.stopwatch(check_resize_last_time, 1) #noqa: E501
-            if check_resize and curses.is_term_resized(self.window_height, self.window_width): #noqa: E501
+            check_resize, check_resize_last_time = utils.stopwatch(check_resize_last_time, 1) 
+            if check_resize and curses.is_term_resized(self.window_height, self.window_width): 
                 # The screen has changed sizes since we last checked. Resize
                 self.resize_curses()
 
@@ -632,11 +637,11 @@ class TUI(App):
             )
         elif choice.startswith(f"Update {constants.APP_NAME}"):
             utils.update_to_latest_lli_release(self)
-        elif self.conf._raw.faithlife_product and choice == f"Run {self.conf._raw.faithlife_product}": #noqa: E501
+        elif self.conf._raw.faithlife_product and choice == f"Run {self.conf._raw.faithlife_product}": 
             self.reset_screen()
             self.logos.start()
             self.main_screen.set_options(self.set_tui_menu_options())
-        elif self.conf._raw.faithlife_product and choice == f"Stop {self.conf.faithlife_product}": #noqa: E501
+        elif self.conf._raw.faithlife_product and choice == f"Stop {self.conf.faithlife_product}": 
             self.reset_screen()
             self.logos.stop()
             self.main_screen.set_options(self.set_tui_menu_options())
@@ -776,7 +781,7 @@ class TUI(App):
 
     def custom_appimage_select(self, choice: str):
         if choice == "Input Custom AppImage":
-            appimage_filename = self.ask("Enter AppImage filename: ", [PROMPT_OPTION_FILE]) #noqa: E501
+            appimage_filename = self.ask("Enter AppImage filename: ", [PROMPT_OPTION_FILE]) 
         else:
             appimage_filename = choice
         self.conf.wine_appimage_path = Path(appimage_filename)
@@ -834,7 +839,7 @@ class TUI(App):
             self.active_screen is not None
             and self.active_screen != self.main_screen
             and len(self.tui_screens) > 0
-        ):  # noqa: E501
+        ):
             self.tui_screens.pop(0)
         if self.active_screen == self.main_screen:
             self.main_screen.choice = "Processing"
@@ -925,7 +930,7 @@ class TUI(App):
     # def get_password(self, dialog):
     #     question = (f"Logos Linux Installer needs to run a command as root. "
     #                 f"Please provide your password to provide escalation privileges.")
-    #     self.screen_q.put(self.stack_password(15, self.password_q, self.password_e, question, dialog=dialog)) #noqa: E501
+    #     self.screen_q.put(self.stack_password(15, self.password_q, self.password_e, question, dialog=dialog)) 
 
     def confirm_restore_dir(self, choice):
         if choice:
@@ -950,10 +955,10 @@ class TUI(App):
         self.go_to_main_menu()
 
     def report_waiting(self, text):
-        # self.screen_q.put(self.stack_text(10, self.status_q, self.status_e, text, wait=True, dialog=dialog)) #noqa: E501
+        # self.screen_q.put(self.stack_text(10, self.status_q, self.status_e, text, wait=True, dialog=dialog)) 
         self.console_log.append(text)
 
-    def which_dialog_options(self, labels: list[str]) -> list[Any]: #noqa: E501
+    def which_dialog_options(self, labels: list[str]) -> list[Any]: 
         # curses - list[str]
         # dialog - list[tuple[str, str]] 
         options: list[Any] = []
@@ -976,15 +981,15 @@ class TUI(App):
                 # logging.debug("Logos Linux Installer is up-to-date.")
                 pass
             elif status == utils.VersionComparison.DEVELOPMENT:
-                # logging.debug("Logos Linux Installer is newer than the latest release.")  # noqa: E501
+                # logging.debug("Logos Linux Installer is newer than the latest release.")
                 pass
             else:
                 logging.error(f"Unknown result: {status}")
 
         if self.is_installed():
-            if self.logos.logos_state in [logos.State.STARTING, logos.State.RUNNING]:  # noqa: E501
+            if self.logos.logos_state in [logos.State.STARTING, logos.State.RUNNING]:
                 run = f"Stop {self.conf.faithlife_product}"
-            elif self.logos.logos_state in [logos.State.STOPPING, logos.State.STOPPED]:  # noqa: E501
+            elif self.logos.logos_state in [logos.State.STOPPING, logos.State.STOPPED]:
                 run = f"Run {self.conf.faithlife_product}"
 
             if self.logos.indexing_state == logos.State.RUNNING:
@@ -1078,7 +1083,7 @@ class TUI(App):
             "Enable Logging"
             if self.conf.faithlife_product_logging
             else "Disable Logging"
-        )  # noqa: E501
+        )
         labels.append(label)
 
         labels.append("Return to Main Menu")
@@ -1097,7 +1102,7 @@ class TUI(App):
         height=None,
         width=None,
         menu_height=8,
-    ):  # noqa: E501
+    ):
         if self.use_python_dialog:
             utils.append_unique(
                 self.tui_screens,
@@ -1112,7 +1117,7 @@ class TUI(App):
                     width,
                     menu_height,
                 ),
-            )  # noqa: E501
+            )
         else:
             utils.append_unique(
                 self.tui_screens,
@@ -1127,7 +1132,7 @@ class TUI(App):
                     width,
                     menu_height,
                 ),
-            )  # noqa: E501
+            )
 
     def stack_input(self, screen_id, queue, event, question: str, default):
         if self.use_python_dialog:
@@ -1136,32 +1141,32 @@ class TUI(App):
                 tui_screen.InputDialog(
                     self, screen_id, queue, event, question, default
                 ),
-            )  # noqa: E501
+            )
         else:
             utils.append_unique(
                 self.tui_screens,
                 tui_screen.InputScreen(
                     self, screen_id, queue, event, question, default
                 ),
-            )  # noqa: E501
+            )
 
     def stack_password(
         self, screen_id, queue, event, question, default=""
-    ):  # noqa: E501
+    ):
         if self.use_python_dialog:
             utils.append_unique(
                 self.tui_screens,
                 tui_screen.PasswordDialog(
                     self, screen_id, queue, event, question, default
                 ),
-            )  # noqa: E501
+            )
         else:
             utils.append_unique(
                 self.tui_screens,
                 tui_screen.PasswordScreen(
                     self, screen_id, queue, event, question, default
                 ),
-            )  # noqa: E501
+            )
 
     def stack_confirm(
         self,
@@ -1172,7 +1177,7 @@ class TUI(App):
         no_text,
         secondary,
         options=["Yes", "No"],
-    ):  # noqa: E501
+    ):
         if self.use_python_dialog:
             yes_label = options[0]
             no_label = options[1]
@@ -1189,34 +1194,34 @@ class TUI(App):
                     yes_label=yes_label,
                     no_label=no_label,
                 ),
-            )  # noqa: E501
+            )
         else:
             utils.append_unique(
                 self.tui_screens,
                 tui_screen.ConfirmScreen(
                     self, screen_id, queue, event, question, no_text, secondary, options
                 ),
-            )  # noqa: E501
+            )
 
     def stack_text(
         self, screen_id, queue, event, text, wait=False, percent=None
-    ):  # noqa: E501
+    ):
         if self.use_python_dialog:
             utils.append_unique(
                 self.tui_screens,
                 tui_screen.TextDialog(
                     self, screen_id, queue, event, text, wait, percent
                 ),
-            )  # noqa: E501
+            )
         else:
             utils.append_unique(
                 self.tui_screens,
                 tui_screen.TextScreen(self, screen_id, queue, event, text, wait),
-            )  # noqa: E501
+            )
 
     def stack_tasklist(
         self, screen_id, queue, event, text, elements, percent
-    ):  # noqa: E501
+    ):
         logging.debug(f"Elements stacked: {elements}")
         if self.use_python_dialog:
             utils.append_unique(
@@ -1224,7 +1229,7 @@ class TUI(App):
                 tui_screen.TaskListDialog(
                     self, screen_id, queue, event, text, elements, percent
                 ),
-            )  # noqa: E501
+            )
         else:
             # TODO: curses version
             pass
@@ -1239,7 +1244,7 @@ class TUI(App):
         height=None,
         width=None,
         list_height=None,
-    ):  # noqa: E501
+    ):
         if self.use_python_dialog:
             utils.append_unique(
                 self.tui_screens,
@@ -1254,7 +1259,7 @@ class TUI(App):
                     width,
                     list_height,
                 ),
-            )  # noqa: E501
+            )
         else:
             # TODO
             pass
@@ -1284,7 +1289,7 @@ class TUI(App):
                     width,
                     list_height,
                 ),
-            )  # noqa: E501
+            )
         else:
             # TODO
             pass
