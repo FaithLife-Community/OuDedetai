@@ -40,7 +40,7 @@ class MissingSystemBinary(Exception):
         super().__init__((
             "Failed to find command: "
             + command
-            + "Please find and install it via your package manager."
+            + " . Please find and install it via your package manager."
         ))
 
 
@@ -73,9 +73,10 @@ def run_cmd(*args, **kwargs) -> subprocess.CompletedProcess[str]:
 
 class OuDedetai:
     _binary: Optional[str] = None
-    _temp_dir: Optional[str] = None
-    config: Optional[Path] = None
-    install_dir: Optional[Path] = None
+    _faithlife_product: Optional["FaithLifeProduct"] = None
+    _temp_dir: str
+    config: Path
+    install_dir: Path
     log_level: str
     """Log level. One of:
     - quiet - warn+ - status
@@ -85,18 +86,24 @@ class OuDedetai:
     """
 
 
-    def __init__(self, isolate: bool = True, log_level: str = "quiet"):
-        if isolate:
-            self.isolate_files()
-        self.log_level = log_level
-
-    def isolate_files(self):
-        if self._temp_dir is not None:
-            shutil.rmtree(self._temp_dir)
+    def __init__(
+        self,
+        log_level: str = "quiet",
+        config_file: Optional[str] = None,
+        install_dir: Optional[str] = None
+    ):
         # FIXME: this isn't properly cleaned up when tests fail. Context manager?
         self._temp_dir = tempfile.mkdtemp(prefix="oudedetai_test_")
-        self.config = Path(self._temp_dir) / "config.json"
-        self.install_dir = Path(self._temp_dir) / "install_dir"
+        if config_file:
+            self.config = Path(config_file)
+        else:
+            self.config = Path(self._temp_dir) / "config.json"
+        if install_dir:
+            self.install_dir = Path(install_dir)
+        else:
+            self.install_dir = Path(self._temp_dir) / "install_dir"
+        self.log_level = log_level
+
 
     @classmethod
     def _source_last_update(cls) -> float:
@@ -138,15 +145,18 @@ class OuDedetai:
         if "env" not in kwargs:
             kwargs["env"] = {}
         env: dict[str, str] = {}
-        if self.config:
-            env["CONFIG_FILE"] = str(self.config)
-        if self.install_dir:
-            env["INSTALLDIR"] = str(self.install_dir)
+        env["CONFIG_FILE"] = str(self.config)
+        env["INSTALLDIR"] = str(self.install_dir)
         env["PATH"] = os.environ.get("PATH", "")
         env["HOME"] = os.environ.get("HOME", "")
         env["DISPLAY"] = os.environ.get("DISPLAY", "")
+        # Pass through other oudedetai envs
         env["logos_release_channel"] = os.environ.get("logos_release_channel", "stable")
         env["FLPRODUCT"] = os.environ.get("FLPRODUCT", "Logos")
+        if (wine_log := os.environ.get("wine_log")) is not None:
+            env["wine_log"] = wine_log
+        if (logos_log := os.environ.get("LOGOS_LOG")) is not None:
+            env["LOGOS_LOG"] = logos_log
         kwargs["env"] = env
         log_level = ""
         if self.log_level == "debug":
@@ -177,17 +187,25 @@ class OuDedetai:
         # Open an issue for this.
         self.run(["--uninstall", "-y"])
 
+    @property
+    def faithlife_product(self) -> "FaithLifeProduct":
+        """Factory for FaithLifeProduct"""
+        if not self._faithlife_product:
+            # There is only one thing we need to check generally for logos.
+            # Consider making display_server a parameter in the future if
+            # this needs to be something else.
+            display_server = DisplayServer.detect(raise_if_winedbg_is_running)
+            self._faithlife_product = FaithLifeProduct(self, display_server)
+        return self._faithlife_product
+
     def start_app(self) -> "FaithLifeProduct":
+        # Ensure binary is built first (this operation is blocking)
+        _ = self._oudedetai_binary()
         # Start a thread, as this command doesn't exit
         threading.Thread(target=self.run, args=[["--run-installed-app"]]).start()
-        # There is only one thing we need to check generally for logos.
-        # Consider making display_server a paramater in the future if
-        # this needs to be something else.
-        display_server = DisplayServer.detect(raise_if_winedbg_is_running)
-        logos = FaithLifeProduct(self, display_server)
+        logos = self.faithlife_product
         # Now wait for the window to open before returning the open window.
-        wait_for_true(logos.is_window_open)
-        display_server.window_name = logos.window_name()
+        wait_for_true(logos.is_window_open, timeout=30)
         # Wait for a bit to ensure the Logos window is actually open
         time.sleep(20)
         return logos
@@ -209,6 +227,7 @@ class FaithLifeProduct:
     def __init__(self, ou_dedetai: OuDedetai, display_server: "DisplayServer"):
         self._ou_dedetai = ou_dedetai
         self._display_server = display_server
+        self._display_server.window_name = self.window_name()
 
     def run_command_box(self, command: str):
         """Given an open Logos, hit the required keys
@@ -230,31 +249,58 @@ class FaithLifeProduct:
         """
         self._display_server.press_keys([
             KeyCodeEscape(),
+            # Sometimes this needs to be done twice
+            KeyCodeModified(KeyCodeAlt(), KeyCodeCharacter("g")),
             KeyCodeModified(KeyCodeAlt(), KeyCodeCharacter("g"))
         ])
         time.sleep(2)
         self._display_server.type_string(guide)
         time.sleep(3)
+        pinned_guides = [
+            "passage guide", "bible word study", "exegetical guide", "topic guide",
+            "basic bible study"
+        ]
+        if guide.lower() not in pinned_guides:
+            # Guides that aren't pinned need an extra tab to get past their guide header
+            self._display_server.press_keys(KeyCodeTab())
         self._display_server.press_keys([KeyCodeTab(), KeyCodeReturn()])
         time.sleep(5)
 
-    def open_tool(self, guide: str):
+    def open_tool(self, tool: str):
         """Given an open Logos, hit the required keys
         to open a tool
         """
         self._display_server.press_keys([
             KeyCodeEscape(),
+            KeyCodeModified(KeyCodeAlt(), KeyCodeCharacter("t")),
+            # Do it again just to make sure it opened.
+            # Sometimes the first open doens't work for some reason.
             KeyCodeModified(KeyCodeAlt(), KeyCodeCharacter("t"))
         ])
         time.sleep(2)
-        self._display_server.type_string(guide)
+        self._display_server.type_string(tool)
         time.sleep(4)
+        pinned_tools = [
+            "atlas", "bible study builder", "canvas", "factbook", "highlighting", 
+            "information", "media", "notes", "search", "sermon builder", 
+            "sermon manager", "text comparison"
+        ]
+        if tool.lower() not in pinned_tools:
+            # Tools that aren't pinned need an extra tab to get past their tool header
+            self._display_server.press_keys(KeyCodeTab())
         self._display_server.press_keys([
-            KeyCodeTab(),
             KeyCodeTab(),
             KeyCodeReturn(),
         ])
         time.sleep(4)
+
+    def close_tab(self):
+        """Close the current tab"""
+        self._display_server.press_keys(
+            KeyCodeModified(KeyCodeCtrl(), KeyCodeCharacter("w"))
+        )
+        # Let it settle
+        time.sleep(.5)
 
     def type_string(self, string: str):
         """Types string
@@ -282,6 +328,8 @@ class FaithLifeProduct:
         - If the window is closed
         - winedbg process is running
         """
+        # FIXME: Verbum seems to hang often rather than crash like Logos does
+        # Detect this somehow too.
         if is_winedbg_is_running():
             return True
         if not self.is_window_open():
@@ -313,7 +361,6 @@ class FaithLifeProduct:
         """Returns the appdata dir of the install product
         
         raises a FileNotFoundError if it cannot be found"""
-        assert self._ou_dedetai.install_dir, "The test must start in isolated mode so we know where the install dir is reliably" #noqa: E501
         appdata_dir = None
         glob = f"data/wine64_bottle/drive_c/users/*/AppData/Local/{self.name()}" #noqa: E501
         for file in Path(self._ou_dedetai.install_dir).glob(glob): #noqa: E501
@@ -322,6 +369,23 @@ class FaithLifeProduct:
         if not appdata_dir:
             raise FileNotFoundError("Failed to find product's appdata dir. Did installation succeed?") # noqa: E501
         return appdata_dir
+
+    def is_installed(self) -> bool:
+        try:
+            return (Path(self.appdata_dir) / f"{self.name()}.exe").exists()
+        except FileNotFoundError:
+            return False
+
+    def is_logged_in(self) -> bool:
+        # If not installed no sense in checking if we're logged in.
+        if not self.is_installed():
+            return False
+        try:
+            for _ in Path(self.appdata_dir).glob("Users/*"):
+                return True
+            return False
+        except FileNotFoundError:
+            return False
 
 def wait_for_true(
     callable: Callable[[], Optional[bool]],
@@ -561,7 +625,7 @@ class X11DisplayServer(DisplayServer):
     def type_string(self, string):
         """Uses xdotool to type a string"""
         self.pre_input_tasks()
-        self._xdotool(["type", string])
+        self._xdotool(["type", "--clearmodifiers", string])
 
     def press_keys(self, keys: KeyCode | list[KeyCode]):
         """Uses xdotool to press keys"""
@@ -570,10 +634,15 @@ class X11DisplayServer(DisplayServer):
             keys = [keys]
         x11_keys = [key.x11_code() for key in keys]
         for key in x11_keys:
-            self._xdotool(["key", key])
+            self._xdotool(["key", "--clearmodifiers", key])
             time.sleep(.5)
 
     def _search_for_window(self, window_name) -> str:
+        """Searches for window
+        
+        Raises:
+        - CommandFailedError: if window wasn't found
+        """
         return run_cmd(["xdotool", "search", "--name", window_name]).stdout.strip()
 
     def set_window(self, window_name: str):
@@ -581,8 +650,14 @@ class X11DisplayServer(DisplayServer):
         self._window_id = self._search_for_window(window_name)
 
     def is_window_open(self, window_name: str) -> bool:
-        output = self._search_for_window(window_name)
-        return len(output) > 0
+        try:
+            output = self._search_for_window(window_name)
+            return len(output) > 0
+        except CommandFailedError:
+            return False
+    
+    # FIXME: Add a screenshot function so we can have a record of each tool/guide/etc 
+    # being open
 
 def wait_for_directory_to_be_untouched(directory: str, period: float):
     def _check_for_directory_to_be_untouched():
@@ -651,18 +726,16 @@ def test_first_run_resource_download(
 
     # Three tabs and a space agrees with second option (essential/minimal). 
     # On Logos some accounts with very little resources do not have 3 options, but 2.
-    # On Verbum this takes an extra Tab, and always has three options Full/Quick/Minimal
-    logos.press_keys([KeyCodeTab()] *4)
+    # If this is the case, login to Verbum too to get three options.
+    # These tab combination is a little unstable. A sleep settles it.
+    logos.press_keys(KeyCodeTab())
+    time.sleep(1)
+    logos.press_keys([KeyCodeTab()] * 3)
     logos.press_keys(KeyCodeSpace())
-    # Then shift+Tab three times to get to the continue button.
-    # We need to use shift tab, as some accounts have three options in the radio
-    # (Full/essential/minimal), others only have (full/minimal)
-    # so we can't count on how many tabs to go down
+    # Then shift+Tab four times to get to the continue button.
     logos.press_keys(
-        [KeyCodeModified(KeyCodeShift(), KeyCodeTab())] *3
+        [KeyCodeModified(KeyCodeShift(), KeyCodeTab())] * 4
     )
-    # if logos.faithlife_product() == "Verbum": #XXX: It looks like this is required if there are three options. Can we just require an account with three options? And if that isn't the case login to Verbum?
-    logos.press_keys(KeyCodeModified(KeyCodeShift(), KeyCodeTab()))
     logos.press_keys(KeyCodeReturn())
     # Wait for the UI to settle - we can wait here longer than we need to
     time.sleep(30)
@@ -696,6 +769,108 @@ def raise_if_winedbg_is_running():
     if is_winedbg_is_running():
         raise WineDBGRunning
 
+def test_logos_command_box(logos: FaithLifeProduct):
+    """Tests to make sure the command box works"""
+    # Open John 3.16 in the preferred bible
+    logos.run_command_box("John 3:16")
+    logos.close_tab()
+
+def test_logos_free_tools(logos: FaithLifeProduct):
+    """Tests opening and closing all of Logos' free tools
+    
+    Ensures that launching them doesn't crash the application"""
+
+    for core_tool in [
+        "library",
+        "documents",
+    ]:
+        logos.run_command_box(core_tool)
+        logos.close_tab()
+
+    # Open and close a number of tools.
+    # All of these tools are available for free
+    for tool, string in [
+        ("Atlas", None),
+        ("Guide Editor", None),
+        ("Highlighting", None),
+        ("Media", "Cross"),
+        ("Memorization", None),
+        ("Notes", None),
+        # FIXME: This types john 3;16 sometimes - notice no shift character. 
+        # Why is it doing this? Seems to start intermittently then get in
+        # a stuck state until a shift+colon is sent.
+        ("Copy Bible Verses", "John 3:16"),
+        ("Explorer", "John 3:16"),
+        ("Text Comparison", "John 3:16"),
+        ("Courses", None),
+        ("Factbook", "Jesus Christ"),
+        ("Reading Lists", None),
+        # While this one does have additional input it selects our passage by default,
+        # and doesn't start on the input box, so it would be harder to automate this.
+        ("Cited By", None),
+        # FIXME: Test this independently as well, it requires some more sophisticated
+        # setup to test it's functionality. we'll do basic for now, but it needs 
+        # extending to test it's features.
+        ("Information", None),
+        # FIXME: Test Power Lookup's features independently as well
+        ("Power Lookup", None),
+        # FIXME: Test Pronunciation's features independently as well
+        ("Pronunciation", None),
+        ("Search", "Jesus"),
+        ("Collections", None),
+        ("Favorites", None),
+        ("History", None),
+        ("Personal Books", None),
+        ("Program Settings", None)
+    ]:
+        logos.open_tool(tool)
+        if string:
+            # Some tools already have input in their boxes, remove it.
+            logos.press_keys(KeyCodeModified(KeyCodeCtrl(), KeyCodeCharacter("a")))
+            logos.type_string(string)
+            time.sleep(3) # Let it settle
+            logos.press_keys(KeyCodeReturn())
+            time.sleep(8) # Let it settle
+        # Some tools require additional time to load - like courses/atlas
+        time.sleep(15)
+        logos.close_tab()
+
+    if logos.is_crashed():
+        raise TestFailed()
+
+    print("Testing free tools passed")
+
+def test_logos_free_guides(logos: FaithLifeProduct):
+    """Tests all of Logos' free guides to ensure opening them
+    doesn't crash the application"""
+
+    # Open and close a number of guides
+    for guide, string in [
+        ("Basic Bible Study", "John 3:16"),
+        ("Devotional", "John 3:16"),
+        ("Lectio Divina", "John 3:16"),
+        ("Exegetical Guide", "John 3:16"),
+        ("Sermon Starter", "Wisdom"),
+        ("Topic Guide", "Kingdom of God"),
+        # Try one English, Greek and Hebrew
+        ("Bible Word Study", "worship"),
+        # FIXME: subject to : coming through as a ; failure
+        ("Bible Word Study", "g:agape"), 
+        # FIXME: subject to : coming through as a ; failure
+        ("Bible Word Study", "h:hesed"), 
+    ]:
+        logos.open_guide(guide)
+        logos.type_string(string)
+        time.sleep(1) # Let it settle
+        logos.press_keys(KeyCodeReturn())
+        time.sleep(8) # Let it settle
+        logos.close_tab()
+
+    if logos.is_crashed():
+        raise TestFailed
+    print(f"Tested all guides, none of them caused {logos.name()} to crash")
+
+
 def test_logos_features(ou_dedetai: OuDedetai):
     """Tests various logos features to ensure it doesn't crash
     
@@ -707,68 +882,100 @@ def test_logos_features(ou_dedetai: OuDedetai):
 
     # FIXME: after moving this to unittests, these should be different test cases
 
-    # Open John 3.16 in the preferred bible
-    logos.run_command_box("John 3:16")
-    # Let it settle
-    time.sleep(2)
-    logos.run_command_box("Jesus factbook")
+    test_logos_command_box(logos)
 
-    logos.open_guide("bible word study")
-    logos.type_string("worship")
-    logos.press_keys(KeyCodeReturn())
-    # Let it settle
-    time.sleep(4)
+    test_logos_free_tools(logos)
 
-    logos.open_guide("passage guide")
-    logos.type_string("John 3:16")
-    logos.press_keys(KeyCodeReturn())
-    # Let it settle
-    time.sleep(4)
-
-    logos.open_tool("copy bible verses")
+    test_logos_free_guides(logos)
 
     # Now ensure the Logos window is still open
     if logos.is_crashed():
-        raise TestFailed("Logos Crashed.")
+        raise TestFailed()
 
-    print("Logos opened all tools while staying open")
+    print("Logos opened all tools/guides while staying open")
     logos.close()
 
-def test_logos_crash_is_detected_by_test_code(ou_dedetai: OuDedetai):
+
+def test_logos_failing_to_load_is_detected_by_test_code(ou_dedetai: OuDedetai):
+    """It is very important to ensure that our test code is actually testing anything
+    
+    This scenario forces a known-crash - removing a data file ICU needs to load.
+    This should cause Logos to not even open."""
+
+    if FaithLifeProduct.name() == "Verbum":
+        print("Skipping test for failing to load detection in test code since it "
+              "doesn't occur in Verbum.")
+        return
+
+    # Move ICU dats out of the way, that should cause a crash
+    icudtl_dat = f"{ou_dedetai.install_dir}/data/wine64_bottle/drive_c/windows/globalization/ICU/icudtl.dat" #noqa: E501
+    fake_icudtl_dat = icudtl_dat + "_"
+    # Don't bother moving if we already did
+    if not Path(fake_icudtl_dat).exists():
+        shutil.move(icudtl_dat, fake_icudtl_dat)
+
+    try:
+        # Execute run manually because our normal start logos function
+        # Checks for an open window - which there won't be one for long.
+        ou_dedetai.run(["-C"])
+
+        # Give it time to crash
+        time.sleep(30)
+    finally:
+        # Cleanup after test
+        shutil.move(fake_icudtl_dat, icudtl_dat)
+
+    # Ensure that Logos crashed
+    if not ou_dedetai.faithlife_product.is_crashed():
+        raise TestFailed("Logos should have crashed from a missing arial font.")
+
+    print("Test code successfully detected Logos failing to launch")
+
+
+def test_logos_winedbg_crash_is_detected_by_test_code(ou_dedetai: OuDedetai):
     """It is very important to ensure that our test code is actually testing anything
     
     This scenario forces a known-crash - in this case a missing arial font and opening
     copy bible verses - to ensure our code detects that Logos did indeed crash."""
 
-    # FIXME: Find a way to crash Verbum too
-    # For some reason this doesn't crash Verbum, but crashes logos.
+    font_dir = f"{ou_dedetai.install_dir}/data/wine64_bottle/drive_c/windows/Fonts"
+
+    # This test only functions if arial wasn't installed at the system level
+    if not (Path(font_dir) / "arial.ttf").exists():
+        print("Skipping test for winedbg detection in test code since environment "
+              "wouldn't hit the issue in question.")
+        return
     if FaithLifeProduct.name() == "Verbum":
-        print("Skipping test (doesn't work on Verbum)")
+        print("Skipping test for winedbg detection in test code since it doesn't "
+              "occur in Verbum.")
         return
 
-    # Now check to see if our test code properly detects a crash
-    logos = ou_dedetai.start_app()
-
-    assert ou_dedetai.install_dir, "This test only supports isolated installs"
     # Sabotage! For the sake of a crash. Still needs testing to force a crash. 
     # We may want to have a negative test for this to ensure our logic to detect
     # logos idn't crash still functions later on in time.
     # This may or may not work as the data might already be loaded.
-    font_dir = f"{ou_dedetai.install_dir}/data/wine64_bottle/drive_c/windows/Fonts"
     fake_font_dir = font_dir + "_"
     shutil.move(font_dir, fake_font_dir)
 
-    # This also causes a crash on Logos, but this tool doesn't appear to be working
-    # In the latest Verbum
-    logos.open_tool("copy bible verses")
-    # Let it settle
-    time.sleep(2)
+    try:
+        # Now check to see if our test code properly detects a crash
+        logos = ou_dedetai.start_app()
 
-    # Cleanup after tests
-    shutil.move(fake_font_dir, font_dir)
+        # This also causes a crash on Logos, but this tool doesn't appear to be working
+        # In the latest Verbum
+        logos.open_tool("copy bible verses")
+        # Let it settle
+        time.sleep(2)
+        logos.type_string("John 3:16")
+        logos.press_keys(KeyCodeReturn())
+        # Let it settle
+        time.sleep(4)
+    finally:
+        # Cleanup after tests
+        shutil.move(fake_font_dir, font_dir)
 
     # Ensure that Logos crashed
-    if not logos.is_crashed():
+    if not ou_dedetai.faithlife_product.is_crashed():
         raise TestFailed("Logos should have crashed from a missing arial font.")
     
     # best-effort cleanup
@@ -779,42 +986,68 @@ def test_logos_crash_is_detected_by_test_code(ou_dedetai: OuDedetai):
 
     print("Test code successfully detected Logos crash")
 
-    logos.close()
 
-# Xephyr is very useful for testing this - it is a nested Xorg server
+def test_logos_crash_is_detected_by_test_code(ou_dedetai: OuDedetai):
+    """It is very important to ensure that our test code is actually testing anything
+    
+    This scenario forces a known-crash - in this case a missing arial font and opening
+    copy bible verses - to ensure our code detects that Logos did indeed crash."""
+    test_logos_failing_to_load_is_detected_by_test_code(ou_dedetai)
+    test_logos_winedbg_crash_is_detected_by_test_code(ou_dedetai)
+
+
+# Xephyr (nested Xorg server) + xfce4 is very useful for testing this.
+# Looks like kde plasma is subject to menu bug, so can't be used in testing.
 def main():
-    # FIXME: also test the beta channel of Logos?
-    # FIXME: also test verbum
+
+
     # FIXME: add negative tests for when the installer fails (at different points)
 
     # FIXME: consider loop to run all of these in their supported distroboxes (https://distrobox.it/)
-    # ou_dedetai = test_install()
-    ou_dedetai = OuDedetai(log_level="debug", isolate=True)
-    ou_dedetai.run(["--install-app", "--assume-yes"])
+    
+    ou_dedetai = OuDedetai(
+        log_level="debug",
+        install_dir=os.getenv("INSTALLDIR"),
+        config_file=os.getenv("CONFIG_FILE")
+    )
+    if not ou_dedetai.faithlife_product.is_installed():
+        ou_dedetai.run(["--install-app", "--assume-yes"])
 
-    # If we were given credentials, use them to login and download resources.
-    # This may take some time.
-    # Useful bash script to set these
-    """
-    export LOGOS_USERNAME=`read -p "Username: " foo;echo $foo`;
-    export LOGOS_PASSWORD=`read -p "Password: " -s foo;echo $foo`;
-    echo
-    """
-    logos_username = os.getenv("LOGOS_USERNAME")
-    logos_password = os.getenv("LOGOS_PASSWORD")
-    # These key sequences were tested on Logos 41.
-    # If the installer changes form, we'll need to adjust this.
-    if logos_username and logos_password:
-        test_first_run_resource_download(ou_dedetai, logos_username, logos_password)
+        # If we were given credentials, use them to login and download resources.
+        # This may take some time.
+        # Useful bash script to set these
+        """
+        export LOGOS_USERNAME=`read -p "Username: " foo;echo $foo`;
+        export LOGOS_PASSWORD=`read -p "Password: " -s foo;echo $foo`;
+        echo
+        """
+        logos_username = os.getenv("LOGOS_USERNAME")
+        logos_password = os.getenv("LOGOS_PASSWORD")
+        # These key sequences were tested on Logos 41.
+        # If the installer changes form, we'll need to adjust this.
+        if logos_username and logos_password:
+            print("Tests are build for use with accounts with three login options. "
+                "If that isn't the case for you, login to Logos and Verbum, that should"
+                "Get you enough resources to qualify for three options")
+            # If tests are printing a 2 instead of a @ you may need a window manager
+            # in your Xorg server. openbox is subject to menu bug, xfce4 isn't
+            test_first_run_resource_download(ou_dedetai, logos_username, logos_password)
         
+    if not ou_dedetai.faithlife_product.is_logged_in() and os.getenv("BACKUPDIR"):
         # FIXME: also support loading from a backup to achieve the same state
-        test_logos_features(ou_dedetai)
+        raise NotImplementedError("In the future this test suite should support loading"
+                                  " from a backup")
 
+    if ou_dedetai.faithlife_product.is_logged_in():
+        test_logos_features(ou_dedetai)
 
         test_logos_crash_is_detected_by_test_code(ou_dedetai)
 
-    ou_dedetai.uninstall()
-
+    # FIXME: more robust cleanup on test failure. Consider waiting until after moving 
+    # this into unittest
+    if not os.getenv("INSTALLDIR"):
+        # If we didn't pass an install dir we should cleanup
+        ou_dedetai.uninstall()
 
     # Untested:
     # - run_indexing - Need to be logged in
