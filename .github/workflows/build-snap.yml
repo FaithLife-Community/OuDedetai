@@ -18,7 +18,7 @@ jobs:
     - name: Patch snapcraft.yaml
       run: |
         echo We want to build from the current branch not re-pull from git.
-        sed -i 's#source: https://github.com/FaithLife-Community/LogosLinuxInstaller.git#source: https://github.com/FaithLife-Community/LogosLinuxInstaller.git\n    source-commit: ${{ github.sha }}#' snap/snapcraft.yaml
+        sed -i 's#source: https://github.com/FaithLife-Community/OuDedetai.git#source: https://github.com/FaithLife-Community/OuDedetai.git\n    source-commit: ${{ github.sha }}#' snap/snapcraft.yaml
         sed -zi 's#override-pull: |\n      craftctl default\n      craftctl set version=$(git describe --tag)#override-pull: |\n      craftctl default\n      craftctl set version=dev-$(git rev-parse --short HEAD)#' snap/snapcraft.yaml
     - name: Debug information
       run: |

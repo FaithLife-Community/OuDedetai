@@ -105,7 +105,7 @@ class App(abc.ABC):
                     return option
 
         passed_options: list[str] | str = options
-        if len(passed_options) == 1 and passed_options[0] in constants.PROMPT_OPTION_SIGILS: #noqa: E501
+        if len(passed_options) == 1 and passed_options[0] in constants.PROMPT_OPTION_SIGILS: 
             # Set the only option to be the follow up prompt
             passed_options = options[0]
         elif passed_options is not None and self._exit_option is not None:
@@ -123,7 +123,7 @@ class App(abc.ABC):
             answer = validate_result(answer, options)
             if answer is None:
                 # Huh? coding error, this should have been checked earlier
-                logging.critical("An invalid response slipped by, please report this incident to the developers") #noqa: E501
+                logging.critical("An invalid response slipped by, please report this incident to the developers") 
                 self.exit("Failed to get a valid value from user")
 
         return answer
@@ -172,7 +172,7 @@ class App(abc.ABC):
         if intended:
             sys.exit(0)
         else:
-            logging.critical(f"Cannot continue because {reason}\n{constants.SUPPORT_MESSAGE}") #noqa: E501
+            logging.critical(f"Cannot continue because {reason}\n{constants.SUPPORT_MESSAGE}") 
             sys.exit(1)
 
     _exit_option: Optional[str] = "Exit"
@@ -208,8 +208,7 @@ class App(abc.ABC):
         """A status update
         
         Args:
-            message: str - if it ends with a \r that signifies that this message is
-                intended to be overrighten next time
+            message: str - message to send to user
             percent: Optional[int] - percent of the way through the current install step
                 (if installing)
         """
@@ -223,7 +222,7 @@ class App(abc.ABC):
         if self.installer_step_count != 0:
             current_step_percent = percent or 0
             # We're further than the start of our current step, percent more
-            installer_percent = round((self.installer_step * 100 + current_step_percent) / self.installer_step_count) # noqa: E501
+            installer_percent = round((self.installer_step * 100 + current_step_percent) / self.installer_step_count)
             logging.debug(f"Install {installer_percent}%: {message}")
             self._status(message, percent=installer_percent)
         else:
@@ -232,23 +231,52 @@ class App(abc.ABC):
             self._status(message, percent)
         self._last_status = message
 
+    # FIXME: This implementation is overridden in every implementation
+    # Perhaps this should just raise NotImplementedError to avoid confusion?
     @abc.abstractmethod
     def _status(self, message: str, percent: Optional[int] = None):
         """Implementation for updating status pre-front end
         
         Args:
-            message: str - if it ends with a \r that signifies that this message is
-                intended to be overridden next time
+            message: str - message to send to user
             percent: Optional[int] - percent complete of the current overall operation
                 if None that signifies we can't track the progress.
                 Feel free to implement a spinner
         """
+
+        def get_progressbar(pct, w=10, suffix=''):
+            suffix = f" {int(pct):>3}%"
+            # end = '\r'
+
+            ci = '\u23b8'
+            cf = '\u23b9'
+            d = '█'
+            u = ' '
+            d_ct = min(int(w*pct/100), w)
+            u_ct = min(int(w - d_ct - 1), w - 1)
+
+            bar = ''
+            if d_ct == 0:
+                bar += ci + u*(u_ct - 1) + cf
+            elif d_ct < w:
+                bar += str(d*d_ct) + str(u*u_ct) + cf
+            else:
+                bar += str(d*d_ct)
+            bar += suffix #+ end
+            return bar
+
         # De-dup
         if message != self._last_status:
+            bar = ''
+            if percent is not None:
+                bar = f"{get_progressbar(percent)}"
             if message.endswith("\r"):
-                print(f"{message}", end="\r")
+                print(f"{bar}{message}", end="\r")
             else:
                 print(f"{message}")
+                if bar:
+                    print(bar)
+        
 
     @property
     def superuser_command(self) -> str:

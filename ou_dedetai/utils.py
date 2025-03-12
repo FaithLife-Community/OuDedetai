@@ -54,7 +54,7 @@ def die_if_running(app: App):
     if os.path.isfile(constants.PID_FILE):
         with open(constants.PID_FILE, 'r') as f:
             pid = f.read().strip()
-            message = f"The script is already running on PID {pid}. Should it be killed to allow this instance to run?"  # noqa: E501
+            message = f"The script is already running on PID {pid}. Should it be killed to allow this instance to run?"
             if app.approve(message):
                 os.kill(int(pid), signal.SIGKILL)
 
@@ -117,15 +117,15 @@ def install_dependencies(app: App):
         targetversion = int(app.conf.faithlife_product_version)
     else:
         targetversion = 10
-    app.status(f"Checking {app.conf.faithlife_product} {str(targetversion)} dependencies…") #noqa: E501
+    app.status(f"Checking {app.conf.faithlife_product} {str(targetversion)} dependencies…") 
 
     if targetversion == 10:
-        system.install_dependencies(app, target_version=10)  # noqa: E501
+        system.install_dependencies(app, target_version=10)
     elif targetversion == 9:
         app.status("Logos 9 not supported.", 100)
         app.exit("Logos 9 not supported.", False)
     else:
-        logging.error(f"Unknown Target version, expecting 10 but got: {app.conf.faithlife_product_version}.") #noqa: E501
+        logging.error(f"Unknown Target version, expecting 10 but got: {app.conf.faithlife_product_version}.") 
 
     app.status("Installed dependencies.", 100)
 
@@ -143,7 +143,7 @@ def file_exists(file_path: Optional[str | bytes | Path]) -> bool:
 def get_current_logos_version(logos_appdata_dir: Optional[str]) -> Optional[str]:
     if logos_appdata_dir is None:
         return None
-    path = f"{logos_appdata_dir}/System/Logos.deps.json"  # noqa: E501
+    path = f"{logos_appdata_dir}/System/Logos.deps.json"
     logos_version_number: Optional[str] = None
     if Path(path).exists():
         with open(path, 'r') as json_file:
@@ -172,7 +172,10 @@ def get_winebin_code_and_desc(app: App, binary) -> Tuple[str, str | None]:
     codes = {
         "Recommended": "Use the recommended AppImage",
         "AppImage": "AppImage of Wine64",
-        "System": "Use the system binary (i.e., /usr/bin/wine64). WINE must be 7.18-staging or later, or 8.16-devel or later, and cannot be version 8.0.",  # noqa: E501
+        "System": (
+            "Use the system binary (i.e., /usr/bin/wine64). "
+            "WINE must be 7.18-staging or later, or 8.16-devel or later, and cannot be version 8.0."
+        ),
         "Proton": "Install using the Steam Proton fork of WINE.",
         "PlayOnLinux": "Install using a PlayOnLinux WINE64 binary.",
         "Custom": "Use a WINE64 binary from another directory.",
@@ -188,7 +191,7 @@ def get_winebin_code_and_desc(app: App, binary) -> Tuple[str, str | None]:
     # Does it work?
     if isinstance(binary, Path):
         binary = str(binary)
-    if binary == f"{app.conf.installer_binary_dir}/{app.conf.wine_appimage_recommended_file_name}":  # noqa: E501
+    if binary == f"{app.conf.installer_binary_dir}/{app.conf.wine_appimage_recommended_file_name}":
         code = "Recommended"
     elif binary.lower().endswith('.appimage'):
         code = "AppImage"
@@ -205,14 +208,14 @@ def get_winebin_code_and_desc(app: App, binary) -> Tuple[str, str | None]:
     return code, desc
 
 
-def get_wine_options(app: App) -> List[str]:  # noqa: E501
+def get_wine_options(app: App) -> List[str]:
     appimages = app.conf.wine_app_image_files
     binaries = app.conf.wine_binary_files
     logging.debug(f"{appimages=}")
     logging.debug(f"{binaries=}")
     wine_binary_options = []
 
-    recomended_appimage = f"{app.conf.installer_binary_dir}/{app.conf.wine_appimage_recommended_file_name}" # noqa: E501
+    recomended_appimage = f"{app.conf.installer_binary_dir}/{app.conf.wine_appimage_recommended_file_name}"
 
     if recomended_appimage in appimages:
         appimages.remove(recomended_appimage)
@@ -228,7 +231,7 @@ def get_wine_options(app: App) -> List[str]:  # noqa: E501
 
     for wine_binary_path in sorted_binaries:
         # FIXME: The results of this function aren't used [anymore?].
-        code, description = get_winebin_code_and_desc(app, wine_binary_path)  # noqa: E501
+        code, description = get_winebin_code_and_desc(app, wine_binary_path)
 
         # Create wine binary option array
         wine_binary_options.append(wine_binary_path)
@@ -262,31 +265,37 @@ def find_installed_product(faithlife_product: str, wine_prefix: str) -> Optional
     return None
 
 
-def enough_disk_space(dest_dir, bytes_required):
+def enough_disk_space(dest_dir, bytes_required: int) -> bool:
     free_bytes = shutil.disk_usage(dest_dir).free
     logging.debug(f"{free_bytes=}; {bytes_required=}")
     return free_bytes > bytes_required
 
 
-def get_path_size(file_path):
+def get_path_size(file_path: Path|str) -> int:
     file_path = Path(file_path)
     if not file_path.exists():
-        path_size = None
+        path_size = 0
     else:
-        path_size = sum(f.stat().st_size for f in file_path.rglob('*')) + file_path.stat().st_size  # noqa: E501
+        path_size = sum(f.stat().st_size for f in file_path.rglob('*')) + file_path.stat().st_size
     return path_size
 
 
-def get_folder_group_size(src_dirs: list[Path], q: queue.Queue[int]):
+def get_folder_group_size(
+    src_dirs: List[Path] | Tuple[Path],
+    q: queue.Queue[int] | None = None,
+) ->  int:
     src_size = 0
     for d in src_dirs:
         if not d.is_dir():
             continue
         src_size += get_path_size(d)
-    q.put(src_size)
+    if q is not None:
+        q.put(src_size)
+
+    return src_size
 
 
-def get_latest_folder(folder_path):
+def get_latest_folder(folder_path: Path|str) -> Optional[Path]:
     folders = [f for f in Path(folder_path).glob('*')]
     if not folders:
         logging.warning(f"No folders found in {folder_path}")
@@ -372,8 +381,8 @@ def get_lli_release_version(lli_binary):
 
 def is_appimage(file_path):
     # Ref:
-    # - https://cgit.freedesktop.org/xdg/shared-mime-info/commit/?id=c643cab25b8a4ea17e73eae5bc318c840f0e3d4b  # noqa: E501
-    # - https://github.com/AppImage/AppImageSpec/blob/master/draft.md#image-format  # noqa: E501
+    # - https://cgit.freedesktop.org/xdg/shared-mime-info/commit/?id=c643cab25b8a4ea17e73eae5bc318c840f0e3d4b
+    # - https://github.com/AppImage/AppImageSpec/blob/master/draft.md#image-format
     # Note:
     # result is a tuple: (is AppImage: True|False, AppImage type: 1|2|None)
     # result = (False, None)
@@ -410,7 +419,7 @@ def check_appimage(filestr):
     if appimage:
         logging.debug("It is an AppImage!")
         if appimage_type == 1:
-            logging.error(f"{file_path}: Can't handle AppImage version {str(appimage_type)} yet.")  # noqa: E501
+            logging.error(f"{file_path}: Can't handle AppImage version {str(appimage_type)} yet.")
             return False
         else:
             logging.debug("It is a usable AppImage!")
@@ -421,7 +430,7 @@ def check_appimage(filestr):
 
 
 def find_appimage_files(app: App) -> list[str]:
-    release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release #noqa: E501
+    release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release 
     appimages = []
     directories = [
         app.conf.installer_binary_dir,
@@ -432,7 +441,7 @@ def find_appimage_files(app: App) -> list[str]:
         directories.append(app.conf._overrides.custom_binary_path)
 
     if sys.version_info < (3, 12):
-        raise RuntimeError("Python 3.12 or higher is required for .rglob() flag `case-sensitive` ")  # noqa: E501
+        raise RuntimeError("Python 3.12 or higher is required for .rglob() flag `case-sensitive` ")
 
     for d in directories:
         appimage_paths = Path(d).glob('wine*.appimage', case_sensitive=False)
@@ -456,7 +465,7 @@ def find_wine_binary_files(app: App, release_version: Optional[str]) -> list[str
         "/usr/local/bin",
         os.path.expanduser("~") + "/bin",
         os.path.expanduser("~") + "/PlayOnLinux/wine/linux-amd64/*/bin",
-        os.path.expanduser("~") + "/.steam/steam/steamapps/common/Proton*/files/bin",  # noqa: E501
+        os.path.expanduser("~") + "/.steam/steam/steamapps/common/Proton*/files/bin",
     ]
 
     if app.conf._overrides.custom_binary_path is not None:
@@ -493,7 +502,7 @@ def find_wine_binary_files(app: App, release_version: Optional[str]) -> list[str
 def set_appimage_symlink(app: App):
     # This function assumes make_skel() has been run once.
     if app.conf.wine_binary_code not in ["AppImage", "Recommended"]:
-        logging.debug("AppImage commands disabled since we're not using an appimage")  # noqa: E501
+        logging.debug("AppImage commands disabled since we're not using an appimage")
         return
     if app.conf.wine_appimage_path is None:
         logging.debug("No need to set appimage symlink, as it wasn't set")
@@ -505,9 +514,9 @@ def set_appimage_symlink(app: App):
     appdir_bindir = Path(app.conf.installer_binary_dir)
     appimage_symlink_path = appdir_bindir / app.conf.wine_appimage_link_file_name
 
-    destination_file_path = appdir_bindir / appimage_file_path.name  # noqa: E501
+    destination_file_path = appdir_bindir / appimage_file_path.name
 
-    if appimage_file_path.name == app.conf.wine_appimage_recommended_file_name:  # noqa: E501
+    if appimage_file_path.name == app.conf.wine_appimage_recommended_file_name:
         # Default case.
         # This saves in the install binary dir
         network.download_recommended_appimage(app)
@@ -517,19 +526,19 @@ def set_appimage_symlink(app: App):
             app.exit(f"Cannot use {appimage_file_path}.")
 
         if destination_file_path != appimage_file_path:
-            logging.info(f"Copying {destination_file_path} to {app.conf.installer_binary_dir}.")  # noqa: E501
+            logging.info(f"Copying {destination_file_path} to {app.conf.installer_binary_dir}.")
             shutil.copy(appimage_file_path, destination_file_path)
 
     delete_symlink(appimage_symlink_path)
     os.symlink(destination_file_path, appimage_symlink_path)
-    app.conf.wine_appimage_path = destination_file_path  # noqa: E501
+    app.conf.wine_appimage_path = destination_file_path
 
 
 def update_to_latest_lli_release(app: App):
     result = compare_logos_linux_installer_version(app)
 
     if constants.RUNMODE != 'binary':
-        logging.error(f"Can't update {constants.APP_NAME} when run as {constants.RUNMODE}.")  # noqa: E501
+        logging.error(f"Can't update {constants.APP_NAME} when run as {constants.RUNMODE}.")
     elif result == VersionComparison.OUT_OF_DATE:
         network.update_lli_binary(app=app)
     elif result == VersionComparison.UP_TO_DATE:
@@ -541,9 +550,9 @@ def update_to_latest_lli_release(app: App):
 # FIXME: consider moving this to control
 def update_to_latest_recommended_appimage(app: App):
     if app.conf.wine_binary_code not in ["AppImage", "Recommended"]:
-        logging.debug("AppImage commands disabled since we're not using an appimage")  # noqa: E501
+        logging.debug("AppImage commands disabled since we're not using an appimage")
         return
-    app.conf.wine_appimage_path = Path(app.conf.wine_appimage_recommended_file_name)  # noqa: E501
+    app.conf.wine_appimage_path = Path(app.conf.wine_appimage_recommended_file_name)
     status, _ = compare_recommended_appimage_version(app)
     if status == 0:
         # TODO: Consider also removing old appimage from install dir. 
@@ -551,7 +560,7 @@ def update_to_latest_recommended_appimage(app: App):
     elif status == 1:
         logging.debug("The AppImage is already set to the latest recommended.")
     elif status == 2:
-        logging.debug("The AppImage version is newer than the latest recommended.")  # noqa: E501
+        logging.debug("The AppImage version is newer than the latest recommended.")
 
 
 def get_downloaded_file_path(download_dir: str, filename: str):
@@ -593,7 +602,7 @@ def untar_file(file_path, output_dir):
     try:
         with tarfile.open(file_path, 'r:gz') as tar:
             tar.extractall(path=output_dir)
-            logging.debug(f"Successfully extracted '{file_path}' to '{output_dir}'")  # noqa: E501
+            logging.debug(f"Successfully extracted '{file_path}' to '{output_dir}'")
     except tarfile.TarError as e:
         logging.error(f"Error extracting '{file_path}': {e}")
 

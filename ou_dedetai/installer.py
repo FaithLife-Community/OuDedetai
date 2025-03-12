@@ -77,12 +77,12 @@ def ensure_appimage_download(app: App):
     app.installer_step_count += 1
     ensure_sys_deps(app=app)
     app.installer_step += 1
-    if app.conf.faithlife_product_version != '9' and not str(app.conf.wine_binary).lower().endswith('appimage'):  # noqa: E501
+    if app.conf.faithlife_product_version != '9' and not str(app.conf.wine_binary).lower().endswith('appimage'):
         return
     app.status("Ensuring wine AppImage is downloaded…")
 
     downloaded_file = None
-    appimage_path = app.conf.wine_appimage_recommended_file_name #noqa: E501
+    appimage_path = app.conf.wine_appimage_recommended_file_name 
     filename = Path(appimage_path).name
     downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, filename)
     if not downloaded_file:
@@ -94,7 +94,7 @@ def ensure_appimage_download(app: App):
         app=app,
     )
     if downloaded_file:
-        logging.debug(f"> File exists?: {downloaded_file}: {Path(downloaded_file).is_file()}")  # noqa: E501
+        logging.debug(f"> File exists?: {downloaded_file}: {Path(downloaded_file).is_file()}")
 
 
 def ensure_wine_executables(app: App):
@@ -121,7 +121,7 @@ def ensure_winetricks_executable(app: App):
 
     system.ensure_winetricks(app=app)
 
-    logging.debug(f"> {app.conf.winetricks_binary} is executable?: {os.access(app.conf.winetricks_binary, os.X_OK)}")  # noqa: E501
+    logging.debug(f"> {app.conf.winetricks_binary} is executable?: {os.access(app.conf.winetricks_binary, os.X_OK)}")
 
 
 def ensure_product_installer_download(app: App):
@@ -130,9 +130,9 @@ def ensure_product_installer_download(app: App):
     app.installer_step += 1
     app.status(f"Ensuring {app.conf.faithlife_product} installer is downloaded…")
 
-    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, app.conf.faithlife_installer_name) #noqa: E501
+    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, app.conf.faithlife_installer_name) 
     if not downloaded_file:
-        downloaded_file = Path(app.conf.download_dir) / app.conf.faithlife_installer_name #noqa: E501
+        downloaded_file = Path(app.conf.download_dir) / app.conf.faithlife_installer_name 
     network.logos_reuse_download(
         app.conf.faithlife_installer_download_url,
         app.conf.faithlife_installer_name,
@@ -144,7 +144,7 @@ def ensure_product_installer_download(app: App):
     if not installer.is_file():
         shutil.copy(downloaded_file, installer.parent)
 
-    logging.debug(f"> '{downloaded_file}' exists?: {Path(downloaded_file).is_file()}")  # noqa: E501
+    logging.debug(f"> '{downloaded_file}' exists?: {Path(downloaded_file).is_file()}")
 
 
 def ensure_wineprefix_init(app: App):
@@ -158,9 +158,7 @@ def ensure_wineprefix_init(app: App):
     if not init_file.is_file():
         logging.debug(f"{init_file} does not exist")
         logging.debug("Initializing wineprefix.")
-        process = wine.initializeWineBottle(app.conf.wine64_binary, app)
-        if process:
-            process.wait()
+        wine.initializeWineBottle(app.conf.wine64_binary, app)
         # wine.light_wineserver_wait()
         wine.wineserver_wait(app)
         logging.debug("Wine init complete.")
@@ -250,9 +248,9 @@ def ensure_launcher_executable(app: App):
         if launcher_exe.is_file():
             logging.debug("Removing existing launcher binary.")
             launcher_exe.unlink()
-        logging.info(f"Creating launcher binary by copying this installer binary to {launcher_exe}.")  # noqa: E501
+        logging.info(f"Creating launcher binary by copying this installer binary to {launcher_exe}.")
         shutil.copy(sys.executable, launcher_exe)
-        logging.debug(f"> File exists?: {launcher_exe}: {launcher_exe.is_file()}")  # noqa: E501
+        logging.debug(f"> File exists?: {launcher_exe}: {launcher_exe.is_file()}")
     else:
         app.status(
             "Running from source. Skipping launcher copy."
@@ -301,7 +299,7 @@ def create_wine_appimage_symlinks(app: App):
     os.environ['PATH'] = f"{app.conf.installer_binary_dir}:{os.getenv('PATH')}"
     # Ensure AppImage symlink.
     appimage_link = appdir_bindir / app.conf.wine_appimage_link_file_name
-    if app.conf.wine_binary_code not in ['AppImage', 'Recommended'] or app.conf.wine_appimage_path is None: #noqa: E501
+    if app.conf.wine_binary_code not in ['AppImage', 'Recommended'] or app.conf.wine_appimage_path is None: 
         logging.debug("No need to symlink non-appimages")
         return
     
@@ -314,7 +312,7 @@ def create_wine_appimage_symlinks(app: App):
         appimage_filename = app.conf.wine_appimage_recommended_file_name
     appimage_file = appdir_bindir / appimage_filename
     # Ensure appimage is copied to appdir_bindir.
-    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, appimage_filename) #noqa: E501
+    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, appimage_filename) 
     if downloaded_file is None:
         logging.critical("Failed to get a valid wine appimage")
         return
@@ -384,7 +382,7 @@ def create_launcher_shortcuts(app: App):
     app_icon_src = constants.APP_IMAGE_DIR / 'icon.png'
 
     if not installdir.is_dir():
-        app.exit("Can't create launchers because the installation folder does not exist.") #noqa: E501
+        app.exit("Can't create launchers because the installation folder does not exist.") 
     app_dir = Path(installdir) / 'data'
     logos_icon_path = app_dir / logos_icon_src.name
     app_icon_path = app_dir / app_icon_src.name
@@ -400,17 +398,17 @@ def create_launcher_shortcuts(app: App):
                     repo_dir = p
                     break
         if repo_dir is None:
-            app.exit("Could not find .git directory from arg 0")  # noqa: E501
+            app.exit("Could not find .git directory from arg 0")
         # Find python in virtual environment.
         py_bin = next(repo_dir.glob('*/bin/python'))
         if not py_bin.is_file():
-            app.exit("Could not locate python binary in virtual environment.")  # noqa: E501
+            app.exit("Could not locate python binary in virtual environment.")
         lli_executable = f"env DIALOG=tk {py_bin} {script}"
     elif constants.RUNMODE in ["snap", "flatpak"]:
-        logging.info(f"Not creating launcher shortcuts, {constants.RUNMODE} already handles this") #noqa: E501
+        logging.info(f"Not creating launcher shortcuts, {constants.RUNMODE} already handles this") 
         return
 
-    for (src, path) in [(app_icon_src, app_icon_path), (logos_icon_src, logos_icon_path)]:  # noqa: E501
+    for (src, path) in [(app_icon_src, app_icon_path), (logos_icon_src, logos_icon_path)]:
         if not path.is_file():
             app_dir.mkdir(exist_ok=True)
             shutil.copy(src, path)

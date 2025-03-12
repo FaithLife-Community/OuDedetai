@@ -59,9 +59,9 @@ if RUNMODE == 'snap':
     CACHE_DIR = str(Path(_snap_user_common) / '.cache' / 'FaithLife-Community')
     del _snap_user_common
 else:
-    CACHE_DIR = str(Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache' / 'FaithLife-Community'))) #noqa: E501
+    CACHE_DIR = str(Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache' / 'FaithLife-Community'))) 
 
-DATA_HOME = str(Path(os.getenv('XDG_DATA_HOME', str(Path.home() / '.local/share'))) / 'FaithLife-Community') #noqa: E501
+DATA_HOME = str(Path(os.getenv('XDG_DATA_HOME', str(Path.home() / '.local/share'))) / 'FaithLife-Community') 
 CONFIG_DIR = os.getenv("XDG_CONFIG_HOME", "~/.config") + "/FaithLife-Community"
 STATE_DIR = os.getenv("XDG_STATE_HOME", "~/.local/state") + "/FaithLife-Community"
 
@@ -70,7 +70,7 @@ DEFAULT_CONFIG_PATH = os.path.expanduser(f"{CONFIG_DIR}/{BINARY_NAME}.json")
 DEFAULT_APP_WINE_LOG_PATH = os.path.expanduser(f"{STATE_DIR}/wine.log")
 DEFAULT_APP_LOG_PATH = os.path.expanduser(f"{STATE_DIR}/{BINARY_NAME}.log")
 NETWORK_CACHE_PATH = f"{CACHE_DIR}/network.json"
-DEFAULT_WINEDEBUG = "fixme+all,err+all"
+DEFAULT_WINEDEBUG = "err+all"
 LEGACY_CONFIG_FILES = [
     # If the user didn't have XDG_CONFIG_HOME set before, but now does.
     os.path.expanduser("~/.config/FaithLife-Community/oudedetai"),
@@ -91,7 +91,11 @@ PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
 FAITHLIFE_PRODUCT_VERSIONS = ["10"] # This used to include 9
 
-SUPPORT_MESSAGE = f"If you need help, please consult:\n{WIKI_LINK}\nIf the install failed, use the \"Get Support\" operation"  # noqa: E501
+SUPPORT_MESSAGE = f"""If you need help, please consult:
+{WIKI_LINK}
+If the install failed, use the \"Get Support\" operation
+"""
+
 DEFAULT_SUPPORT_FILE_NAME = "FaithlifeCommunitySupport.zip"
 
 # Strings for choosing a follow up file or directory
@@ -99,7 +103,7 @@ PROMPT_OPTION_DIRECTORY = "Choose Directory"
 PROMPT_OPTION_FILE = "Choose File"
 PROMPT_OPTION_NEW_FILE = "Save as"
 
-PROMPT_OPTION_SIGILS = [PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE, PROMPT_OPTION_NEW_FILE] #noqa: E501
+PROMPT_OPTION_SIGILS = [PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE, PROMPT_OPTION_NEW_FILE] 
 
 # String for when a binary is meant to be downloaded later
 DOWNLOAD = "Download"

@@ -36,7 +36,7 @@ class LogosManager:
     def monitor_indexing(self):
         if self.app.conf.logos_indexer_exe in self.existing_processes:
             indexer = self.existing_processes.get(self.app.conf.logos_indexer_exe)
-            if indexer and isinstance(indexer[0], psutil.Process) and indexer[0].is_running():  # noqa: E501
+            if indexer and isinstance(indexer[0], psutil.Process) and indexer[0].is_running():
                 self.indexing_state = State.RUNNING
             else:
                 self.indexing_state = State.STOPPED
@@ -79,15 +79,18 @@ class LogosManager:
         # FIXME: consider refactoring to make one call to get a system pids
         # Currently this gets all system pids 4 times
         if app.conf.logos_exe:
-            self.existing_processes[app.conf.logos_exe] = system.get_pids(app.conf.logos_exe) # noqa: E501
+            self.existing_processes[app.conf.logos_exe] = system.get_pids(app.conf.logos_exe)
         if app.conf.wine_user:
             # Also look for the system's Logos.exe (this may be the login window)
-            logos_system_exe = f"C:\\users\\{app.conf.wine_user}\\AppData\\Local\\Logos\\System\\Logos.exe" #noqa: E501
-            self.existing_processes[logos_system_exe] = system.get_pids(logos_system_exe) # noqa: E501
+            logos_system_exe = (
+                f"C:\\users\\{app.conf.wine_user}\\AppData\\Local\\{app.conf.faithlife_product}\\System\\"
+                f"{app.conf.faithlife_product}.exe"
+            )
+            self.existing_processes[logos_system_exe] = system.get_pids(logos_system_exe)
         if app.conf.logos_indexer_exe:
-            self.existing_processes[app.conf.logos_indexer_exe] = system.get_pids(app.conf.logos_indexer_exe)  # noqa: E501
+            self.existing_processes[app.conf.logos_indexer_exe] = system.get_pids(app.conf.logos_indexer_exe)
         if app.conf.logos_cef_exe:
-            self.existing_processes[app.conf.logos_cef_exe] = system.get_pids(app.conf.logos_cef_exe) # noqa: E501
+            self.existing_processes[app.conf.logos_cef_exe] = system.get_pids(app.conf.logos_cef_exe)
 
     def monitor(self):
         if self.app.is_installed():
@@ -111,9 +114,9 @@ class LogosManager:
             self.set_auto_updates(False)
             if not self.app.conf.logos_exe:
                 raise ValueError("Could not find installed Logos EXE to run")
-            process = wine.run_wine_proc(
-                self.app.conf.wine_binary,
+            process = wine.run_wine_application(
                 self.app,
+                self.app.conf.wine_binary,
                 exe=self.app.conf.logos_exe
             )
             if process is not None:
@@ -162,11 +165,12 @@ class LogosManager:
         logos_user_id = self.app.conf._logos_user_id
         if not logos_user_id:
             return None
-        db_path = logos_appdata_dir / "Documents" / logos_user_id / "LocalUserPreferences" / "PreferencesManager.db" #noqa: E501
+        db_path = logos_appdata_dir / "Documents" / logos_user_id / "LocalUserPreferences" / "PreferencesManager.db" 
         sql = (
             """UPDATE Preferences SET Data='<data """ +
             ('OptIn="true"' if val else 'OptIn="false"') +
-            """ StartDownloadHour="0" StopDownloadHour="0" MarkNewResourcesAsCloud="true" />' WHERE Type='UpdateManagerPreferences'""" #noqa: E501
+            """ StartDownloadHour="0" StopDownloadHour="0" MarkNewResourcesAsCloud="true" />' """
+            """ WHERE Type='UpdateManagerPreferences'""" 
         )
         self.app.start_thread(database.watch_db, str(db_path), [sql])
 
@@ -180,7 +184,7 @@ class LogosManager:
         logos_user_id = self.app.conf._logos_user_id
         if logos_user_id is None:
             return None
-        db_path = logos_appdata_dir / "Data" / logos_user_id / "UpdateManager" / "Updates.db" #noqa :E501
+        db_path = logos_appdata_dir / "Data" / logos_user_id / "UpdateManager" / "Updates.db"
         # FIXME: I wonder if we can use the result of these deletion using RETURNING
         # Then we could notify the user that there are updates.
         # If we do that we'd have to consider if their other resources are up to date
@@ -228,9 +232,9 @@ class LogosManager:
         if pids:
             try:
                 system.run_command(['kill', '-9'] + pids)
-                logging.debug(f"Stopped Logos processes at PIDs {', '.join(pids)}.")  # noqa: E501
+                logging.debug(f"Stopped Logos processes at PIDs {', '.join(pids)}.")
             except Exception as e:
-                logging.debug(f"Error while stopping Logos processes: {e}.")  # noqa: E501
+                logging.debug(f"Error while stopping Logos processes: {e}.")
         else:
             logging.debug("No Logos processes to stop.")
         self.logos_state = State.STOPPED
@@ -240,7 +244,7 @@ class LogosManager:
     def end_processes(self):
         for process_name, process in self.processes.items():
             if isinstance(process, subprocess.Popen):
-                logging.debug(f"Found {process_name} in Processes. Attempting to close {process}.")  # noqa: E501
+                logging.debug(f"Found {process_name} in Processes. Attempting to close {process}.")
                 try:
                     process.terminate()
                     process.wait(timeout=10)
@@ -255,9 +259,9 @@ class LogosManager:
         def run_indexing():
             if not self.app.conf.logos_indexer_exe:
                 raise ValueError("Cannot find installed indexer")
-            process = wine.run_wine_proc(
-                self.app.conf.wine_binary,
+            process = wine.run_wine_application(
                 app=self.app,
+                wine_binary=self.app.conf.wine_binary,
                 exe=self.app.conf.logos_indexer_exe
             )
             if process is not None:
@@ -276,7 +280,7 @@ class LogosManager:
                     elapsed_min = int(total_elapsed_time // 60)
                     elapsed_sec = int(total_elapsed_time % 60)
                     formatted_time = f"{elapsed_min}m {elapsed_sec}s"
-                    self.app.status(f"Indexing is running… (Elapsed Time: {formatted_time})")  # noqa: E501
+                    self.app.status(f"Indexing is running… (Elapsed Time: {formatted_time})")
                     update_send = 0
             index_finished.set()
 
@@ -308,15 +312,15 @@ class LogosManager:
                 if process:
                     pids.append(str(process.pid))
                 else:
-                    logging.debug(f"No LogosIndexer processes found for {process_name}.")  # noqa: E501
+                    logging.debug(f"No LogosIndexer processes found for {process_name}.")
 
             if pids:
                 try:
                     system.run_command(['kill', '-9'] + pids)
                     self.indexing_state = State.STOPPED
-                    self.app.status(f"Stopped LogosIndexer processes at PIDs {', '.join(pids)}.")  # noqa: E501
+                    self.app.status(f"Stopped LogosIndexer processes at PIDs {', '.join(pids)}.")
                 except Exception as e:
-                    logging.debug(f"Error while stopping LogosIndexer processes: {e}.")  # noqa: E501
+                    logging.debug(f"Error while stopping LogosIndexer processes: {e}.")
             else:
                 logging.debug("No LogosIndexer processes to stop.")
                 self.indexing_state = State.STOPPED
@@ -331,7 +335,7 @@ class LogosManager:
                 self.app
             )
         except Exception as e:
-            logging.warning(f"Failed to determine if logging was enabled, assuming no: {e}") #noqa: E501
+            logging.warning(f"Failed to determine if logging was enabled, assuming no: {e}") 
             current_value = None
         if current_value == '0x1':
             state = 'ENABLED'
@@ -363,9 +367,9 @@ class LogosManager:
             'add', 'HKCU\\Software\\Logos4\\Logging', '/v', 'Enabled',
             '/t', 'REG_DWORD', '/d', value, '/f'
         ]
-        process = wine.run_wine_proc(
-            self.app.conf.wine_binary,
+        process = wine.run_wine_during_install(
             app=self.app,
+            wine_binary=self.app.conf.wine_binary,
             exe='reg',
             exe_args=exe_args
         )

@@ -104,7 +104,7 @@ class UrlProps(Props):
         content_length = self.headers.get('Content-Length')
         content_encoding = self.headers.get('Content-Encoding')
         if content_encoding is not None:
-            logging.critical(f"The server requires receiving the file compressed as '{content_encoding}'.")  # noqa: E501
+            logging.critical(f"The server requires receiving the file compressed as '{content_encoding}'.")
         logging.debug(f"{content_length=}")
         if content_length is not None:
             self._size = int(content_length)
@@ -116,7 +116,7 @@ class UrlProps(Props):
             if content_md5 is not None:
                 # Convert from hex to base64
                 content_md5_hex = content_md5.strip('"').strip("'")
-                content_md5 = b64encode(bytes.fromhex(content_md5_hex)).decode()  # noqa: E501
+                content_md5 = b64encode(bytes.fromhex(content_md5_hex)).decode()
         else:
             content_md5 = self.headers.get('Content-MD5')
         if content_md5 is not None:
@@ -132,7 +132,7 @@ class CachedRequests:
     """This struct all network requests and saves to a cache"""
     # Some of these values are cached to avoid github api rate-limits
 
-    faithlife_product_releases: dict[str, dict[str, dict[str, list[str]]]] = field(default_factory=dict) # noqa: E501
+    faithlife_product_releases: dict[str, dict[str, dict[str, list[str]]]] = field(default_factory=dict)
     """Cache of faithlife releases.
     
     Since this depends on the user's selection we need to scope the cache based on that
@@ -150,7 +150,7 @@ class CachedRequests:
     """
 
 
-    url_size_and_hash: dict[str, tuple[Optional[int], Optional[str]]] = field(default_factory=dict) # noqa: E501
+    url_size_and_hash: dict[str, tuple[Optional[int], Optional[str]]] = field(default_factory=dict)
 
     last_updated: Optional[float] = None
 
@@ -306,7 +306,7 @@ class NetworkRequests:
 
     def app_latest_version(self, channel: str) -> SoftwareReleaseInfo:
         if channel == "stable":
-            repo = "FaithLife-Community/LogosLinuxInstaller"
+            repo = "FaithLife-Community/OuDedetai"
         else:
             repo = "FaithLife-Community/test-builds"
         return self._repo_latest_version(repo)
@@ -404,7 +404,7 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
         local_size = target_props.size
         logging.info(f"Current downloaded size in bytes: {local_size}")
         if url_props.headers.get('Accept-Ranges') == 'bytes':
-            logging.debug("Server accepts byte range; attempting to resume download.")  # noqa: E501
+            logging.debug("Server accepts byte range; attempting to resume download.")
             file_mode = 'ab'
             if type(url_props.size) is int:
                 headers['Range'] = f'bytes={local_size}-{total_size}'
@@ -442,16 +442,16 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
                             message = "GitHub API rate limit exceeded. Please wait "
                             if "x-ratelimit-reset" in r.headers:
                                 epoch_to_reset: str = r.headers["x-ratelimit-reset"]
-                                seconds_until_reset = ceil(int(epoch_to_reset) - time.time()) #noqa: E501
+                                seconds_until_reset = ceil(int(epoch_to_reset) - time.time()) 
                                 if seconds_until_reset < 120:
                                     message += f"{seconds_until_reset} seconds "
                                 else:
                                     # More human readable to display in minutes
-                                    message += f"{ceil(seconds_until_reset / 60)} minutes " #noqa: E501
+                                    message += f"{ceil(seconds_until_reset / 60)} minutes " 
                             message += "before trying again."
                             logging.error(message)
                     else:
-                        logging.error(f"HTTP error occurred: {e.response.status_code}")  # noqa: E501
+                        logging.error(f"HTTP error occurred: {e.response.status_code}")
                     return None
 
                 return r._content  # raw bytes
@@ -484,7 +484,7 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
         return None  # Return None values to indicate an error condition
 
 
-def _verify_downloaded_file(url: str, file_path: Path | str, app: App, status_messages: bool = True): #noqa: E501
+def _verify_downloaded_file(url: str, file_path: Path | str, app: App, status_messages: bool = True): 
     if status_messages:
         app.status(f"Verifying {file_path}…", 0)
     file_props = FileProps(file_path)
@@ -553,7 +553,7 @@ def _get_latest_release_data(repository) -> SoftwareReleaseInfo:
     )
 
 def download_recommended_appimage(app: App):
-    wine64_appimage_full_filename = Path(app.conf.wine_appimage_recommended_file_name)  # noqa: E501
+    wine64_appimage_full_filename = Path(app.conf.wine_appimage_recommended_file_name)
     dest_path = Path(app.conf.installer_binary_dir) / wine64_appimage_full_filename
     if dest_path.is_file():
         return
@@ -570,12 +570,12 @@ def _get_faithlife_product_releases(
     faithlife_product_version: str,
     faithlife_product_release_channel: str
 ) -> list[str]:
-    logging.debug(f"Downloading release list for {faithlife_product} {faithlife_product_version}…")  # noqa: E501
+    logging.debug(f"Downloading release list for {faithlife_product} {faithlife_product_version}…")
     # NOTE: This assumes that Verbum release numbers continue to mirror Logos.
     if faithlife_product_release_channel == "beta":
-        url = "https://clientservices.logos.com/update/v1/feed/logos10/beta.xml"  # noqa: E501
+        url = "https://clientservices.logos.com/update/v1/feed/logos10/beta.xml"
     else:
-        url = f"https://clientservices.logos.com/update/v1/feed/logos{faithlife_product_version}/stable.xml"  # noqa: E501
+        url = f"https://clientservices.logos.com/update/v1/feed/logos{faithlife_product_version}/stable.xml"
     
     response_xml_bytes = _net_get(url)
     if response_xml_bytes is None:
@@ -602,7 +602,7 @@ def _get_faithlife_product_releases(
     #Filtering not needed at the moment but left here in case we want it later.
     #Double check this works before releasing.
     #from packaging.versions import Version
-    #filtered_releases = [version for version in releases if Version("40.0.0.0") > Version(version)] # noqa: E501
+    #filtered_releases = [version for version in releases if Version("40.0.0.0") > Version(version)]
     #logging.debug(f"Available releases: {', '.join(releases)}")
     #logging.debug(f"Filtered releases: {', '.join(filtered_releases)}")
 
@@ -614,14 +614,14 @@ def update_lli_binary(app: App):
     lli_download_path = Path(app.conf.download_dir) / constants.BINARY_NAME
     temp_path = Path(app.conf.download_dir) / f"{constants.BINARY_NAME}.tmp"
     logging.debug(
-        f"Updating {constants.APP_NAME} to latest version by overwriting: {lli_file_path}")  # noqa: E501
+        f"Updating {constants.APP_NAME} to latest version by overwriting: {lli_file_path}")
 
     # Remove existing downloaded file if different version.
     if lli_download_path.is_file():
         logging.info("Checking if existing LLI binary is latest version.")
         lli_download_ver = utils.get_lli_release_version(lli_download_path)
-        if not lli_download_ver or lli_download_ver != app.conf.app_latest_version:  # noqa: E501
-            logging.info(f"Removing \"{lli_download_path}\", version: {lli_download_ver}")  # noqa: E501
+        if not lli_download_ver or lli_download_ver != app.conf.app_latest_version:
+            logging.info(f"Removing \"{lli_download_path}\", version: {lli_download_ver}")
             # Remove incompatible file.
             lli_download_path.unlink()
 
