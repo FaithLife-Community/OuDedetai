@@ -1,3 +1,5 @@
+import math
+import os
 import queue
 import shutil
 import sys
@@ -139,6 +141,25 @@ class CLI(App):
         self.choice_event.wait()
         self.choice_event.clear()
 
+    @classmethod
+    def print(_cls, message: str):
+        """Prints a message to the console.
+        
+        Use this instead of python's print.
+
+        Handles implementation detail of drawing nicely
+        even if there was progress bar displayed
+        """
+        print(
+            (
+                # "\033[2K" is the ANSI code for clearing the current line
+                b"\033[2K\r"
+                + message.encode("utf-8")
+                + b"\n\r"
+            ).decode(),
+            end=""
+        )
+
     def exit(self, reason: str, intended: bool = False):
         # Signal CLI.user_input_processor to stop.
         self.input_q.put(None)
@@ -146,28 +167,36 @@ class CLI(App):
         # Signal CLI itself to stop.
         self.running = False
         # We always want this to return regardless of level
-        print(f"Closing {constants.APP_NAME} due to: {reason}")
+        self.print(f"Closing {constants.APP_NAME} due to: {reason}")
         return super().exit(reason, intended)
     
     def _status(self, message: str, percent: Optional[int] = None):
-        """Implementation for updating status pre-front end"""
-        prefix = ""
-        end = "\n"
-        # Signifies we want to overwrite the last line
-        if message.endswith("\r"):
-            end = "\r"
-        if message == self._last_status:
-            # Go back to the beginning of the line to re-write the current line
-            # Rather than sending a new one. This allows the current line to update
-            prefix += "\r"
-            end = "\r"
+        """Implementation for updating status pre-front end
+        
+        This implementation adds a progres bar.
+        
+        It should be noted this progress bar won't display nicely if
+        other sources call to python's print. Use Cli.print() instead.
+        """
+        # Enforce percent is not over 100
+        if percent is not None and percent > 100:
+            percent = 100
+        progress_str = ""
+        # We don't want to display 100% as it doesn't print nicely.
         if percent is not None:
-            percent_per_char = 5
-            chars_of_progress = round(percent / percent_per_char)
-            chars_remaining = round((100 - percent) / percent_per_char)
-            progress_str = "[" + "-" * chars_of_progress + " " * chars_remaining + "] "
-            prefix += progress_str
-        print(f"{prefix}{message}", end=end)
+            # -2 is for the brackets, -1 is for the >
+            progress_bar_length = os.get_terminal_size().columns - 2 -1
+            # Subtract one for the >
+            chars_of_progress = math.floor(float(progress_bar_length) * percent / 100) #noqa: E501
+            chars_remaining = progress_bar_length - chars_of_progress
+            progress_str = "[" + "-" * chars_of_progress + ">" + " " * chars_remaining + "]" #noqa: E501
+
+        if message != self._last_status:
+            self.print(message)
+        # Write my progress then carriage return
+        # (so we're back at the beginning for the next log line)
+        if progress_str:
+            print(progress_str, end="\r")
 
     @property
     def superuser_command(self) -> str:

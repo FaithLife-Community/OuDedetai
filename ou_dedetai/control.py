@@ -9,6 +9,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
+import subprocess
 from typing import Any
 import webbrowser
 from zipfile import ZipFile

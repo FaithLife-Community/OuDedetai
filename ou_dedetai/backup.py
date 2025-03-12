@@ -112,7 +112,7 @@ class BackupBase(abc.ABC):
         t = self.app.start_thread(self._copy_dirs, src_dirs, self.destination_dir)
         try:
             while t.is_alive():
-                self.app.status("copying…\r", self._get_copy_percentage())
+                self.app.status("copying…", self._get_copy_percentage())
                 time.sleep(0.5)
             print()
         except KeyboardInterrupt:
