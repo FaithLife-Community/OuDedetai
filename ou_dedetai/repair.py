@@ -53,6 +53,11 @@ def detect_broken_install(
         # No other checks we can preform without the logos_user_id
         return None
 
+    # FIXME: Add step looking for a .NET stacktrace and suggest reaching out to support
+    # with logs. This probably should be in a different function and checked before
+    # logos is run. Look for failures using:
+    # `grep ":err:eventlog:ReportEventW" ~/.local/state/FaithLife-Community/wine.log`
+
     # Recovery is best-effort we don't want to crash the app on account of failures here
     try:
         with ou_dedetai.database.LocalUserPreferencesManager(logos_app_dir, logos_user_id) as db: 

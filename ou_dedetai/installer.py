@@ -158,9 +158,7 @@ def ensure_wineprefix_init(app: App):
     if not init_file.is_file():
         logging.debug(f"{init_file} does not exist")
         logging.debug("Initializing wineprefix.")
-        process = wine.initializeWineBottle(app.conf.wine64_binary, app)
-        if process:
-            process.wait()
+        wine.initializeWineBottle(app.conf.wine64_binary, app)
         # wine.light_wineserver_wait()
         wine.wineserver_wait(app)
         logging.debug("Wine init complete.")

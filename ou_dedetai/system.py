@@ -140,7 +140,8 @@ def run_command(command, retries=1, delay=0, **kwargs) -> Optional[subprocess.Co
     return None
 
 
-def popen_command(command, retries=1, delay=0, **kwargs) -> Optional[subprocess.Popen[bytes]]: 
+# FIXME: #300 refactor this to either return Popen or raise. No None.
+def popen_command(command, retries=1, delay=0, **kwargs) -> Optional[subprocess.Popen[bytes]]:
     shell = kwargs.get("shell", False)
     env = kwargs.get("env", None)
     cwd = kwargs.get("cwd", None)

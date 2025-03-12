@@ -114,9 +114,9 @@ class LogosManager:
             self.set_auto_updates(False)
             if not self.app.conf.logos_exe:
                 raise ValueError("Could not find installed Logos EXE to run")
-            process = wine.run_wine_proc(
-                self.app.conf.wine_binary,
+            process = wine.run_wine_application(
                 self.app,
+                self.app.conf.wine_binary,
                 exe=self.app.conf.logos_exe
             )
             if process is not None:
@@ -259,9 +259,9 @@ class LogosManager:
         def run_indexing():
             if not self.app.conf.logos_indexer_exe:
                 raise ValueError("Cannot find installed indexer")
-            process = wine.run_wine_proc(
-                self.app.conf.wine_binary,
+            process = wine.run_wine_application(
                 app=self.app,
+                wine_binary=self.app.conf.wine_binary,
                 exe=self.app.conf.logos_indexer_exe
             )
             if process is not None:
@@ -367,9 +367,9 @@ class LogosManager:
             'add', 'HKCU\\Software\\Logos4\\Logging', '/v', 'Enabled',
             '/t', 'REG_DWORD', '/d', value, '/f'
         ]
-        process = wine.run_wine_proc(
-            self.app.conf.wine_binary,
+        process = wine.run_wine_during_install(
             app=self.app,
+            wine_binary=self.app.conf.wine_binary,
             exe='reg',
             exe_args=exe_args
         )

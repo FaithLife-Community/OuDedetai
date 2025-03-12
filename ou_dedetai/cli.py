@@ -1,5 +1,6 @@
 import queue
 import shutil
+import sys
 import threading
 import time
 from typing import Optional, Tuple
@@ -72,14 +73,30 @@ class CLI(App):
         self.logos.stop()
 
     def winetricks(self):
-        wine.run_winetricks(self, *(self.conf._overrides.wine_args or []))
-
-    def wine(self):
-        wine.run_wine_proc(
-            self.conf.wine64_binary,
+        process = wine.run_wine_process(
             self,
+            self.conf.winetricks_binary,
+            sys.stdout,
+            sys.stderr,
+            sys.stdin,
             exe_args=(self.conf._overrides.wine_args or [])
         )
+        if process:
+            process.wait()
+            sys.exit(process.returncode)
+
+    def wine(self):
+        process = wine.run_wine_process(
+            self,
+            self.conf.wine64_binary,
+            sys.stdout,
+            sys.stderr,
+            sys.stdin,
+            exe_args=(self.conf._overrides.wine_args or [])
+        )
+        if process:
+            process.wait()
+            sys.exit(process.returncode)
 
     def set_appimage(self):
         utils.set_appimage_symlink(app=self)
