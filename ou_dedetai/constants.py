@@ -79,7 +79,7 @@ LEGACY_CONFIG_FILES = [
     os.path.expanduser("~/.config/Logos_on_Linux/Logos_on_Linux.conf")
 ]
 LLI_AUTHOR = "Ferion11, John Goodman, T. H. Wright, N. Marti, N. Shaaban"
-LLI_CURRENT_VERSION = "4.0.0-beta.10"
+LLI_CURRENT_VERSION = "4.0.0-beta.11"
 # This SHOULD match the version of winetricks we ship in the latest appimage
 WINETRICKS_VERSION = '20250102'
 DEFAULT_LOG_LEVEL = logging.WARNING
