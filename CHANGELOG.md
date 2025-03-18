@@ -1,5 +1,11 @@
 # Changelog
 
+- 4.0.0-beta.11
+	- Fixes bug where the TUI didn't open (#379, #382) [N. Shaaban, T. H. Wright]
+	- Fixes bug where Verbum didn't stop when told (#374) [N. Shaaban]
+	- Functionality restored to Backup/Restore on CLI (#345) [N. Marti]
+	- Properly rotate wine.log (#378, #376) [N. Shaaban]
+	- Adds proper progress bar to CLI (#370) [N. Shaaban]
 - 4.0.0-beta.10
 	- Fixes bug where advanced GUI install failed (#354) [N. Shaaban]
 	- Adds a new option: "Get Support" to create a zip and display our social groups (#353, #274, #103) [N. Shaaban]
