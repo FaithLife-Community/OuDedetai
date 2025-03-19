@@ -3,6 +3,7 @@
 #   - https://tkdocs.com/
 #   - https://github.com/thw26/LogosLinuxInstaller/blob/master/LogosLinuxInstaller.sh
 
+import copy
 import logging
 from pathlib import Path
 from queue import Queue
@@ -25,6 +26,7 @@ from ou_dedetai.constants import (
     PROMPT_OPTION_NEW_FILE,
 )
 from ou_dedetai.config import EphemeralConfiguration
+import ou_dedetai.logos
 
 from . import backup
 from . import constants
@@ -34,6 +36,7 @@ from . import installer
 from . import system
 from . import utils
 from . import wine
+import ou_dedetai
 
 class GuiApp(App):
     """Implements the App interface for all windows"""
@@ -441,6 +444,21 @@ class ControlWindow(GuiApp):
             self.update_latest_lli_release_button()
         self.gui.update_lli_button.state(['disabled'])
         self.start_thread(_update_lli_version)
+        # Spawn a thread to ensure our logos state stays up to date
+        def _monitor_faithlife_product_pids():
+            last_state = copy.copy(self.logos.logos_state)
+            while True:
+                if self.is_installed():
+                    self.logos.monitor()
+                    time.sleep(1)
+                else:
+                    # Will probably be some time before we need to monitor.
+                    time.sleep(30)
+                # If our state changed, we need to update our button.
+                if last_state != self.logos.logos_state:
+                    self.update_app_button()
+                last_state = copy.copy(self.logos.logos_state)
+        self.start_thread(_monitor_faithlife_product_pids)
         self.gui.update_lli_label.config(text=text)
         self.gui.run_indexing_radio.config(
             command=self.on_action_radio_clicked
@@ -511,6 +529,9 @@ class ControlWindow(GuiApp):
         classname = constants.BINARY_NAME
         installer_window_top = Toplevel()
         InstallerWindow(installer_window_top, self.root, app=self, class_=classname) 
+
+    def stop_logos(self):
+        self.start_thread(self.logos.stop)
 
     def run_logos(self, evt=None):
         self.start_thread(self.logos.start)
@@ -630,8 +651,12 @@ class ControlWindow(GuiApp):
     def update_app_button(self, evt=None):
         self.gui.app_button.state(['!disabled'])
         if self.is_installed():
-            self.gui.app_buttonvar.set(f"Run {self.conf.faithlife_product}")
-            self.gui.app_button.config(command=self.run_logos)
+            if self.logos.logos_state == ou_dedetai.logos.State.RUNNING:
+                self.gui.app_buttonvar.set(f"Stop {self.conf.faithlife_product}")
+                self.gui.app_button.config(command=self.stop_logos)
+            else:
+                self.gui.app_buttonvar.set(f"Run {self.conf.faithlife_product}")
+                self.gui.app_button.config(command=self.run_logos)
             self.gui.logging_button.state(['!disabled'])
             self.gui.app_install_advanced.grid_forget()
             self.gui.actions_button.state(['!disabled'])
