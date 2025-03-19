@@ -124,6 +124,8 @@ def get_support(app: App) -> str:
             zip.write(app.conf.app_log_path)
         if Path(app.conf.app_wine_log_path).exists():
             zip.write(app.conf.app_wine_log_path)
+        if Path(app.conf.app_wine_log_previous_path).exists():
+            zip.write(app.conf.app_wine_log_previous_path)
         if Path("/etc/os-release").exists():
             zip.write("/etc/os-release")
         run_commands = [
