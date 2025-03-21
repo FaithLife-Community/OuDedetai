@@ -587,7 +587,7 @@ def run_wine_application(
     Store the log in a dedicated file, keeping the previous log.
     """
     current_log_path = Path(app.conf.app_wine_log_path)
-    previous_log_path = current_log_path.with_suffix(".1" + current_log_path.suffix)
+    previous_log_path = Path(app.conf.app_wine_log_previous_path)
     if current_log_path.exists():
         shutil.move(current_log_path, previous_log_path)
     with open(current_log_path, 'w') as wine_log:

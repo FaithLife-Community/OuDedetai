@@ -1049,6 +1049,11 @@ class Config:
         return constants.DEFAULT_APP_WINE_LOG_PATH
 
     @property
+    def app_wine_log_previous_path(self) -> str:
+        wine_log = Path(self.app_wine_log_path)
+        return str(wine_log.with_suffix(".1" + wine_log.suffix))
+
+    @property
     def app_log_path(self) -> str:
         if self._overrides.app_log_path is not None:
             return self._overrides.app_log_path
