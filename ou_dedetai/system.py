@@ -1,9 +1,5 @@
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional, Tuple
-from collections.abc import MutableMapping
-import zipfile
 import distro
+import glfw
 import logging
 import os
 import psutil
@@ -13,12 +9,20 @@ import struct
 import subprocess
 import sys
 import time
+import zipfile
+
+from collections.abc import MutableMapping
+from dataclasses import dataclass
+from OpenGL.GL import glGetString, GL_VERSION
+from packaging.version import Version
+from pathlib import Path
+from typing import Optional, Tuple
 
 from ou_dedetai import constants, network
 from ou_dedetai.app import App
 
 
-def fix_ld_library_path(env: Optional[MutableMapping[str, str]]) -> dict[str, str]: 
+def fix_ld_library_path(env: Optional[MutableMapping[str, str]]) -> dict[str, str]:
     """Removes pyinstaller bundled dynamic linked libraries when executing commands
 
     - https://pyinstaller.org/en/latest/common-issues-and-pitfalls.html#launching-external-programs-from-the-frozen-application
@@ -363,6 +367,50 @@ def get_os() -> Tuple[str, str]:
 
 
 class SuperuserCommandNotFound(Exception):
+    """Superuser command not found. Install pkexec or sudo or doas"""
+
+
+def get_opengl_version(required_version="3.2"):
+    window = None
+    try:
+        if not glfw.init():
+            return False, "Failed to initialize GLFW."
+
+        glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
+        glfw.window_hint(glfw.RESIZABLE, glfw.FALSE)
+
+        window = glfw.create_window(1, 1, "Hidden OpenGL Context", None, None)
+        if not window:
+            glfw.terminate()
+            return False, "Failed to create an OpenGL context."
+
+        glfw.make_context_current(window)
+
+        opengl_version = glGetString(GL_VERSION)
+        if opengl_version is None:
+            raise RuntimeError("Failed to retrieve OpenGL version. Ensure OpenGL drivers are installed.")
+
+        opengl_version = opengl_version.decode().split()[0]
+
+    except Exception as e:
+        return False, f"OpenGL check failed: {e}"
+
+    finally:
+        if window:
+            glfw.destroy_window(window)
+        glfw.terminate()
+
+    if Version(opengl_version) >= Version(required_version):
+        message = f"OpenGL Version: {opengl_version} is supported (>= {required_version})."
+        logging.info(message)
+        return True, message
+    else:
+        message = f"OpenGL Version: {opengl_version} is not supported (must be >= {required_version})."
+        logging.info(message)
+        return False, message
+
+
+class OpenGLIncompatible(Exception):
     """Superuser command not found. Install pkexec or sudo or doas"""
 
 
