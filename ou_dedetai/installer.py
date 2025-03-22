@@ -6,14 +6,15 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from ou_dedetai import system
 from ou_dedetai.app import App, UserExitedFromAsk
 
 from . import constants
 from . import network
+from . import system
 from . import utils
 from . import wine
 
+from .system import OpenGLIncompatible
 
 # This step doesn't do anything per-say, but "collects" all the choices in one step
 # The app would continue to work without this function
@@ -401,11 +402,23 @@ def ensure_launcher_shortcuts(app: App):
             f"Runmode is '{constants.RUNMODE}'. Won't create desktop shortcuts",
         )
 
+
+def ensure_opengl(app: App):
+    app.status("Checking available OpenGL version…")
+    opengl_version, reason = system.get_opengl_version()
+    app.status(reason)
+    if not opengl_version:
+        raise OpenGLIncompatible
+
+
 def install(app: App):
     """Entrypoint for installing"""
     app.status('Installing…')
     try:
+        ensure_opengl(app)
         ensure_launcher_shortcuts(app)
+    except OpenGLIncompatible:
+        app.status(f"Incompatible OpenGL version.")
     except UserExitedFromAsk:
         # Reset choices, it's possible that the user didn't mean to select
         # one of the options they did - that is why they are exiting

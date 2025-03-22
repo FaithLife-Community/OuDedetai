@@ -1,9 +1,7 @@
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional, Tuple
-from collections.abc import MutableMapping
-import zipfile
+import re
+
 import distro
+import glfw
 import logging
 import os
 import psutil
@@ -13,12 +11,19 @@ import struct
 import subprocess
 import sys
 import time
+import zipfile
+
+from collections.abc import MutableMapping
+from dataclasses import dataclass
+from packaging.version import Version
+from pathlib import Path
+from typing import Optional, Tuple
 
 from ou_dedetai import constants, network
 from ou_dedetai.app import App
 
 
-def fix_ld_library_path(env: Optional[MutableMapping[str, str]]) -> dict[str, str]: 
+def fix_ld_library_path(env: Optional[MutableMapping[str, str]]) -> dict[str, str]:
     """Removes pyinstaller bundled dynamic linked libraries when executing commands
 
     - https://pyinstaller.org/en/latest/common-issues-and-pitfalls.html#launching-external-programs-from-the-frozen-application
@@ -363,6 +368,33 @@ def get_os() -> Tuple[str, str]:
 
 
 class SuperuserCommandNotFound(Exception):
+    """Superuser command not found. Install pkexec or sudo or doas"""
+
+
+def get_opengl_version(required_version="3.2"):
+    try:
+        result = subprocess.run(['glxinfo'], capture_output=True, text=True, check=True)
+    except FileNotFoundError:
+        return False, "glxinfo command not found. Please install mesa-utils or equivalent."
+    except subprocess.CalledProcessError as e:
+        return False, f"glxinfo command failed: {e.stderr.strip()}"
+
+    match = re.search(r"OpenGL version string:\s+([\d\.]+)", result.stdout)
+    if not match:
+        return False, "Failed to parse OpenGL version from glxinfo output."
+
+    opengl_version = match.group(1)
+    if Version(opengl_version) >= Version(required_version):
+        message = f"OpenGL Version: {opengl_version} is supported (>= {required_version})."
+        logging.info(message)
+        return True, message
+    else:
+        message = f"OpenGL Version: {opengl_version} is not supported (must be >= {required_version})."
+        logging.info(message)
+        return False, message
+
+
+class OpenGLIncompatible(Exception):
     """Superuser command not found. Install pkexec or sudo or doas"""
 
 

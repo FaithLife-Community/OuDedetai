@@ -118,6 +118,11 @@ class LogosManager:
                 self.processes[self.app.conf.logos_exe] = process
             self.logos_state = State.RUNNING
 
+        # Ensure OpenGL version is compatible with Logos on Wine.
+        opengl_version, reason = system.get_opengl_version()
+        if not opengl_version:
+            self.app.exit(reason)
+
         # Ensure wine version is compatible with Logos release version.
         good_wine, reason = wine.check_wine_rules(
             wine_release,
