@@ -97,6 +97,19 @@ parts:
       - libusb-1.0-0
       - libxkbregistry0
 
+  wine-deps:
+    plugin: nil
+    stage-packages:
+      - binutils
+      - winbind
+
+  winetricks-deps:  # winetricks itself is downloaded during Logos install
+    plugin: nil
+    stage-packages:
+      - 7zip
+      - cabextract
+      - wget
+
   oudedetai:
     source: https://github.com/FaithLife-Community/OuDedetai.git
     plugin: python
