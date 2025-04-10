@@ -126,6 +126,15 @@ def get_support(app: App) -> str:
             zip.write(app.conf.app_wine_log_path)
         if Path(app.conf.app_wine_log_previous_path).exists():
             zip.write(app.conf.app_wine_log_previous_path)
+        # Only include LogosCrash.log for now. Logos.log can include
+        # information about which books the user owns which is more information than
+        # The user would probably expect to be included in a support package.
+        if (
+            app.conf._faithlife_crash_log is not None and
+            Path(app.conf._faithlife_crash_log).exists()
+        ):
+            zip.write(app.conf._faithlife_crash_log)
+
         if Path("/etc/os-release").exists():
             zip.write("/etc/os-release")
         run_commands = [
