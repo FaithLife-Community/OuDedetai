@@ -482,12 +482,20 @@ def get_wine_user(wine_prefix: str) -> Optional[str]:
     return None
 
 
+def get_appdata_dir(
+    wine_prefix: str,
+    wine_user: str,
+) -> str:
+    return f'{wine_prefix}/drive_c/users/{wine_user}/AppData/'
+
+
 def get_logos_appdata_dir(
     wine_prefix: str,
     wine_user: str,
     faithlife_product: str
 ) -> str:
-    return f'{wine_prefix}/drive_c/users/{wine_user}/AppData/Local/{faithlife_product}'
+    appdata = get_appdata_dir(wine_prefix=wine_prefix, wine_user=wine_user)
+    return f'{appdata}/Local/{faithlife_product}'
 
 
 def get_logos_user_id(
@@ -819,6 +827,33 @@ class Config:
             wine_user,
             self.faithlife_product
         )
+
+    @property
+    def _faithlife_logs_dir(self) -> Optional[str]:
+        """Path to the directory containing faithlife logs"""
+        # We don't want to prompt the user in this function
+        wine_user = self.wine_user
+        if (
+            wine_user is None
+            or self._raw.faithlife_product is None
+            or self._raw.install_dir is None
+        ):
+            return None
+        appdata = get_appdata_dir(
+            self.wine_prefix,
+            wine_user,
+        )
+        return f'{appdata}/Local/Faithlife/Logs/{self.faithlife_product}'
+
+    @property
+    def _faithlife_crash_log(self) -> Optional[str]:
+        """Path to the LogosCrash.log or VerbumCrash.log respectively"""
+        faithlife_logs = self._faithlife_logs_dir
+        if not faithlife_logs or self._raw.faithlife_product is None:
+            return None
+        # FIXME: Confirm Verbum's Crash log has this name - not aware of a Verbum crash right now
+        # to confirm this.
+        return f"{faithlife_logs}/{self._raw.faithlife_product}Crash.log"
 
     @property
     def _logos_user_id(self) -> Optional[str]:
