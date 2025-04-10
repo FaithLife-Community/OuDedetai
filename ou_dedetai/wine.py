@@ -15,7 +15,7 @@ from . import network
 from . import system
 from . import utils
 
-def check_wineserver(app: App):
+def check_wineserver(app: App) -> bool:
     # FIXME: if the wine version changes, we may need to restart the wineserver
     # (or at least kill it). Gotten into several states in dev where this happend
     # Normally when an msi install failed
@@ -24,6 +24,9 @@ def check_wineserver(app: App):
         if not process:
             logging.debug("Failed to spawn wineserver to check it")
             return False
+        # We already check the return code in run_wine_during_install.
+        # If there is a non-zero exit code subprocess.CalledProcessError will be raised
+        return True
     except subprocess.CalledProcessError:
         return False
 
@@ -631,7 +634,10 @@ def run_wine_during_install(
             additional_wine_dll_overrides=additional_wine_dll_overrides
         )
         if process:
-            full_command_string = f"{wine_binary} {exe} {" ".join(exe_args)}"
+            if exe:
+                full_command_string = f"{wine_binary} {exe} {" ".join(exe_args)}"
+            else:
+                full_command_string = f"{wine_binary} {" ".join(exe_args)}"
             logging.debug(f"Waiting on: {full_command_string}")
             process.wait()
             logging.debug(f"Wine process {full_command_string} "
