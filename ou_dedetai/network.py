@@ -205,13 +205,19 @@ class CachedRequests:
             return False
         return True
 
-    def clean_if_stale(self, force: bool = False):
+    def ensure_fresh(self, force: bool = False) -> "CachedRequests":
+        """Returns a CachedRequests that is fresh 
+        
+        - Either an empty new one
+        - Or the existing one
+        """
         if force or not self._is_fresh():
             logging.debug("Cleaning out cache…")
             self = CachedRequests(last_updated=time.time())
             self._write()
         else:
             logging.debug("Cache is valid")
+        return self
 
 
 class NetworkRequests:
@@ -224,9 +230,8 @@ class NetworkRequests:
         force_clean: Optional[bool] = None,
         hook: Callable[[], None] | None = None
     ) -> None:
-        self._cache = CachedRequests.load()
+        self._cache = CachedRequests.load().ensure_fresh(force=force_clean or False)
         self._cache._update_hook = hook
-        self._cache.clean_if_stale(force=force_clean or False)
 
     def _faithlife_product_releases(
         self,
