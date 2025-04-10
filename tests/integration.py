@@ -521,7 +521,7 @@ class DisplayServer(abc.ABC):
     
     @classmethod
     def detect(cls, pre_input_tasks: Callable[[], None]) -> "DisplayServer":
-        """Detects the current running Display server and returns and interface
+        """Detects the current running Display server and returns an interface
         for interacting with it
         """
         xdg_session_type = os.getenv("XDG_SESSION_TYPE")
@@ -952,7 +952,7 @@ def test_logos_winedbg_crash_is_detected_by_test_code(ou_dedetai: OuDedetai):
 
     # Sabotage! For the sake of a crash. Still needs testing to force a crash. 
     # We may want to have a negative test for this to ensure our logic to detect
-    # logos idn't crash still functions later on in time.
+    # logos didn't crash still functions later on in time.
     # This may or may not work as the data might already be loaded.
     fake_font_dir = font_dir + "_"
     shutil.move(font_dir, fake_font_dir)
