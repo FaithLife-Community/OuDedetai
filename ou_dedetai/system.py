@@ -526,7 +526,7 @@ def get_package_manager() -> PackageManager | None:
             packages = (
                 "fuse2 "  # appimages
                 "binutils libwbclient samba wget "  # wine
-                "p7zip cabextract " # winetricks (p7zip used to be called pzip)
+                "7zip cabextract " # winetricks (7zip used to be called pzip then p7zip)
                 "openjpeg2 libxcomposite libxinerama "  # display
                 "ocl-icd vulkan-icd-loader "  # hardware
                 "alsa-plugins gst-plugins-base-libs libpulse openal "  # audio
