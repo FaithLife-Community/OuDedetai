@@ -502,6 +502,9 @@ def get_logos_user_id(
     logos_appdata_dir: str
 ) -> Optional[str]:
     logos_data_path = Path(logos_appdata_dir) / "Data"
+    # If somehow the directory does not exist - like if the user removed it manually while trying to reset their data.
+    if not logos_data_path.exists():
+        return None
     contents = os.listdir(logos_data_path)
     children = [logos_data_path / child for child in contents]
     file_children = [child for child in children if child.is_dir()]
@@ -523,7 +526,8 @@ class Config:
     # prefix with app_ if it's ours (and otherwise not clear)
     # prefix with wine_ if it's theirs
     # suffix with _binary if it's a linux binary
-    # suffix with _exe if it's a windows binary
+    # suffix with _exe if it's a windows binary structured as a linux path
+    # suffix with _exe_windows_path if it's a windows binary structured as a windows path
     # suffix with _path if it's a file path
     # suffix with _file_name if it's a file's name (with extension)
 
@@ -1161,25 +1165,42 @@ class Config:
         return self._wine_user
 
     @property
-    def logos_cef_exe(self) -> Optional[str]:
-        if self.wine_user is not None:
-            # This name is the same even in Verbum
-            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\LogosCEF.exe'
-        return None
+    def logos_appdata_windows_path(self) -> Optional[str]:
+        """Path to the Logos appdata dir within windows. 
+        
+        Structured like: C:\\Users\\user\\AppData\\Local...
+        """
+        if self.wine_user is None:
+            return None
+        # We don't want to prompt here.
+        if self._raw.faithlife_product is None:
+            return None
+        return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self._raw.faithlife_product}'
 
     @property
-    def logos_indexer_exe(self) -> Optional[str]:
-        if self.wine_user is not None:
-            return (f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\'
-                    f'{self.faithlife_product}Indexer.exe')
-        return None
+    def logos_exe_windows_path(self) -> Optional[str]:
+        if self.logos_appdata_windows_path is None or self._raw.faithlife_product is None:
+            return None
+        return f'{self.logos_appdata_windows_path}\\{self._raw.faithlife_product}.exe'
 
     @property
-    def logos_login_exe(self) -> Optional[str]:
-        if self.wine_user is not None:
-            return (f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\'
-                    f'{self.faithlife_product}.exe')
-        return None
+    def logos_cef_exe_windows_path(self) -> Optional[str]:
+        if self.logos_appdata_windows_path is None:
+            return None
+        # This name is the same even in Verbum
+        return f'{self.logos_appdata_windows_path}\\System\\LogosCEF.exe'
+
+    @property
+    def logos_indexer_exe_windows_path(self) -> Optional[str]:
+        if self.logos_appdata_windows_path is None or self._raw.faithlife_product is None:
+            return None
+        return f'{self.logos_appdata_windows_path}\\System\\{self._raw.faithlife_product}Indexer.exe'
+
+    @property
+    def logos_system_exe_windows_path(self) -> Optional[str]:
+        if self.logos_appdata_windows_path is None or self._raw.faithlife_product is None:
+            return None
+        return f'{self.logos_appdata_windows_path}\\System\\{self._raw.faithlife_product}.exe'
 
     @property
     def log_level(self) -> str | int:

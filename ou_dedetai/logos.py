@@ -34,8 +34,8 @@ class LogosManager:
         """These are processes we discovered already running"""
 
     def monitor_indexing(self):
-        if self.app.conf.logos_indexer_exe in self.existing_processes:
-            indexer = self.existing_processes.get(self.app.conf.logos_indexer_exe)
+        if self.app.conf.logos_indexer_exe_windows_path in self.existing_processes:
+            indexer = self.existing_processes.get(self.app.conf.logos_indexer_exe_windows_path)
             if indexer and isinstance(indexer[0], psutil.Process) and indexer[0].is_running():
                 self.indexing_state = State.RUNNING
             else:
@@ -47,10 +47,10 @@ class LogosManager:
         cef = []
         if self.app.conf.logos_exe:
             splash = self.existing_processes.get(self.app.conf.logos_exe, [])
-        if self.app.conf.logos_login_exe:
-            login = self.existing_processes.get(self.app.conf.logos_login_exe, [])
-        if self.app.conf.logos_cef_exe:
-            cef = self.existing_processes.get(self.app.conf.logos_cef_exe, [])
+        if self.app.conf.logos_system_exe_windows_path:
+            login = self.existing_processes.get(self.app.conf.logos_system_exe_windows_path, [])
+        if self.app.conf.logos_cef_exe_windows_path:
+            cef = self.existing_processes.get(self.app.conf.logos_cef_exe_windows_path, [])
 
         splash_running = splash[0].is_running() if splash else False
         login_running = login[0].is_running() if login else False
@@ -78,19 +78,14 @@ class LogosManager:
         app = self.app
         # FIXME: consider refactoring to make one call to get a system pids
         # Currently this gets all system pids 4 times
-        if app.conf.logos_exe:
-            self.existing_processes[app.conf.logos_exe] = system.get_pids(app.conf.logos_exe)
-        if app.conf.wine_user:
-            # Also look for the system's Logos.exe (this may be the login window)
-            logos_system_exe = (
-                f"C:\\users\\{app.conf.wine_user}\\AppData\\Local\\{app.conf.faithlife_product}\\System\\"
-                f"{app.conf.faithlife_product}.exe"
-            )
-            self.existing_processes[logos_system_exe] = system.get_pids(logos_system_exe)
-        if app.conf.logos_indexer_exe:
-            self.existing_processes[app.conf.logos_indexer_exe] = system.get_pids(app.conf.logos_indexer_exe)
-        if app.conf.logos_cef_exe:
-            self.existing_processes[app.conf.logos_cef_exe] = system.get_pids(app.conf.logos_cef_exe)
+        for exe_path in [
+            app.conf.logos_exe,
+            app.conf.logos_system_exe_windows_path,
+            app.conf.logos_indexer_exe_windows_path,
+            app.conf.logos_cef_exe_windows_path
+        ]:
+            if exe_path:
+                self.existing_processes[exe_path] = system.get_pids(exe_path)
 
     def monitor(self):
         if self.app.is_installed():
@@ -257,15 +252,15 @@ class LogosManager:
         index_finished = threading.Event()
 
         def run_indexing():
-            if not self.app.conf.logos_indexer_exe:
+            if not self.app.conf.logos_indexer_exe_windows_path:
                 raise ValueError("Cannot find installed indexer")
             process = wine.run_wine_application(
                 app=self.app,
                 wine_binary=self.app.conf.wine_binary,
-                exe=self.app.conf.logos_indexer_exe
+                exe=self.app.conf.logos_indexer_exe_windows_path
             )
             if process is not None:
-                self.processes[self.app.conf.logos_indexer_exe] = process
+                self.processes[self.app.conf.logos_indexer_exe_windows_path] = process
 
         def check_if_indexing(process: threading.Thread):
             start_time = time.time()
@@ -305,7 +300,7 @@ class LogosManager:
         self.indexing_state = State.STOPPING
         if self.app:
             pids = []
-            for process_name in [self.app.conf.logos_indexer_exe]:
+            for process_name in [self.app.conf.logos_indexer_exe_windows_path]:
                 if process_name is None:
                     continue
                 process = self.processes.get(process_name)
