@@ -84,7 +84,8 @@ parts:
   #     craftctl default
 
   wine-custom:
-    source: https://github.com/sil-car/wine-builds/releases/download/wine_10.0/wine_10.0+24.04.tar.xz
+    # source: https://github.com/sil-car/wine-builds/releases/download/wine_10.0/wine_10.0+24.04.tar.xz
+    source: https://github.com/sil-car/wine-builds/releases/download/wine_10.6/wine_10.6+24.04.tar.xz
     plugin: dump
     organize:
       'wine_*/bin': bin
