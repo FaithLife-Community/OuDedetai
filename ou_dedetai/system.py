@@ -420,6 +420,7 @@ def get_package_manager() -> PackageManager | None:
             "libfuse2 "  # appimages
             "binutils wget winbind "  # wine
             "p7zip-full cabextract " # winetricks
+            "xdg-utils " # For xdg-mime needed for custom url scheme registration
         )
         # NOTE: Package names changed together for Ubuntu 24+, Debian 13+, and
         # derivatives. This does not include an exhaustive list of distros that
@@ -459,6 +460,7 @@ def get_package_manager() -> PackageManager | None:
             "fuse fuse-libs "  # appimages
             "mod_auth_ntlm_winbind samba-winbind samba-winbind-clients "  # wine
             "cabextract " # winetricks
+            "xdg-utils " # For xdg-mime needed for custom url scheme registration
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('zypper') is not None:  # OpenSUSE
@@ -473,6 +475,7 @@ def get_package_manager() -> PackageManager | None:
             "samba wget "  # wine
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks
+            "xdg-utils " # For xdg-mime needed for custom url scheme registration
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('apk') is not None:  # alpine
@@ -488,6 +491,7 @@ def get_package_manager() -> PackageManager | None:
             "wget curl "  # network
             "7zip cabextract " # winetricks
             "samba sed grep gawk bash bash-completion "  # other
+            "xdg-utils " # For xdg-mime needed for custom url scheme registration
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('pamac') is not None:  # manjaro
@@ -501,6 +505,7 @@ def get_package_manager() -> PackageManager | None:
             "samba wget "  # wine
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks (7zip used to be called p7zip)
+            "xdg-utils " # For xdg-mime needed for custom url scheme registration
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('pacman') is not None:  # arch, steamOS
@@ -520,7 +525,8 @@ def get_package_manager() -> PackageManager | None:
                 "lib32-alsa-plugins alsa-lib lib32-alsa-lib libjpeg-turbo lib32-libjpeg-turbo sqlite lib32-sqlite "
                 "libxcomposite lib32-libxcomposite libxinerama lib32-libgcrypt libgcrypt lib32-libxinerama ncurses "
                 "lib32-ncurses ocl-icd lib32-ocl-icd libxslt lib32-libxslt libva lib32-libva gtk3 lib32-gtk3 "
-                "gst-plugins-base-libs lib32-gst-plugins-base-libs vulkan-icd-loader lib32-vulkan-icd-loader"
+                "gst-plugins-base-libs lib32-gst-plugins-base-libs vulkan-icd-loader lib32-vulkan-icd-loader "
+                "xdg-utils " # For xdg-mime needed for custom url scheme registration
             )
         else:  # arch
             packages = (
@@ -532,6 +538,7 @@ def get_package_manager() -> PackageManager | None:
                 "alsa-plugins gst-plugins-base-libs libpulse openal "  # audio
                 "libva mpg123 v4l-utils "  # video
                 "libxslt sqlite "  # misc
+                "xdg-utils " # For xdg-mime needed for custom url scheme registration
             )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif os_name == "org.freedesktop.platform":
