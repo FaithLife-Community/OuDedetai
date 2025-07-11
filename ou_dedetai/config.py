@@ -682,7 +682,9 @@ class Config:
             return self._overrides.faithlife_product_version
         if self._raw.faithlife_product_version is not None:
             return self._raw.faithlife_product_version
-        return "10"
+        # The only version we presently support is 10 - so set it.
+        self.faithlife_product_version = "10"
+        return self.faithlife_product_version
         # Keep following in case we need to prompt for additional versions in the future
         #question = f"Which version of {self.faithlife_product} should the script install?: "
         #options = constants.FAITHLIFE_PRODUCT_VERSIONS
@@ -815,12 +817,13 @@ class Config:
     def _logos_appdata_dir(self) -> Optional[str]:
         """Path to the user's Logos installation under AppData"""
         # We don't want to prompt the user in this function
-        wine_user = self.wine_user
         if (
-            wine_user is None
-            or self._raw.faithlife_product is None
+            self._raw.faithlife_product is None
             or self._raw.install_dir is None
         ):
+            return None
+        wine_user = self.wine_user
+        if wine_user is None:
             return None
         return get_logos_appdata_dir(
             self.wine_prefix,
@@ -1153,7 +1156,12 @@ class Config:
     @property
     def wine_user(self) -> Optional[str]:
         # We don't want to prompt the user for install_dir if it isn't set
-        if not self._raw.install_dir:
+        # or anything that is used in the default install dir
+        if (
+            not self._raw.install_dir
+            or not self._raw.faithlife_product 
+            or not self._raw.faithlife_product_version
+        ):
             return None
         # Cache a successful result (as it goes out to the fs)
         if not self._wine_user:
