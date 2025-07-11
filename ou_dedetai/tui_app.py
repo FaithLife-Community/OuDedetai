@@ -566,7 +566,7 @@ class TUI(App):
             elif choice == "Uninstall":
                 control.uninstall(self)
             elif choice == "Update to Latest AppImage":
-                utils.update_to_latest_recommended_appimage(self)
+                installer.update_to_latest_wine(self)
         except UserExitedFromAsk:
             pass
         self.go_to_main_menu()
