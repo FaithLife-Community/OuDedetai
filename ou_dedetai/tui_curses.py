@@ -256,6 +256,7 @@ class MenuDialog(CursesDialog):
                 option = self.app.options[index]
                 if type(option) is list:
                     option_lines = []
+                    # XXX: What's up with this name?
                     wine_binary_code = option[0]
                     if wine_binary_code != "Exit":
                         wine_binary_path = option[1]

@@ -618,7 +618,7 @@ class ControlWindow(GuiApp):
         self.start_thread(self.update_to_latest_appimage, evt=evt)
 
     def update_to_latest_appimage(self, evt=None):
-        utils.update_to_latest_recommended_appimage(self)
+        installer.update_to_latest_wine(self)
         self.root.event_generate(evt)
 
     def set_appimage(self, evt=None):
@@ -706,7 +706,7 @@ class ControlWindow(GuiApp):
         if not self.is_installed():
             state = "disabled"
             msg = "Please install first"
-        elif self.conf._raw.wine_binary_code not in ["Recommended", "AppImage", None]:
+        elif self.conf.wine_appimage_path is None:
             state = 'disabled'
             msg = "This button is disabled. The configured install was not created using an AppImage."
             self.gui.set_appimage_button.state(['disabled'])
@@ -715,7 +715,7 @@ class ControlWindow(GuiApp):
                 "This button is disabled. The configured install was not created using an AppImage."
             )
         elif self.conf._raw.wine_binary is not None:
-            status, _ = utils.compare_recommended_appimage_version(self)
+            status, _ = utils.compare_recommended_wine_version(self)
             if status == 0:
                 state = '!disabled'
             elif status == 1:

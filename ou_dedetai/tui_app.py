@@ -748,7 +748,7 @@ class TUI(App):
                 self.start_thread(self.do_backup)
             elif choice == "Update to Latest AppImage":
                 self.reset_screen()
-                utils.update_to_latest_recommended_appimage(self)
+                installer.update_to_latest_wine(self)
                 self.go_to_main_menu()
             # This isn't an option in set_utilities_menu_options
             # This code path isn't reachable and isn't tested post-refactor

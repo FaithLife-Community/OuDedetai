@@ -409,6 +409,9 @@ def get_package_manager() -> PackageManager | None:
     packages: str
     incompatible_packages: str
 
+    # FIXME: consider what to do with appimage dependencies long term - should they be removed?
+    # Moved to a feature flag or something?
+
     if shutil.which('apt') is not None:  # debian, ubuntu, & derivatives
         install_command = ["apt", "install", "-y"]
         download_command = ["apt", "install", "--download-only", "-y"]
@@ -418,7 +421,7 @@ def get_package_manager() -> PackageManager | None:
         # Set default package list.
         packages = (
             "libfuse2 "  # appimages
-            "binutils wget winbind "  # wine
+            "binutils wget winbind libfreetype6 "  # wine
             "p7zip-full cabextract " # winetricks
         )
         # NOTE: Package names changed together for Ubuntu 24+, Debian 13+, and
@@ -525,7 +528,7 @@ def get_package_manager() -> PackageManager | None:
         else:  # arch
             packages = (
                 "fuse2 "  # appimages
-                "binutils libwbclient samba wget "  # wine
+                "binutils libwbclient samba wget freetype2 "  # wine
                 "7zip cabextract " # winetricks (7zip used to be called pzip then p7zip)
                 "openjpeg2 libxcomposite libxinerama "  # display
                 "ocl-icd vulkan-icd-loader "  # hardware
@@ -929,8 +932,7 @@ def ensure_winetricks(
 
     # Symlink if using an appimage
     if (
-        app.conf.wine_binary_code in ["Recommended", "AppImage"]
-        and app.conf.wine_appimage_path is not None
+        app.conf.wine_appimage_path is not None
         and app.conf.wine_appimage_path.exists()
     ):
         winetricks_path.symlink_to(app.conf.wine_appimage_path)

@@ -47,7 +47,7 @@ class TestAppUtils(unittest.TestCase):
     @unittest.skip("Needs functional wine binary.")
     def test_compare_recommended_appimage_version(self):
         self.app.conf.wine_appimage_recommended_version = '11'
-        status, msg = utils.compare_recommended_appimage_version(self.app)
+        status, msg = utils.compare_recommended_wine_version(self.app)
         self.assertEqual(status, 0)
 
     def test_die_if_running_nofile(self):
