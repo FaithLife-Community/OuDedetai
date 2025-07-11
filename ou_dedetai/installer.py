@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +16,7 @@ from . import utils
 from . import wine
 
 from ou_dedetai.system import OpenGLIncompatible
+
 
 # This step doesn't do anything per-say, but "collects" all the choices in one step
 # The app would continue to work without this function
@@ -30,9 +32,8 @@ def ensure_choices(app: App):
     logging.debug(f"> {app.conf.install_dir=}")
     logging.debug(f"> {app.conf.installer_binary_dir=}")
     logging.debug(f"> {app.conf.wine_appimage_path=}")
-    logging.debug(f"> {app.conf.wine_appimage_recommended_url=}")
-    logging.debug(f"> {app.conf.wine_appimage_recommended_file_name=}")
-    logging.debug(f"> {app.conf.wine_binary_code=}")
+    logging.debug(f"> {app.conf.wine_download_url=}")
+    logging.debug(f"> {app.conf.wine_download_file_name=}")
     logging.debug(f"> {app.conf.wine_binary=}")
     logging.debug(f"> {app.conf.faithlife_product_icon_path}")
     logging.debug(f"> {app.conf.faithlife_installer_download_url}")
@@ -40,6 +41,7 @@ def ensure_choices(app: App):
     logging.debug(f"> Config={app.conf.__dict__}")
 
     app.status("Install is running…")
+
 
 def ensure_install_dirs(app: App):
     app.installer_step_count += 1
@@ -110,20 +112,20 @@ def check_for_known_bugs(app: App):
             # org.qutebrowser.qutebrowser.desktop - Debian Qutebrowser
             # org.kde.falkon.desktop - Debian Falkon
             if (
-               "chromium" in command_output
-               or "chrome" in command_output
-               or "brave" in command_output
-               or "vivaldi" in command_output
-               or "dooble" in command_output
-               or "falkon" in command_output
-               or "qutebrowser" in command_output
-               or "opera" in command_output
+                    "chromium" in command_output
+                    or "chrome" in command_output
+                    or "brave" in command_output
+                    or "vivaldi" in command_output
+                    or "dooble" in command_output
+                    or "falkon" in command_output
+                    or "qutebrowser" in command_output
+                    or "opera" in command_output
             ):
-               chromium_detected = True
-            
+                chromium_detected = True
+
             # Now check the .desktop's Exec line for either "flatpak" or "/snap/bin" if either are found, fail as well.
             xdg_data_dirs = os.getenv("XDG_DATA_DIRS", "/usr/local/share:/usr/share")
-           
+
             found: bool = False
 
             for xdg_data_dir in xdg_data_dirs.split(":"):
@@ -134,7 +136,7 @@ def check_for_known_bugs(app: App):
                     lines = list(filter(lambda line: line.lower().startswith("exec="), lines))
                     if any("/snap/bin" in line or "flatpak" in line for line in lines):
                         snap_or_flatpak_detected = True
-            
+
             if not found:
                 logging.warning("Cannot find the desktop file in question")
     except subprocess.CalledProcessError as e:
@@ -160,6 +162,7 @@ def check_for_known_bugs(app: App):
 
     # End workaround #435
 
+
 def check_opengl(app: App):
     app.status("Checking available OpenGL version…")
     try:
@@ -183,84 +186,96 @@ def check_system_compatibility(app: App):
     except Exception:
         logging.exception("Failed to check for known bugs - assuming everything is fine and continuing install.")
     if (
-        app.conf.faithlife_product_version != '9'
-        and not str(app.conf.wine_binary).lower().endswith('appimage')
-        and app.conf.wine_binary not in [constants.WINE_BETA_SIGIL, constants.WINE_RECOMMENDED_SIGIL]
+            app.conf.faithlife_product_version != '9'
+            and not str(app.conf.wine_binary).lower().endswith('appimage')
+            and app.conf.wine_binary not in [
+        constants.WINE_BETA_SIGIL,
+        constants.WINE_RECOMMENDED_SIGIL,
+        constants.RECOMMENDED_WINE_TARBALL_SIGIL,
+    ]
     ):
         return
 
     check_opengl(app=app)
 
 
-def ensure_appimage_download(app: App):
-    app.installer_step_count += 1
-    ensure_sys_deps(app=app)
-    check_system_compatibility(app=app)
-    app.installer_step += 1
+# FIXME: consider where to put this long term - can also be called in the update case
+def setup_wine(app: App):
+    """Prepare the Wine executables for installation or update."""
+    downloaded_file = download_wine(app)
 
-    if (
-        app.conf.faithlife_product_version != '9'
-        and not str(app.conf.wine_binary).lower().endswith('appimage')
-        and app.conf.wine_binary not in [constants.WINE_RECOMMENDED_SIGIL, constants.WINE_BETA_SIGIL]
-    ):
-        return
-    app.status("Ensuring wine AppImage is downloaded…")
+    if downloaded_file is not None and downloaded_file.name.lower().endswith(".appimage"):
+        # Retain compatibility with existing AppImage-based installations.
+        app.conf.wine_binary = str(downloaded_file.absolute())
+    elif downloaded_file is not None and downloaded_file.name.lower().endswith((".tar.gz", ".tgz")):
+        wine_rootfs = Path(app.conf.wine_rootfs)
+        with tarfile.open(downloaded_file, "r:gz") as tarball:
+            if wine_rootfs.exists():
+                shutil.rmtree(wine_rootfs)
+            wine_rootfs.mkdir(parents=True)
+            tarball.extractall(wine_rootfs, filter="data")
 
-    downloaded_file = None
-    appimage_path = app.conf.wine_appimage_recommended_file_name 
-    download_url = app.conf.wine_appimage_recommended_url
+        if not Path(app.conf.wine_path_in_rootfs).exists():
+            raise RuntimeError("Downloaded tarball didn't contain the needed Wine binary")
 
-    if (
-        app.conf.wine_binary == constants.WINE_BETA_SIGIL
-        or (
-            app.conf.wine_appimage_beta_file_name is not None 
-            # It was set to this manually.
-            and app.conf.wine_binary == f"{constants.RELATIVE_BINARY_DIR}/{app.conf.wine_appimage_beta_file_name}"
-        )
-    ):
-        if (
-            app.conf.wine_appimage_beta_file_name is not None
-            and app.conf.wine_appimage_beta_url is not None
-        ):
-            appimage_path = app.conf.wine_appimage_beta_file_name
-            download_url = app.conf.wine_appimage_beta_url
-    elif (
-        app.conf.wine_binary == constants.WINE_RECOMMENDED_SIGIL
-        or (
-            app.conf.wine_appimage_recommended_file_name is not None 
-            # It was set to this manually.
-            and app.conf.wine_binary ==
-              f"{constants.RELATIVE_BINARY_DIR}/{app.conf.wine_appimage_recommended_file_name}"
-        )
-    ):
-        appimage_path = app.conf.wine_appimage_recommended_file_name
-        download_url = app.conf.wine_appimage_recommended_url
+        wrapper_path = wine_rootfs / "wrapper"
+        with wrapper_path.open("r") as original:
+            data = original.read()
+        with wrapper_path.open("w") as modified:
+            modified.write(
+                '#!/bin/bash\nAPPDIR="$(dirname -- "${BASH_SOURCE[0]}")"\n' + data
+            )
+        wrapper_path.chmod(wrapper_path.stat().st_mode | 0o111)
+        app.conf.wine_binary = app.conf.wine_path_in_rootfs
+
+    create_wine_symlinks(app)
+
+
+def update_to_latest_wine(app: App):
+    """Update a managed Wine installation to the currently recommended build."""
+    if app.conf.wine_appimage_path is not None:
+        app.conf.wine_binary = constants.RECOMMENDED_WINE_APPIMAGE_SIGIL
+    elif str(app.conf.wine_binary).startswith(app.conf.wine_rootfs_relative):
+        app.conf.wine_binary = constants.RECOMMENDED_WINE_TARBALL_SIGIL
     else:
-        logging.warning("Could not find which appimage to download, returning early.")
+        logging.debug("System wine detected - cowardly refusing to upgrade")
         return
 
-    filename = Path(appimage_path).name
-    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, filename)
-    if not downloaded_file:
-        downloaded_file = f"{app.conf.download_dir}/{filename}"
+    setup_wine(app)
+
+
+def download_wine(app: App) -> Optional[Path]:
+    if app.conf.faithlife_product_version != "9" and app.conf.wine_binary not in [
+        constants.RECOMMENDED_WINE_APPIMAGE_SIGIL,
+        constants.RECOMMENDED_WINE_TARBALL_SIGIL,
+        constants.UNTESTED_WINE_STABLE_APPIMAGE_SIGIL,
+        constants.UNTESTED_WINE_STAGING_APPIMAGE_SIGIL,
+        constants.UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL,
+    ]:
+        return None
+
+    app.status("Ensuring Wine is downloaded…")
+    filename = Path(app.conf.wine_download_file_name).name
     network.logos_reuse_download(
-        download_url,
+        app.conf.wine_download_url,
         filename,
         app.conf.download_dir,
         app=app,
     )
-    logging.debug(f"> File exists?: {downloaded_file}: {Path(downloaded_file).is_file()}")
-    
-    app.conf.wine_binary = downloaded_file
+    downloaded_file = Path(app.conf.download_dir) / filename
+    logging.debug(f"> File exists?: {downloaded_file}: {downloaded_file.is_file()}")
+    return downloaded_file
 
 
-def ensure_wine_executables(app: App):
+def ensure_wine_installed(app: App):
     app.installer_step_count += 1
-    ensure_appimage_download(app=app)
+    ensure_sys_deps(app=app)
     app.installer_step += 1
+
     app.status("Ensuring wine executables are available…")
 
-    create_wine_appimage_symlinks(app=app)
+    check_system_compatibility(app=app)
+    setup_wine(app=app)
 
     # PATH is modified if wine appimage isn't found, but it's not modified
     # during a restarted installation, so shutil.which doesn't find the
@@ -272,7 +287,7 @@ def ensure_wine_executables(app: App):
 
 def ensure_winetricks_executable(app: App):
     app.installer_step_count += 1
-    ensure_wine_executables(app=app)
+    ensure_wine_installed(app=app)
     app.installer_step += 1
     app.status("Ensuring winetricks executable is available…")
 
@@ -287,9 +302,9 @@ def ensure_product_installer_download(app: App):
     app.installer_step += 1
     app.status(f"Ensuring {app.conf.faithlife_product} installer is downloaded…")
 
-    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, app.conf.faithlife_installer_name) 
+    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, app.conf.faithlife_installer_name)
     if not downloaded_file:
-        downloaded_file = Path(app.conf.download_dir) / app.conf.faithlife_installer_name 
+        downloaded_file = Path(app.conf.download_dir) / app.conf.faithlife_installer_name
     network.logos_reuse_download(
         app.conf.faithlife_installer_download_url,
         app.conf.faithlife_installer_name,
@@ -334,7 +349,7 @@ def ensure_wineprefix_config(app: App):
 
     # Force renderer=gdi in registry.
     logging.debug("Setting renderer=gdi in wineprefix registry.")
-    wine.set_renderer(app=app, wine64_binary=app.conf.wine64_binary, value='gdi')
+    wine.set_renderer(app=app, wine64_binary=app.conf.wine64_binary, value="gdi")
 
     # Force fontsmooth=rgb in registry.
     logging.debug("Setting fontsmoothing=rgb in wineprefix registry.")
@@ -355,11 +370,11 @@ def ensure_icu_data_files(app: App):
     ensure_fonts(app=app)
     app.installer_step += 1
     app.status("Ensuring ICU data files are installed…")
-    logging.debug('- ICU data files')
+    logging.debug("- ICU data files")
 
     wine.enforce_icu_data_files(app=app)
 
-    logging.debug('> ICU data files installed')
+    logging.debug("> ICU data files installed")
 
 
 def ensure_product_installed(app: App):
@@ -377,7 +392,7 @@ def ensure_product_installed(app: App):
     target_release = app.conf._raw.faithlife_product_release
 
     if not app.is_installed() or (
-        target_release is not None and installed_release != target_release
+            target_release is not None and installed_release != target_release
     ):
         # FIXME: Should we try to cleanup on a failed msi?
         # Like terminating msiexec if already running for Logos
@@ -407,7 +422,7 @@ def ensure_launcher_executable(app: App):
     app.installer_step_count += 1
     ensure_config_file(app=app)
     app.installer_step += 1
-    if constants.RUNMODE == 'binary':
+    if constants.RUNMODE == "binary":
         app.status(f"Copying launcher to {app.conf.install_dir}…")
 
         # Copy executable into install dir.
@@ -419,9 +434,7 @@ def ensure_launcher_executable(app: App):
         shutil.copy(sys.executable, launcher_exe)
         logging.debug(f"> File exists?: {launcher_exe}: {launcher_exe.is_file()}")
     else:
-        app.status(
-            "Running from source. Skipping launcher copy."
-        )
+        app.status("Running from source. Skipping launcher copy.")
 
 
 def ensure_launcher_shortcuts(app: App):
@@ -429,7 +442,7 @@ def ensure_launcher_shortcuts(app: App):
     ensure_launcher_executable(app=app)
     app.installer_step += 1
     app.status("Creating launcher shortcuts…")
-    if constants.RUNMODE == 'binary':
+    if constants.RUNMODE == "binary":
         app.status("Creating launcher shortcuts…")
         create_launcher_shortcuts(app)
     else:
@@ -441,7 +454,7 @@ def ensure_launcher_shortcuts(app: App):
 
 def install(app: App):
     """Entrypoint for installing"""
-    app.status('Installing…')
+    app.status("Installing…")
     try:
         ensure_launcher_shortcuts(app)
     except UserExitedFromAsk:
@@ -461,61 +474,83 @@ def get_progress_pct(current, total):
     return round(current * 100 / total)
 
 
-def create_wine_appimage_symlinks(app: App):
-    app.status("Creating wine appimage symlinks…")
+def create_wine_symlinks(app: App):
+    app.status("Creating wine symlinks…")
+
+    symlink_paths = ["wine", "wine64", "wineserver", "winetricks"]
+
     appdir_bindir = Path(app.conf.installer_binary_dir)
-    os.environ['PATH'] = f"{app.conf.installer_binary_dir}:{os.getenv('PATH')}"
-    # Ensure AppImage symlink.
-    appimage_link = appdir_bindir / app.conf.wine_appimage_link_file_name
-    if app.conf.wine_binary_code not in ['AppImage', 'Recommended'] or app.conf.wine_appimage_path is None: 
-        logging.debug("No need to symlink non-appimages")
-        return
-    
-    # Only use the appimage_path if it exists
-    # It may not exist if it was an old install's .appimage
-    # where the install dir has been cleared.
-    if app.conf.wine_appimage_path.exists():
-        appimage_filename = app.conf.wine_appimage_path.name
+    # FIXME: This would only run once during install. Are we sure that's what we want?
+    os.environ["PATH"] = f"{app.conf.installer_binary_dir}:{os.getenv('PATH')}"
+
+    symlink_to: str
+
+    if app.conf.wine_appimage_path is not None:
+        # Ensure AppImage symlink.
+        appimage_link = appdir_bindir / app.conf.wine_appimage_link_file_name
+
+        # Only use the appimage_path if it exists
+        # It may not exist if it was an old install's .appimage
+        # where the install dir has been cleared.
+        if app.conf.wine_appimage_path.exists():
+            appimage_filename = app.conf.wine_appimage_path.name
+        else:
+            appimage_filename = app.conf.wine_download_file_name
+        appimage_file = appdir_bindir / appimage_filename
+        # Ensure appimage is copied to appdir_bindir.
+        downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, appimage_filename)
+        if downloaded_file is None:
+            logging.critical("Failed to get a valid wine appimage")
+            return
+        if not appimage_file.exists():
+            app.status(f"Copying: {downloaded_file} into: {appdir_bindir}")
+            shutil.copy(downloaded_file, appdir_bindir)
+        os.chmod(appimage_file, 0o755)
+        app.conf.wine_appimage_path = appimage_file
+        app.conf.wine_binary = str(appimage_file)
+
+        appimage_link.unlink(missing_ok=True)  # remove & replace
+        appimage_link.symlink_to(f"./{appimage_filename}")
+
+        symlink_to = f"./{app.conf.wine_appimage_link_file_name}"
+    elif (
+            app.conf.wine_binary.startswith(app.conf.wine_rootfs)
+            or app.conf.wine_binary.startswith(app.conf.wine_rootfs_relative)
+    ):
+        # FIXME: figure out what this script does and simplify
+        symlink_to = str(Path(app.conf.wine_rootfs) / "wrapper")
+
+        # Make symlinks in the rootfs in order for us to be able to detect where we are later.
+        # FIXME: Consider switching this discovery to traversing symlinks instead
+        for name in symlink_paths:
+            p = Path(app.conf.wine_rootfs) / name
+            p.unlink(missing_ok=True)
+            p.symlink_to(symlink_to)
+
+        # Direct all wine commands here - it initializes the environment we need
+        app.conf.wine_binary = str(Path(app.conf.wine_rootfs) / "wine")
     else:
-        appimage_filename = app.conf.wine_appimage_recommended_file_name
-    appimage_file = appdir_bindir / appimage_filename
-    # Ensure appimage is copied to appdir_bindir.
-    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, appimage_filename) 
-    if downloaded_file is None:
-        logging.critical("Failed to get a valid wine appimage")
+        logging.debug("No need to make symlinks as the wine installation is from a binary")
         return
-    if not appimage_file.exists():
-        app.status(f"Copying: {downloaded_file} into: {appdir_bindir}")
-        shutil.copy(downloaded_file, appdir_bindir)
-    os.chmod(appimage_file, 0o755)
-    app.conf.wine_appimage_path = appimage_file
-    app.conf.wine_binary = str(appimage_file)
-
-    appimage_link.unlink(missing_ok=True)  # remove & replace
-    appimage_link.symlink_to(f"./{appimage_filename}")
-
-    # NOTE: if we symlink "winetricks" then the log is polluted with:
-    # "Executing: cd /tmp/.mount_winet.../bin"
-    (appdir_bindir / "winetricks").unlink(missing_ok=True)
 
     # Ensure wine executables symlinks.
-    for name in ["wine", "wine64", "wineserver", "winetricks"]:
+    for name in symlink_paths:
         p = appdir_bindir / name
         p.unlink(missing_ok=True)
-        p.symlink_to(f"./{app.conf.wine_appimage_link_file_name}")
+        p.symlink_to(symlink_to)
 
 
 def create_desktop_file(
-    filename: str,
-    app_name: str,
-    exec_cmd: str,
-    generic_name: str | None = None,
-    comment: str | None = None,
-    icon_path: str | Path | None = None,
-    wm_class: str | None = None,
-    additional_keywords: list[str] | None = None,
-    mime_types: list[str] | None = None,
-    terminal: Optional[bool] = None
+        filename: str,
+        app_name: str,
+        exec_cmd: str,
+        generic_name: str | None = None,
+        comment: str | None = None,
+        icon_path: str | Path | None = None,
+        wm_class: str | None = None,
+        additional_keywords: list[str] | None = None,
+        mime_types: list[str] | None = None,
+        terminal: Optional[bool] = None
 ):
     contents = f"""[Desktop Entry]
 Name={app_name}
@@ -524,7 +559,7 @@ Exec={exec_cmd}
 Categories=Education;Spirituality;Languages;Literature;Maps;
 Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(additional_keywords or [])}
 """
-    contents += f"Terminal={"true" if terminal is True else "false"}\n"
+    contents += f"Terminal={'true' if terminal is True else 'false'}\n"
     if generic_name:
         contents += f"GenericName={generic_name}\n"
     if comment:
@@ -532,7 +567,7 @@ Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(addit
     if icon_path:
         contents += f"Icon={icon_path}\n"
     if mime_types:
-        contents += f"MimeType={";".join(mime_types)}\n"
+        contents += f"MimeType={';'.join(mime_types)}\n"
 
     if wm_class:
         contents += f"StartupWMClass={wm_class}\n"
@@ -540,7 +575,7 @@ Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(addit
         contents += "StartupNotify=false\n"
 
     xdg_data_home = Path(constants.XDG_DATA_HOME)
-    launcher_path = xdg_data_home / 'applications' / filename
+    launcher_path = xdg_data_home / "applications" / filename
     if launcher_path.is_file():
         logging.info(f"Removing desktop launcher at {launcher_path}.")
         launcher_path.unlink()
@@ -548,7 +583,7 @@ Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(addit
     launcher_path.parent.mkdir(parents=True, exist_ok=True)
 
     logging.info(f"Creating desktop launcher at {launcher_path}.")
-    with launcher_path.open('w') as f:
+    with launcher_path.open("w") as f:
         f.write(contents)
     os.chmod(launcher_path, 0o755)
     return launcher_path
@@ -559,36 +594,36 @@ def create_launcher_shortcuts(app: App):
     flproduct = app.conf.faithlife_product
     installdir = Path(app.conf.install_dir)
     logos_icon_src = constants.APP_IMAGE_DIR / f"{flproduct}-128-icon.png"
-    app_icon_src = constants.APP_IMAGE_DIR / 'icon.png'
+    app_icon_src = constants.APP_IMAGE_DIR / "icon.png"
 
     if not installdir.is_dir():
-        app.exit("Can't create launchers because the installation folder does not exist.") 
-    app_dir = Path(installdir) / 'data'
+        app.exit("Can't create launchers because the installation folder does not exist.")
+    app_dir = Path(installdir) / "data"
     logos_icon_path = app_dir / logos_icon_src.name
     app_icon_path = app_dir / app_icon_src.name
 
-    if constants.RUNMODE == 'binary':
+    if constants.RUNMODE == "binary":
         oudedetai_executable = f"{installdir}/{constants.BINARY_NAME}"
     elif constants.RUNMODE in ("source", "script"):
         script = Path(sys.argv[0]).expanduser().resolve()
         repo_dir = None
         for p in script.parents:
             for c in p.iterdir():
-                if c.name == '.git':
+                if c.name == ".git":
                     repo_dir = p
                     break
         if repo_dir is None:
             app.exit("Could not find .git directory from arg 0")
         # Find python in virtual environment.
-        py_bin = next(repo_dir.glob('*/bin/python'))
+        py_bin = next(repo_dir.glob("*/bin/python"))
         if not py_bin.is_file():
             app.exit("Could not locate python binary in virtual environment.")
         oudedetai_executable = f"env DIALOG=tk {py_bin} {script}"
     elif constants.RUNMODE in ["snap", "flatpak"]:
-        logging.info(f"Not creating launcher shortcuts, {constants.RUNMODE} already handles this") 
+        logging.info(f"Not creating launcher shortcuts, {constants.RUNMODE} already handles this")
         return
 
-    for (src, path) in [(app_icon_src, app_icon_path), (logos_icon_src, logos_icon_path)]:
+    for src, path in [(app_icon_src, app_icon_path), (logos_icon_src, logos_icon_path)]:
         if not path.is_file():
             app_dir.mkdir(exist_ok=True)
             shutil.copy(src, path)
@@ -635,13 +670,13 @@ def create_launcher_shortcuts(app: App):
         comment="Handles logos4: and libronixdls: URL Schemes",
         exec_cmd=(
             f"/bin/sh -c \""
-            f"({oudedetai_executable} --wine '{app.conf.logos_exe_windows_path.replace('\\','\\\\')}' ''%u'') "
+            f"({oudedetai_executable} --wine '{app.conf.logos_exe_windows_path.replace('\\', '\\\\')}' ''%u'') "
             "|| (echo 'Failed to spawn logos. If you are logging in please hit the link for not being redirected "
             "automatically then the link for still having trouble. If you contact support please attach this log'"
             "; sleep 60; exit 1); wait\""
         ),
         icon_path=app_icon_path,
-        mime_types=["x-scheme-handler/logos4","x-scheme-handler/libronixdls"],
+        mime_types=["x-scheme-handler/logos4", "x-scheme-handler/libronixdls"],
         terminal=True
     )
     # For most users Logos will be "installed" at this point, if we fail here there is no easy
