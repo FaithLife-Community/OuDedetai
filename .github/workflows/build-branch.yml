@@ -33,7 +33,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner: ubuntu-20.04
+          - runner: ubuntu-22.04
             arch: x86_64
           - runner: ubuntu-22.04-arm
             arch: arm
