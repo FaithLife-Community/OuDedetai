@@ -99,6 +99,7 @@ modules:
       - type: file
         path: ./snap/gui/verbum.png
         dest-filename: verbum.png
+      # FIXME: Also support logos4 and libronixdls URL Schemes
       - type: inline
         dest-filename: oudedetai.desktop
         contents: |

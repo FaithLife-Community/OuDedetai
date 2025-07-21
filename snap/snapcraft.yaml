@@ -47,6 +47,8 @@ environment:
   # https://forum.snapcraft.io/t/libpxbackend-1-0-so-cannot-open-shared-object-file-no-such-file-or-directory/44263/2
   LD_LIBRARY_PATH: $SNAP/usr/lib:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR
 
+# FIXME: Also support logos4 and libronixdls URL Schemes by adding a new .desktop file with MimeType. It may just work from there.
+
 apps:
   oudedetai:
     extensions: [gnome]

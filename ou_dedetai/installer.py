@@ -340,24 +340,36 @@ def create_wine_appimage_symlinks(app: App):
 def create_desktop_file(
     filename: str,
     app_name: str,
-    generic_name: str,
-    comment: str,
     exec_cmd: str,
-    icon_path: str | Path,
-    wm_class: str,
+    generic_name: str | None = None,
+    comment: str | None = None,
+    icon_path: str | Path | None = None,
+    wm_class: str | None = None,
+    additional_keywords: list[str] | None = None,
+    mime_types: list[str] | None = None
 ):
     contents = f"""[Desktop Entry]
 Name={app_name}
-GenericName={generic_name}
-Comment={comment}
-Exec={exec_cmd}
-Icon={icon_path}
-Terminal=false
 Type=Application
-StartupWMClass={wm_class}
+Exec={exec_cmd}
+Terminal=false
 Categories=Education;Spirituality;Languages;Literature;Maps;
-Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;
+Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(additional_keywords or [])}
 """
+    if generic_name:
+        contents += f"GenericName={generic_name}\n"
+    if comment:
+        contents += f"Comment={comment}\n"
+    if icon_path:
+        contents += f"Icon={icon_path}\n"
+    if mime_types:
+        contents += f"MimeType={";".join(mime_types)}\n"
+
+    if wm_class:
+        contents += f"StartupWMClass={wm_class}\n"
+    else:
+        contents += "StartupNotify=false\n"
+
     local_share = Path.home() / '.local' / 'share'
     xdg_data_home = Path(os.getenv('XDG_DATA_HOME', local_share))
     launcher_path = xdg_data_home / 'applications' / filename
@@ -388,7 +400,7 @@ def create_launcher_shortcuts(app: App):
     app_icon_path = app_dir / app_icon_src.name
 
     if constants.RUNMODE == 'binary':
-        lli_executable = f"{installdir}/{constants.BINARY_NAME}"
+        oudedetai_executable = f"{installdir}/{constants.BINARY_NAME}"
     elif constants.RUNMODE == "source":
         script = Path(sys.argv[0]).expanduser().resolve()
         repo_dir = None
@@ -403,7 +415,7 @@ def create_launcher_shortcuts(app: App):
         py_bin = next(repo_dir.glob('*/bin/python'))
         if not py_bin.is_file():
             app.exit("Could not locate python binary in virtual environment.")
-        lli_executable = f"env DIALOG=tk {py_bin} {script}"
+        oudedetai_executable = f"env DIALOG=tk {py_bin} {script}"
     elif constants.RUNMODE in ["snap", "flatpak"]:
         logging.info(f"Not creating launcher shortcuts, {constants.RUNMODE} already handles this") 
         return
@@ -417,23 +429,70 @@ def create_launcher_shortcuts(app: App):
 
     # Create Logos/Verbum desktop file.
     logos_path = create_desktop_file(
-        f"{flproduct}Bible.desktop",
-        f"{flproduct}",
-        "Bible",
-        "Runs Faithlife Bible Software via Wine (snap). Community supported.",
-        f"{lli_executable} --run-installed-app",
-        logos_icon_path,
-        f"{flproduct.lower()}.exe",
+        filename=f"{flproduct}Bible.desktop",
+        app_name=f"{flproduct}",
+        generic_name="Bible",
+        comment="Runs Faithlife Bible Software via Wine (snap). Community supported.",
+        exec_cmd=f"{oudedetai_executable} --run-installed-app",
+        icon_path=logos_icon_path,
+        wm_class=f"{flproduct.lower()}.exe",
+        additional_keywords=["Catholic"] if flproduct == "Verbum" else None
     )
     logging.debug(f"> File exists?: {logos_path}: {logos_path.is_file()}")
     # Create Ou Dedetai desktop file.
     app_path = create_desktop_file(
-        f"{constants.BINARY_NAME}.desktop",
-        constants.APP_NAME,
-        "FaithLife App Installer",
-        "Installs and manages either Logos or Verbum via wine. Community supported.",
-        lli_executable,
-        app_icon_path,
-        constants.BINARY_NAME,
+        filename=f"{constants.BINARY_NAME}.desktop",
+        app_name=constants.APP_NAME,
+        generic_name="FaithLife App Installer",
+        comment="Installs and manages either Logos or Verbum via wine. Community supported.",
+        exec_cmd=oudedetai_executable,
+        icon_path=app_icon_path,
+        wm_class=constants.BINARY_NAME,
     )
     logging.debug(f"> File exists?: {app_path}: {app_path.is_file()}")
+
+    # Register URL scheme handlers:
+    # logos4 - to facilitate Logos 40.1+ login OAuth flow
+    # libronixdls - allows opening of bible links from the browser
+
+    if not app.conf.logos_exe_windows_path:
+        # XXX: handle this case - it shouldn't happen as this should have been installed by now
+        raise NotImplementedError
+
+    url_handler_desktop_filename = f"{flproduct}-url-handler.desktop"
+    # Create the desktop file to register the MIME types.
+    app_path = create_desktop_file(
+        filename=url_handler_desktop_filename,
+        app_name=f"{flproduct} URL Handler",
+        comment="Handles logos4: and libronixdls: URL Schemes",
+        exec_cmd=f"{oudedetai_executable} --wine '{app.conf.logos_exe_windows_path}' '%u'",
+        icon_path=app_icon_path,
+        mime_types=["x-scheme-handler/logos4","x-scheme-handler/libronixdls"]
+    )
+
+    # XXX: consider what happens if this command fails.
+    # For most users Logos will be "installed" at this point, if we fail here there is no easy
+    # way in the current flow to re-apply these - and this isn't required for Logos to function,
+    # more of a nice to have. While it would be nice for support reasons not to branch here - 
+    # which is more important: a passing exit code doing what we could to setup Logos, or 
+    # everything that we do - even that which is optional such as this - passes?
+
+    # On most systems these commands have the effect of adding the following to ~/.config/mimetypes:
+    # ```
+    # [Default Applications]
+    # x-scheme-handler/logos4=logos4.desktop
+    # x-scheme-handler/libronixdls=libronixdls.desktop
+    # ```
+    system.run_command([
+        "xdg-mime",
+        "default",
+        url_handler_desktop_filename,
+        "x-scheme-handler/logos4"
+    ])
+    system.run_command([
+        "xdg-mime",
+        "default",
+        url_handler_desktop_filename,
+        "x-scheme-handler/libronixdls"
+    ])
+
