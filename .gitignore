@@ -10,3 +10,4 @@ venv/
 *.egg-info
 .vscode
 /.flatpak-builder
+/distrobox

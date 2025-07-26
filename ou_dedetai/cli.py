@@ -107,7 +107,7 @@ class CLI(App):
         self.logos.switch_logging()
 
     def update_latest_appimage(self):
-        utils.update_to_latest_recommended_appimage(self)
+        installer.update_to_latest_wine(self)
 
     def update_self(self):
         utils.update_to_latest_lli_release(self)

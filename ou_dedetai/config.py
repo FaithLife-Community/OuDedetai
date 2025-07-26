@@ -330,11 +330,8 @@ class PersistentConfiguration:
     faithlife_product_logging: Optional[bool] = None
     install_dir: Optional[str] = None
     wine_binary: Optional[str] = None
-    # FIXME: Should this be stored independently of wine_binary
-    # (and potentially get out of sync), or
-    # Should we derive this value from wine_binary?
-    wine_binary_code: Optional[str] = None
-    """This is the type of wine installation used"""
+    # This is where to search for wine
+    # wine_binary_code: Optional[str] = None
     backup_dir: Optional[str] = None
 
     # Color to use in curses. Either "System", "Logos", "Light", or "Dark"
@@ -404,7 +401,7 @@ class PersistentConfiguration:
             install_dir=install_dir,
             app_release_channel=legacy.lli_release_channel or 'stable',
             wine_binary=legacy.WINE_EXE,
-            wine_binary_code=legacy.WINEBIN_CODE,
+            # wine_binary_code=legacy.WINEBIN_CODE,
             faithlife_product_logging=faithlife_product_logging,
             _legacy=legacy
         )
@@ -874,6 +871,26 @@ class Config:
         return get_wine_prefix_path(self.install_dir)
 
     @property
+    def wine_rootfs(self) -> str:
+        """This path may or may not exist"""
+        return f"{self.install_dir}/{self.wine_rootfs_relative}"
+    
+    @property
+    def wine_rootfs_relative(self) -> str:
+        """This path may or may not exist"""
+        return "wine_rootfs/"
+
+    @property
+    def wine_path_in_rootfs(self) -> str:
+        wine_opt = Path(self.wine_rootfs) / "opt"
+        # Glob on the next folder as it might be wine-staging, or wine-stable, ect.
+        return str(next(wine_opt.glob("wine*")) / "bin" / "wine") #noqa: E501
+
+    @property
+    def is_wine_binary_in_wine_rootfs(self) -> bool:
+        return self.wine_binary.startswith(self.wine_rootfs_relative) or self.wine_binary.startswith(self.wine_rootfs)
+
+    @property
     def wine_binary(self) -> str:
         """Returns absolute path to the wine binary"""
         output = self._raw.wine_binary
@@ -911,6 +928,19 @@ class Config:
     @wine_binary.setter
     def wine_binary(self, value: str):
         """Takes in a path to the wine binary and stores it as relative for storage"""
+        if value in [
+            constants.RECOMMENDED_WINE_APPIMAGE_SIGIL,
+            constants.RECOMMENDED_WINE_TARBALL_SIGIL,
+            constants.UNTESTED_WINE_STABLE_APPIMAGE_SIGIL,
+            constants.UNTESTED_WINE_STAGING_APPIMAGE_SIGIL,
+            constants.UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL,
+        ]:
+            # We handle this case in the installer.
+            # Don't like how this value (which should only be a path to a wine binary)
+            # can sometimes be a download option - i.e. one that doesn't exist yet.
+            # But that's a problem for another day.
+            pass
+
         # Make the path absolute for comparison
         relative = self._relative_from_install_dir(value)
         # FIXME: consider this, it doesn't work at present as the wine_binary may be an
@@ -922,7 +952,7 @@ class Config:
         if self._raw.wine_binary != relative:
             self._raw.wine_binary = relative
             # Reset dependents
-            self._raw.wine_binary_code = None
+            # self._raw.wine_binary_code = None
             self._overrides.wine_appimage_path = None
             self._wine64_path = None
             self._write()
@@ -941,16 +971,6 @@ class Config:
         if self._wine_appimage_files is None:
             self._wine_appimage_files = utils.find_appimage_files(self.app)
         return self._wine_appimage_files
-
-    @property
-    def wine_binary_code(self) -> str:
-        """Wine binary code.
-        
-        One of: Recommended, AppImage, System, Proton, PlayOnLinux, Custom"""
-        if self._raw.wine_binary_code is None:
-            self._raw.wine_binary_code = utils.get_winebin_code_and_desc(self.app, self.wine_binary)[0]
-            self._write()
-        return self._raw.wine_binary_code
 
     @property
     def wine64_binary(self) -> str:
@@ -1028,9 +1048,6 @@ class Config:
         if self._overrides.wine_appimage_path != value:
             self._overrides.wine_appimage_path = value
             # Reset dependents
-            self._raw.wine_binary_code = None
-            # NOTE: we don't save this persistently, it's assumed
-            # it'll be saved under wine_binary if it's used
 
     @property
     def wine_appimage_link_file_name(self) -> str:
@@ -1039,22 +1056,33 @@ class Config:
         return 'selected_wine.AppImage'
 
     @property
-    def wine_appimage_recommended_url(self) -> str:
-        """URL to recommended appimage.
+    def wine_download_url(self) -> str:
+        """URL to download the specified wine binary
         
         Talks to the network if required"""
-        return self._network.wine_appimage_recommended_url()
+        if self.wine_binary == constants.UNTESTED_WINE_STABLE_APPIMAGE_SIGIL:
+            return self._network.wine_appimage_upstream_url("continuous-stable")
+        elif self.wine_binary == constants.UNTESTED_WINE_STAGING_APPIMAGE_SIGIL:
+            return self._network.wine_appimage_upstream_url("continuous-staging")
+        elif self.wine_binary == constants.UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL:
+            return self._network.wine_appimage_upstream_url("continuous-devel")
+        elif self.wine_binary == constants.RECOMMENDED_WINE_TARBALL_SIGIL:
+            return self._network.wine_tarball_recommended_url()
+        else:
+            # self.wine_binary == constants.RECOMMENDED_WINE_APPIMAGE_SIGIL
+            return self._network.wine_appimage_recommended_url()
+        
     
     @property
-    def wine_appimage_recommended_file_name(self) -> str:
+    def wine_download_file_name(self) -> str:
         """Returns the file name of the recommended appimage with extension"""
-        return os.path.basename(self.wine_appimage_recommended_url)
+        return os.path.basename(self.wine_download_url)
 
     @property
-    def wine_appimage_recommended_version(self) -> str:
+    def wine_recommended_version(self) -> str:
         # Getting version and branch rely on the filename having this format:
         #   wine-[branch]_[version]-[arch]
-        return self.wine_appimage_recommended_file_name.split('-')[1].split('_')[1]
+        return self.wine_download_file_name.split('-')[1].split('_')[1]
 
     @property
     def wine_dll_overrides(self) -> str:

@@ -347,7 +347,7 @@ def wine_reg_install(app: App, name: str, reg_text: str, wine64_binary: str):
             wineserver_wait(app)
         except subprocess.CalledProcessError:
             failed = "Failed to install reg file"
-            logging.exception(f"{failed}. {process=}")
+            logging.exception(f"{failed}")
             app.exit(f"{failed}: {reg_file}")
         finally:
             reg_file.unlink()
@@ -753,6 +753,13 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
         wine_env["WINEDLLOVERRIDES"] += ";" + additional_wine_dll_overrides
 
     updated_env = {k: wine_env.get(k) for k in wine_env_defaults.keys()}
+
+    # Needed for the wrapper script
+    if app.conf.is_wine_binary_in_wine_rootfs:
+        wine_env["LD_PRELOAD"] = f"libapprun_hooks.so:{wine_env.get("LD_PRELOAD","")}"
+        wine_env["PATH"] = f"{app.conf.wine_rootfs}:{wine_env.get("PATH", "")}"
+        wine_env["LD_LIBRARY_PATH"] = f"{Path(app.conf.wine_rootfs) / "lib" / "x86_64-linux-gnu"}:{Path(app.conf.wine_rootfs) / "usr" / "lib" / "x86_64-linux-gnu"}:{wine_env.get("LD_LIBRARY_PATH", "")}"
+
     logging.debug(f"Wine env: {updated_env}")
     # Extra safe calling this here, it should be called run run_command anyways
     return system.fix_ld_library_path(wine_env)

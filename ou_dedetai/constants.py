@@ -107,3 +107,11 @@ PROMPT_OPTION_SIGILS = [PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE, PROMPT_OPTI
 
 # String for when a binary is meant to be downloaded later
 DOWNLOAD = "Download"
+
+# Sigils used in conditional logic
+RECOMMENDED_WINE_APPIMAGE_SIGIL="Recommended Appimage"
+# At preset all these files appear statically linked, no need to mess with LD_LIBRARY_PATH
+RECOMMENDED_WINE_TARBALL_SIGIL="Recommended"
+UNTESTED_WINE_STABLE_APPIMAGE_SIGIL="Latest (untested) Appimage from wine stable"
+UNTESTED_WINE_STAGING_APPIMAGE_SIGIL="Latest (untested) Appimage from wine staging"
+UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL="Latest (untested) Appimage from wine development" # noqa: E501
