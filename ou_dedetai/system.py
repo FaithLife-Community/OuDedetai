@@ -1,9 +1,7 @@
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional, Tuple
-from collections.abc import MutableMapping
-import zipfile
+import re
+
 import distro
+import glfw
 import logging
 import os
 import psutil
@@ -13,12 +11,19 @@ import struct
 import subprocess
 import sys
 import time
+import zipfile
 
-from ou_dedetai import constants, network
+from collections.abc import MutableMapping
+from dataclasses import dataclass
+from packaging.version import Version
+from pathlib import Path
+from typing import Optional, Tuple
+
+from ou_dedetai import constants, network, wine
 from ou_dedetai.app import App
 
 
-def fix_ld_library_path(env: Optional[MutableMapping[str, str]]) -> dict[str, str]: 
+def fix_ld_library_path(env: Optional[MutableMapping[str, str]]) -> dict[str, str]:
     """Removes pyinstaller bundled dynamic linked libraries when executing commands
 
     - https://pyinstaller.org/en/latest/common-issues-and-pitfalls.html#launching-external-programs-from-the-frozen-application
@@ -366,6 +371,34 @@ class SuperuserCommandNotFound(Exception):
     """Superuser command not found. Install pkexec or sudo or doas"""
 
 
+def get_opengl_version(app: App, required_version="3.2"):
+    try:
+        env = wine.get_wine_env(app, None)
+        result = subprocess.run(['glxinfo'], env=fix_ld_library_path(env), capture_output=True, text=True, check=True)
+    except FileNotFoundError:
+        return False, "glxinfo command not found. Please install mesa-utils or equivalent."
+    except subprocess.CalledProcessError as e:
+        return False, f"glxinfo command failed: {e.stderr.strip()}"
+
+    match = re.search(r"OpenGL version string:\s+([\d\.]+)", result.stdout)
+    if not match:
+        return False, "Failed to parse OpenGL version from glxinfo output."
+
+    opengl_version = match.group(1)
+    if Version(opengl_version) >= Version(required_version):
+        message = f"OpenGL Version: {opengl_version} is supported (>= {required_version})."
+        logging.info(message)
+        return True, message
+    else:
+        message = f"OpenGL Version: {opengl_version} is not supported (must be >= {required_version})."
+        logging.info(message)
+        raise OpenGLIncompatible() from e
+
+
+class OpenGLIncompatible(Exception):
+    """OpenGL version is incompatible."""
+
+
 def get_superuser_command() -> str:
     if shutil.which('pkexec'):
         return "pkexec"
@@ -420,6 +453,7 @@ def get_package_manager() -> PackageManager | None:
             "libfuse2 "  # appimages
             "binutils wget winbind "  # wine
             "p7zip-full cabextract " # winetricks
+            "mesa-utils"  # verify opengl version
         )
         # NOTE: Package names changed together for Ubuntu 24+, Debian 13+, and
         # derivatives. This does not include an exhaustive list of distros that
@@ -459,6 +493,7 @@ def get_package_manager() -> PackageManager | None:
             "fuse fuse-libs "  # appimages
             "mod_auth_ntlm_winbind samba-winbind samba-winbind-clients "  # wine
             "cabextract " # winetricks
+            "glx-utils"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('zypper') is not None:  # OpenSUSE
@@ -473,6 +508,7 @@ def get_package_manager() -> PackageManager | None:
             "samba wget "  # wine
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks
+            "Mesa-demo-x"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('apk') is not None:  # alpine
@@ -484,10 +520,11 @@ def get_package_manager() -> PackageManager | None:
         packages = (
             "bash bash-completion "  # bash support
             "gcompat "  # musl to glibc
-            #"fuse-common fuse fuse3 "  # appimages
+            #"fuse-common fuse fuse3 "  # appimages; incompatible with muslc
             "wget curl "  # network
             "7zip cabextract " # winetricks
             "samba sed grep gawk bash bash-completion "  # other
+            "mesa-demos"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('pamac') is not None:  # manjaro
@@ -501,6 +538,7 @@ def get_package_manager() -> PackageManager | None:
             "samba wget "  # wine
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks (7zip used to be called p7zip)
+            "mesa-utils"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('pacman') is not None:  # arch, steamOS
@@ -521,6 +559,7 @@ def get_package_manager() -> PackageManager | None:
                 "libxcomposite lib32-libxcomposite libxinerama lib32-libgcrypt libgcrypt lib32-libxinerama ncurses "
                 "lib32-ncurses ocl-icd lib32-ocl-icd libxslt lib32-libxslt libva lib32-libva gtk3 lib32-gtk3 "
                 "gst-plugins-base-libs lib32-gst-plugins-base-libs vulkan-icd-loader lib32-vulkan-icd-loader"
+                "mesa-utils"  # verify opengl version
             )
         else:  # arch
             packages = (
@@ -532,6 +571,7 @@ def get_package_manager() -> PackageManager | None:
                 "alsa-plugins gst-plugins-base-libs libpulse openal "  # audio
                 "libva mpg123 v4l-utils "  # video
                 "libxslt sqlite "  # misc
+                "mesa-utils"  # verify opengl version
             )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif os_name == "org.freedesktop.platform":
