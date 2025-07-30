@@ -3,7 +3,7 @@
 
 a = Analysis(
     ['scripts/run_app.py'],
-    pathex=[],
+    pathex=['.'],
     #binaries=[('/usr/bin/tclsh8.6', '.')],
     binaries=[],
     datas=[('ou_dedetai/img', 'img'),('ou_dedetai/assets', 'assets')],
