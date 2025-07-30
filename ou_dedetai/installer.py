@@ -405,7 +405,7 @@ def ensure_launcher_shortcuts(app: App):
 
 def ensure_opengl(app: App):
     app.status("Checking available OpenGL version…")
-    opengl_version, reason = system.get_opengl_version()
+    opengl_version, reason = system.get_opengl_version(app)
     app.status(reason)
     if not opengl_version:
         raise OpenGLIncompatible
