@@ -452,6 +452,7 @@ def get_package_manager() -> PackageManager | None:
             "libfuse2 "  # appimages
             "binutils wget winbind "  # wine
             "p7zip-full cabextract " # winetricks
+            "mesa-utils"  # verify opengl version
         )
         # NOTE: Package names changed together for Ubuntu 24+, Debian 13+, and
         # derivatives. This does not include an exhaustive list of distros that
@@ -491,6 +492,7 @@ def get_package_manager() -> PackageManager | None:
             "fuse fuse-libs "  # appimages
             "mod_auth_ntlm_winbind samba-winbind samba-winbind-clients "  # wine
             "cabextract " # winetricks
+            "glx-utils"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('zypper') is not None:  # OpenSUSE
@@ -505,6 +507,7 @@ def get_package_manager() -> PackageManager | None:
             "samba wget "  # wine
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks
+            "Mesa-demo-x"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('apk') is not None:  # alpine
@@ -516,10 +519,11 @@ def get_package_manager() -> PackageManager | None:
         packages = (
             "bash bash-completion "  # bash support
             "gcompat "  # musl to glibc
-            #"fuse-common fuse fuse3 "  # appimages
+            #"fuse-common fuse fuse3 "  # appimages; incompatible with muslc
             "wget curl "  # network
             "7zip cabextract " # winetricks
             "samba sed grep gawk bash bash-completion "  # other
+            "mesa-demos"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('pamac') is not None:  # manjaro
@@ -533,6 +537,7 @@ def get_package_manager() -> PackageManager | None:
             "samba wget "  # wine
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks (7zip used to be called p7zip)
+            "mesa-utils"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('pacman') is not None:  # arch, steamOS
@@ -553,6 +558,7 @@ def get_package_manager() -> PackageManager | None:
                 "libxcomposite lib32-libxcomposite libxinerama lib32-libgcrypt libgcrypt lib32-libxinerama ncurses "
                 "lib32-ncurses ocl-icd lib32-ocl-icd libxslt lib32-libxslt libva lib32-libva gtk3 lib32-gtk3 "
                 "gst-plugins-base-libs lib32-gst-plugins-base-libs vulkan-icd-loader lib32-vulkan-icd-loader"
+                "mesa-utils"  # verify opengl version
             )
         else:  # arch
             packages = (
@@ -564,6 +570,7 @@ def get_package_manager() -> PackageManager | None:
                 "alsa-plugins gst-plugins-base-libs libpulse openal "  # audio
                 "libva mpg123 v4l-utils "  # video
                 "libxslt sqlite "  # misc
+                "mesa-utils"  # verify opengl version
             )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif os_name == "org.freedesktop.platform":
