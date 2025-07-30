@@ -19,7 +19,7 @@ from packaging.version import Version
 from pathlib import Path
 from typing import Optional, Tuple
 
-from ou_dedetai import constants, network
+from ou_dedetai import constants, network, wine
 from ou_dedetai.app import App
 
 
@@ -371,9 +371,10 @@ class SuperuserCommandNotFound(Exception):
     """Superuser command not found. Install pkexec or sudo or doas"""
 
 
-def get_opengl_version(required_version="3.2"):
+def get_opengl_version(app: App, required_version="3.2"):
     try:
-        result = subprocess.run(['glxinfo'], capture_output=True, text=True, check=True)
+        env = wine.get_wine_env(app, None)
+        result = subprocess.run(['glxinfo'], env=fix_ld_library_path(env), capture_output=True, text=True, check=True)
     except FileNotFoundError:
         return False, "glxinfo command not found. Please install mesa-utils or equivalent."
     except subprocess.CalledProcessError as e:
@@ -391,11 +392,11 @@ def get_opengl_version(required_version="3.2"):
     else:
         message = f"OpenGL Version: {opengl_version} is not supported (must be >= {required_version})."
         logging.info(message)
-        return False, message
+        raise OpenGLIncompatible() from e
 
 
 class OpenGLIncompatible(Exception):
-    """Superuser command not found. Install pkexec or sudo or doas"""
+    """OpenGL version is incompatible."""
 
 
 def get_superuser_command() -> str:

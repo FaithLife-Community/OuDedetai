@@ -774,7 +774,7 @@ class TUI(App):
                 self.go_to_main_menu()
             elif choice == "Check OpenGL":
                 self.reset_screen()
-                opengl_version, reason = system.get_opengl_version()
+                opengl_version, reason = system.get_opengl_version(self)
                 logging.info(reason)
                 self.status(reason)
                 self.go_to_main_menu()
