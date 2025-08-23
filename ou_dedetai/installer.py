@@ -1,8 +1,10 @@
 import logging
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 from ou_dedetai import system
 from ou_dedetai.app import App, UserExitedFromAsk
@@ -346,16 +348,17 @@ def create_desktop_file(
     icon_path: str | Path | None = None,
     wm_class: str | None = None,
     additional_keywords: list[str] | None = None,
-    mime_types: list[str] | None = None
+    mime_types: list[str] | None = None,
+    terminal: Optional[bool] = None
 ):
     contents = f"""[Desktop Entry]
 Name={app_name}
 Type=Application
 Exec={exec_cmd}
-Terminal=false
 Categories=Education;Spirituality;Languages;Literature;Maps;
 Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(additional_keywords or [])}
 """
+    contents += f"Terminal={"true" if terminal is True else "false"}\n"
     if generic_name:
         contents += f"GenericName={generic_name}\n"
     if comment:
@@ -456,8 +459,8 @@ def create_launcher_shortcuts(app: App):
     # libronixdls - allows opening of bible links from the browser
 
     if not app.conf.logos_exe_windows_path:
-        # XXX: handle this case - it shouldn't happen as this should have been installed by now
-        raise NotImplementedError
+        logging.error("Failed to register MIME types with system due to missing wine exe path")
+        return
 
     url_handler_desktop_filename = f"{flproduct}-url-handler.desktop"
     # Create the desktop file to register the MIME types.
@@ -465,12 +468,11 @@ def create_launcher_shortcuts(app: App):
         filename=url_handler_desktop_filename,
         app_name=f"{flproduct} URL Handler",
         comment="Handles logos4: and libronixdls: URL Schemes",
-        exec_cmd=f"{oudedetai_executable} --wine '{app.conf.logos_exe_windows_path}' '%u'",
+        exec_cmd=f"{oudedetai_executable} --wine '{app.conf.logos_exe_windows_path.replace('\\','\\\\')}' '%u'",
         icon_path=app_icon_path,
-        mime_types=["x-scheme-handler/logos4","x-scheme-handler/libronixdls"]
+        mime_types=["x-scheme-handler/logos4","x-scheme-handler/libronixdls"],
+        terminal=True
     )
-
-    # XXX: consider what happens if this command fails.
     # For most users Logos will be "installed" at this point, if we fail here there is no easy
     # way in the current flow to re-apply these - and this isn't required for Logos to function,
     # more of a nice to have. While it would be nice for support reasons not to branch here - 
@@ -483,16 +485,19 @@ def create_launcher_shortcuts(app: App):
     # x-scheme-handler/logos4=logos4.desktop
     # x-scheme-handler/libronixdls=libronixdls.desktop
     # ```
-    system.run_command([
-        "xdg-mime",
-        "default",
-        url_handler_desktop_filename,
-        "x-scheme-handler/logos4"
-    ])
-    system.run_command([
-        "xdg-mime",
-        "default",
-        url_handler_desktop_filename,
-        "x-scheme-handler/libronixdls"
-    ])
+    try:
+        system.run_command([
+            "xdg-mime",
+            "default",
+            url_handler_desktop_filename,
+            "x-scheme-handler/logos4"
+        ])
+        system.run_command([
+            "xdg-mime",
+            "default",
+            url_handler_desktop_filename,
+            "x-scheme-handler/libronixdls"
+        ])
+    except subprocess.CalledProcessError:
+        logging.exception("Failed to register MIME types with system")
 
