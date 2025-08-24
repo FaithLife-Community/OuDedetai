@@ -75,9 +75,12 @@ def get_parser():
         '-L', '--delete-log', action='store_true',
         help='delete the log file',
     )
+    # FIXME: remove this deprecated option.
+    # If we remove this today, scripts using -P will fail, as now it's an "unknown option"
     cfg.add_argument(
         '-P', '--passive', action='store_true',
-        help='run product installer non-interactively. '
+        help='Legacy argument that used to specify to run the product installer non-interactively. '
+        'Now this is the default. '
         'Consider agreeing to the terms as well --i-agree-to-faithlife-terms',
     )
     cfg.add_argument(
@@ -253,9 +256,6 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
 
     if args.assume_yes:
         ephemeral_config.assume_yes = True
-
-    if args.passive or args.assume_yes:
-        ephemeral_config.faithlife_install_passive = True
 
     if args.i_agree_to_faithlife_terms:
         ephemeral_config.agreed_to_faithlife_terms = True

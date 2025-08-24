@@ -399,14 +399,18 @@ def install_msi(app: App):
     wine_binary = app.conf.wine64_binary
     exe_args = ["/i", f"{app.conf.install_dir}/data/{app.conf.faithlife_installer_name}"]
 
-    # Add passive mode if specified
-    if app.conf._overrides.faithlife_install_passive is True:
-        # Ensure the user agrees to the EULA. Exit if they don't.
-        if (
-            app.conf._overrides.agreed_to_faithlife_terms or
-            app.approve_or_exit("Do you agree to Faithlife's EULA? https://faithlife.com/terms")
-        ):
-            exe_args.append("/passive")
+    # Ensure the user agrees to the EULA. Exit if they don't.
+    # This code block tells the MSI installer to run non-interactively.
+    # There have been 2 reports in the wild, once on ctrlalt24's computer and on Itsjoe
+    # where the installer wouldn't launch interactively.
+    # Since the launcher only prompts for EULA, and askes where to install 
+    # (which is pointless as it's in it's own wine prefix), we can just skip the interaction
+    # entirely once we confirm the user has agreed to EULA (for Faithlife's sake)
+    if (
+        app.conf._overrides.agreed_to_faithlife_terms or
+        app.approve_or_exit("Do you agree to Faithlife's EULA? https://faithlife.com/terms")
+    ):
+        exe_args.append("/passive")
 
     # Add MST transform if needed
     release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release

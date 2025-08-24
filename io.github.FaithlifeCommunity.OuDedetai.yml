@@ -84,7 +84,7 @@ modules:
           - export TARGETVERSION=10
           # Run Logos after installing since it crashes once while downloading resources.
           # Opening it again recovers
-          - if [ ! -f $XDG_DATA_HOME/${1}Bible10/data/wine64_bottle/drive_c/users/*/AppData/Local/$1/${1}.exe ]; then /app/bin/entrypoint.sh --install-app -y --passive && /app/bin/entrypoint.sh --run-installed-app; fi
+          - if [ ! -f $XDG_DATA_HOME/${1}Bible10/data/wine64_bottle/drive_c/users/*/AppData/Local/$1/${1}.exe ]; then /app/bin/entrypoint.sh --install-app -y && /app/bin/entrypoint.sh --run-installed-app; fi
           - /app/bin/entrypoint.sh --run-installed-app
       # FIXME: Should this pull from github releases?
       - type: file

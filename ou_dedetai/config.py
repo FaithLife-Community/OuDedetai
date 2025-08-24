@@ -241,7 +241,6 @@ class EphemeralConfiguration:
     terminal_app_prefer_dialog: Optional[bool] = None
 
     # Start of values just set via cli arg
-    faithlife_install_passive: bool = False
     app_run_as_root_permitted: bool = False
     agreed_to_faithlife_terms: bool = False
     """The user expressed clear agreement with faithlife's terms.
