@@ -1,5 +1,9 @@
 # Changelog
 
+- 4.0.0-beta.12
+	- This release fixes numerous small issues that prevented working installs, while also introducing numerous small UX improvements [N. Shaaban, N. Marti, T. H. Wright, DavidDGTNT, Simpleboy0]
+	- This release fixes a critical issue with beta 11 [N. Shaaban]
+	- This release supports the Logos 41+ login flow [N. Shaaban]
 - 4.0.0-beta.11
 	- Fixes bug where the TUI didn't open (#379, #382) [N. Shaaban, T. H. Wright]
 	- Fixes bug where Verbum didn't stop when told (#374) [N. Shaaban]
