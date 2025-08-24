@@ -374,6 +374,8 @@ def logos_reuse_download(
             except shutil.SameFileError:
                 pass
         else:
+            # In case we ever get here, give us an opportunity to recover by trying the download again from the start
+            os.remove(file_path)
             app.exit(f"Bad file size or checksum: {file_path}")
 
 
@@ -399,94 +401,118 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
     if type(total_size) is int:
         # Use smaller of 2% of filesize or 2 MB for chunk_size.
         chunk_size = min([int(total_size / 50), 2 * 1024 * 1024])
-    # Force non-compressed file transfer for accurate progress tracking.
-    headers = {'Accept-Encoding': 'identity'}
-    file_mode = 'wb'
 
-    # If file exists and URL is resumable, set download Range.
     if target_props.size:
         logging.debug(f"File exists: {str(target_props.path)}")
-        local_size = target_props.size
-        logging.info(f"Current downloaded size in bytes: {local_size}")
-        if url_props.headers.get('Accept-Ranges') == 'bytes':
-            logging.debug("Server accepts byte range; attempting to resume download.")
-            file_mode = 'ab'
-            if type(url_props.size) is int:
-                headers['Range'] = f'bytes={local_size}-{total_size}'
-            else:
-                headers['Range'] = f'bytes={local_size}-'
 
-    logging.debug(f"{chunk_size=}; {file_mode=}; {headers=}")
+    try_again = True
+    last_size = None
 
-    # Log download type.
-    if 'Range' in headers.keys():
-        message = f"Continuing download for {url_props.path}."
-    else:
-        message = f"Starting new download for {url_props.path}."
-    logging.info(message)
+    while try_again:
+        try_again = False
+        # Force non-compressed file transfer for accurate progress tracking.
+        headers = {'Accept-Encoding': 'identity'}
+        file_mode = 'wb'
 
-    # Initiate download request.
-    try:
-        # FIXME: consider splitting this into two functions with a common base.
-        # One that writes into a file, and one that returns a str, 
-        # that share most of the internal logic
-        if target_props.path is None:  # return url content as text
-            with requests.get(url_props.path, headers=headers) as r:
-                if callable(r):
-                    logging.error("Failed to retrieve data from the URL.")
-                    return None
+        target_props = FileProps(target)  # sets path and size attribs
+        # If file exists and URL is resumable, set download Range.
+        if target_props.size:
+            local_size = target_props.size
+            logging.info(f"Current downloaded size in bytes: {local_size}")
+            if url_props.headers.get('Accept-Ranges') == 'bytes':
+                file_mode = 'ab'
+                if type(url_props.size) is int:
+                    headers['Range'] = f'bytes={local_size}-{total_size}'
+                else:
+                    headers['Range'] = f'bytes={local_size}-'
 
-                try:
-                    r.raise_for_status()
-                except requests.exceptions.HTTPError as e:
-                    if domain in ["github.com", "api.github.com"]:
-                        if (
-                            e.response.status_code == 403
-                            or e.response.status_code == 429
-                        ):
-                            message = "GitHub API rate limit exceeded. Please wait "
-                            if "x-ratelimit-reset" in r.headers:
-                                epoch_to_reset: str = r.headers["x-ratelimit-reset"]
-                                seconds_until_reset = ceil(int(epoch_to_reset) - time.time()) 
-                                if seconds_until_reset < 120:
-                                    message += f"{seconds_until_reset} seconds "
-                                else:
-                                    # More human readable to display in minutes
-                                    message += f"{ceil(seconds_until_reset / 60)} minutes " 
-                            message += "before trying again."
-                            logging.error(message)
-                    else:
-                        logging.error(f"HTTP error occurred: {e.response.status_code}")
-                    return None
+        logging.debug(f"{chunk_size=}; {file_mode=}; {headers=}")
 
-                return r._content  # raw bytes
-        else:  # download url to target.path
-            with requests.get(url_props.path, stream=True, headers=headers) as r:
-                with target_props.path.open(mode=file_mode) as f:
-                    if file_mode == 'wb':
-                        mode_text = 'Writing'
-                    else:
-                        mode_text = 'Appending'
-                    logging.debug(f"{mode_text} data to file {target_props.path}.")
-                    for chunk in r.iter_content(chunk_size=chunk_size):
-                        f.write(chunk)
-                        local_size = os.fstat(f.fileno()).st_size
-                        if type(total_size) is int:
-                            percent = local_size / total_size
-                            # if None not in [app, evt]:
-                            if app:
-                                # This assumes that there is a 1:1 relationship between
-                                # steps and download jobs, which is presently true
-                                # If at some point in the future it is no longer true
-                                # the worst that'll happen is the progress bar will
-                                # appear to go backwards.
-                                app.status(
-                                    f"Downloading {target_props.path.name}…",
-                                    percent
-                                )
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error occurred during HTTP request: {e}")
-        return None  # Return None values to indicate an error condition
+        # Log download type.
+        if 'Range' in headers.keys():
+            message = f"Continuing download for {url_props.path}."
+        else:
+            message = f"Starting new download for {url_props.path}."
+        logging.info(message)
+
+        # Initiate download request.
+        try:
+            # FIXME: consider splitting this into two functions with a common base.
+            # One that writes into a file, and one that returns a str, 
+            # that share most of the internal logic
+            if target_props.path is None:  # return url content as text
+                with requests.get(url_props.path, headers=headers) as r:
+                    if callable(r):
+                        logging.error("Failed to retrieve data from the URL.")
+                        return None
+
+                    try:
+                        r.raise_for_status()
+                    except requests.exceptions.HTTPError as e:
+                        if domain in ["github.com", "api.github.com"]:
+                            if (
+                                e.response.status_code == 403
+                                or e.response.status_code == 429
+                            ):
+                                message = "GitHub API rate limit exceeded. Please wait "
+                                if "x-ratelimit-reset" in r.headers:
+                                    epoch_to_reset: str = r.headers["x-ratelimit-reset"]
+                                    seconds_until_reset = ceil(int(epoch_to_reset) - time.time()) 
+                                    if seconds_until_reset < 120:
+                                        message += f"{seconds_until_reset} seconds "
+                                    else:
+                                        # More human readable to display in minutes
+                                        message += f"{ceil(seconds_until_reset / 60)} minutes " 
+                                message += "before trying again."
+                                logging.error(message)
+                        else:
+                            logging.error(f"HTTP error occurred: {e.response.status_code}")
+                        return None
+
+                    return r._content  # raw bytes
+            else:  # download url to target.path
+                with requests.get(url_props.path, stream=True, headers=headers) as r:
+                    with target_props.path.open(mode=file_mode) as f:
+                        if file_mode == 'wb':
+                            mode_text = 'Writing'
+                        else:
+                            mode_text = 'Appending'
+                        logging.debug(f"{mode_text} data to file {target_props.path}.")
+                        for chunk in r.iter_content(chunk_size=chunk_size):
+                            f.write(chunk)
+                            local_size = os.fstat(f.fileno()).st_size
+                            if type(total_size) is int:
+                                percent = local_size / total_size
+                                # if None not in [app, evt]:
+                                if app:
+                                    # This assumes that there is a 1:1 relationship between
+                                    # steps and download jobs, which is presently true
+                                    # If at some point in the future it is no longer true
+                                    # the worst that'll happen is the progress bar will
+                                    # appear to go backwards.
+                                    app.status(
+                                        f"Downloading {target_props.path.name}…",
+                                        percent
+                                    )
+        except requests.exceptions.RequestException as e:
+            # If this was an incomplete read try again
+            new_size = FileProps(target).size
+            if (
+                total_size is not None
+                and new_size is not None
+                and new_size < total_size 
+                and (
+                    last_size is None 
+                    or new_size > last_size
+                )
+            ):
+                logging.warning(f"Only downloaded a portion of the file on this attempt, retrying: {e}")
+                try_again = True
+                last_size = new_size
+                continue
+
+            logging.error(f"Error occurred during HTTP request: {e}")
+            return None  # Return None values to indicate an error condition
 
 
 def _verify_downloaded_file(url: str, file_path: Path | str, app: App, status_messages: bool = True): 
