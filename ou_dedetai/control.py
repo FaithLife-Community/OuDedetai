@@ -65,8 +65,10 @@ def uninstall(app: App):
     app.status("Uninstalling…")
     delete_paths = [
         app.conf.config_file_path,
-        app.conf.install_dir,
     ]
+    # Only add install_dir if we know what it is
+    if app.conf._raw.install_dir is not None:
+        delete_paths += [app.conf._raw.install_dir]
 
     question = "Are you sure you want to uninstall?"
     context = (

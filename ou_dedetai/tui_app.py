@@ -1060,8 +1060,11 @@ class TUI(App):
             ]
             labels.extend(labels_catalog)
         
-        # FIXME: #367 rework uninstall to work without a successful install
-        if self.is_installed():
+        if (
+            self.is_installed() 
+            or Path(self.conf.config_file_path).exists() 
+            or (self.conf._raw.install_dir is not None and Path(self.conf._raw.install_dir).exists())
+        ):
             label_user_data_utilities = [
                 "Uninstall"
                 # "Back Up Data",
