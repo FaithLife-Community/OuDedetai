@@ -14,7 +14,6 @@
 | `-f/--force-root` | | |
 | `-p/--custom-binary-path` | | |
 | `-L/--delete-log` | `4.0.0-alpha.6` | :+1: |
-| `-P/--passive` | `4.0.0-alpha.6` | :+1: |
 | `--install-app` | `4.0.0-alpha.6` | :+1: |
 | `--run-installed-app` | `4.0.0-alpha.6` | :+1: |
 | `--run-indexing` | | |
