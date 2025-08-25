@@ -371,6 +371,10 @@ class SuperuserCommandNotFound(Exception):
     """Superuser command not found. Install pkexec or sudo or doas"""
 
 
+class OpenGLIncompatible(Exception):
+    """OpenGL version is incompatible."""
+
+
 def get_opengl_version(app: App, required_version="3.2"):
     try:
         env = wine.get_wine_env(app, None)
@@ -392,11 +396,7 @@ def get_opengl_version(app: App, required_version="3.2"):
     else:
         message = f"OpenGL Version: {opengl_version} is not supported (must be >= {required_version})."
         logging.info(message)
-        raise OpenGLIncompatible() from e
-
-
-class OpenGLIncompatible(Exception):
-    """OpenGL version is incompatible."""
+        raise OpenGLIncompatible()
 
 
 def get_superuser_command() -> str:
