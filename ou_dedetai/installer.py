@@ -164,6 +164,26 @@ def check_for_known_bugs(app: App):
 
     # End workaround #435
 
+def ensure_opengl(app: App):
+    app.installer_step_count += 1
+    ensure_sys_deps(app=app)
+    app.installer_step += 1
+    app.status("Checking available OpenGL version…")
+    try:
+        opengl_version, reason = system.get_opengl_version(app)
+        app.status(reason)
+        raise OpenGLIncompatible()
+    except OpenGLIncompatible:
+        app.status(f"Incompatible OpenGL version.")
+        question = "Incompatible OpenGL version. Logos will be unable to launch. Should the install continue anyways?"
+        if app.approve(question):
+            logging.debug("> User continuing with incompatible OpenGL.")
+        else:
+            app.status("Exiting install…")
+            sys.exit()  # Exits the install thread.
+
+    logging.debug("> Done.")
+
 
 def ensure_appimage_download(app: App):
     app.installer_step_count += 1
@@ -177,6 +197,11 @@ def ensure_appimage_download(app: App):
         and not str(app.conf.wine_binary).lower().endswith('appimage')
         and app.conf.wine_binary not in [constants.WINE_BETA_SIGIL, constants.WINE_RECOMMENDED_SIGIL]
     ):
+        return
+
+    ensure_opengl(app=app)
+    app.installer_step += 1
+    if app.conf.faithlife_product_version != '9' and not str(app.conf.wine_binary).lower().endswith('appimage'):
         return
     app.status("Ensuring wine AppImage is downloaded…")
 
@@ -403,22 +428,11 @@ def ensure_launcher_shortcuts(app: App):
         )
 
 
-def ensure_opengl(app: App):
-    app.status("Checking available OpenGL version…")
-    opengl_version, reason = system.get_opengl_version(app)
-    app.status(reason)
-    if not opengl_version:
-        raise OpenGLIncompatible
-
-
 def install(app: App):
     """Entrypoint for installing"""
     app.status('Installing…')
     try:
-        ensure_opengl(app)
         ensure_launcher_shortcuts(app)
-    except OpenGLIncompatible:
-        app.status(f"Incompatible OpenGL version.")
     except UserExitedFromAsk:
         # Reset choices, it's possible that the user didn't mean to select
         # one of the options they did - that is why they are exiting
