@@ -143,7 +143,10 @@ def get_support(app: App) -> str:
             ["glxinfo"],
             ["free", "-h"],
             ["inxi", "-F"],
-            ["df", "-h"]
+            ["df", "-h"],
+            ["xdg-mime", "query", "default", "x-scheme-handler/https"],
+            ["xdg-mime", "query", "default", "x-scheme-handler/logos4"],
+            ["xdg-mime", "query", "default", "x-scheme-handler/libronixdls"]
         ]
 
         if app.conf._raw.wine_binary:
@@ -160,9 +163,7 @@ def get_support(app: App) -> str:
                     text=True,
                     env=subprocess_env
                 )
-                # This writes to the root of the zip, which is file considering this is
-                # just a support package
-                zip.writestr(f"{command[0]}.out", output)
+                zip.writestr(f"/tmp/{" ".join(command).replace("/","_")}", output)
             except Exception as e:
                 # Some of these commands may not be found.
                 logging.debug(
