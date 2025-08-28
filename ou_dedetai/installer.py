@@ -207,9 +207,19 @@ def ensure_icu_data_files(app: App):
     logging.debug('> ICU data files installed')
 
 
-def ensure_product_installed(app: App):
+# We've had 3 reports so far that the "Sign in" button on the Logos splash page didn't do anything
+# This ensures winebrowser is configured so that the host browser launches properly.
+def ensure_winebrowser_is_configured(app: App):
     app.installer_step_count += 1
     ensure_icu_data_files(app=app)
+    app.installer_step += 1
+
+    wine.enforce_winebrowser_is_configured(app=app)
+
+
+def ensure_product_installed(app: App):
+    app.installer_step_count += 1
+    ensure_winebrowser_is_configured(app=app)
     app.installer_step += 1
     app.status(f"Ensuring {app.conf.faithlife_product} is installed…")
 
@@ -373,8 +383,7 @@ Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(addit
     else:
         contents += "StartupNotify=false\n"
 
-    local_share = Path.home() / '.local' / 'share'
-    xdg_data_home = Path(os.getenv('XDG_DATA_HOME', local_share))
+    xdg_data_home = Path(constants.XDG_DATA_HOME)
     launcher_path = xdg_data_home / 'applications' / filename
     if launcher_path.is_file():
         logging.info(f"Removing desktop launcher at {launcher_path}.")
@@ -501,3 +510,9 @@ def create_launcher_shortcuts(app: App):
     except subprocess.CalledProcessError:
         logging.exception("Failed to register MIME types with system")
 
+    # Now best-effort update the desktop database
+    if shutil.which("update-desktop-database") is not None:
+        try:
+            system.run_command(["update-desktop-database", f"{Path(constants.XDG_DATA_HOME) / 'applications'}"])
+        except Exception as e:
+            logging.warning(f"Failed to update the desktop databse (not strictly required on all systems): {e}")
