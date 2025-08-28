@@ -417,11 +417,12 @@ def get_package_manager() -> PackageManager | None:
         query_prefix = '.i  '
         # Set default package list.
         packages = (
-            "libfuse2 "  # appimages
             "binutils wget winbind "  # wine
             "p7zip-full cabextract " # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
         )
+
+        # Now set the appimage packages, this has changed over time
         # NOTE: Package names changed together for Ubuntu 24+, Debian 13+, and
         # derivatives. This does not include an exhaustive list of distros that
         # use 'apt', so others will have to be added as users report issues.
@@ -432,13 +433,21 @@ def get_package_manager() -> PackageManager | None:
         # - https://github.com/which-distro/os-release/tree/main
         if (
             (os_name == 'debian' and major_ver >= '13')
-            or (os_name == 'ubuntu' and major_ver >= '24')
+        ):
+            packages += (
+                "libfuse3-4 "  # appimages
+            )
+        elif (
+            (os_name == 'ubuntu' and major_ver >= '24')
             or (os_name == 'linuxmint' and major_ver >= '22')
             or (os_name == 'elementary' and major_ver >= '8')
         ):
-            packages = (
+            packages += (
                 "libfuse3-3 "  # appimages
-                "binutils wget winbind "  # wine
+            )
+        else:
+            packages += (
+                "libfuse2 "  # appimages
             )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('dnf') is not None:  # rhel, fedora
