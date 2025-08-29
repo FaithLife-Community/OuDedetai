@@ -45,6 +45,7 @@ REPO_NAME = 'OuDedetai'
 
 REPOSITORY_LINK = f"https://github.com/FaithLife-Community/{REPO_NAME}"
 WIKI_LINK = f"{REPOSITORY_LINK}/wiki"
+REPOSITORY_ISSUES_LINK = f"{REPOSITORY_LINK}/issues"
 REPOSITORY_NEW_ISSUE_LINK = f"{REPOSITORY_LINK}/issues/new"
 TELEGRAM_LINK = "https://t.me/linux_logos"
 MATRIX_LINK = "https://matrix.to/#/#logosbible:matrix.org"
@@ -88,6 +89,9 @@ LOGOS_BLUE = '#0082FF'
 LOGOS_GRAY = '#E7E7E7'
 LOGOS_WHITE = '#FCFCFC'
 PID_FILE = f'/tmp/{BINARY_NAME}.pid'
+
+WINE_RECOMMENDED_SIGIL = "Recommended"
+WINE_BETA_SIGIL = "Experimental (AKA Beta)"
 
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
 FAITHLIFE_PRODUCT_VERSIONS = ["10"] # This used to include 9

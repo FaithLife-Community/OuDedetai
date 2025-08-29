@@ -736,6 +736,10 @@ class TUI(App):
                 self.reset_screen()
                 self.conf.toggle_installer_release_channel()
                 self.go_to_main_menu()
+            elif choice == "Change AppImage Release Channel":
+                self.reset_screen()
+                self.conf.toggle_wine_release_channel()
+                self.go_to_main_menu()
             elif choice == "Install Dependencies":
                 self.reset_screen()
                 utils.install_dependencies(self)
@@ -1081,6 +1085,9 @@ class TUI(App):
                 f"Change {constants.APP_NAME} Release Channel",
             ]
             labels.extend(labels_utils_installed)
+
+        # Also add the option to change wine AppImage release at any time
+        labels.append("Change Wine Release Channel")
 
         label = (
             "Enable Logging"

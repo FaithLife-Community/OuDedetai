@@ -208,7 +208,8 @@ def get_support(app: App) -> str:
 
         answer = app.ask(
             "How would you like to continue to get support?\n"
-            f"Make sure to:\n"
+            "Make sure to:\n"
+            f"- Check the pinned issues {constants.REPOSITORY_ISSUES_LINK} to see if your problem is already known.\n"
             f"- Upload {output_path.replace(str(Path().home()), "~")}\n"
             "- Describe what went wrong\n"
             "- Describe actions you took",
