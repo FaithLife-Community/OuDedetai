@@ -4,34 +4,34 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Install Dependencies
-      run: |
-        sudo apt install -y snapd
-        sudo snap install --classic snapcraft
-        # It would be ideal to add current user to the lxd group, but that's not easy in GHA
-        sudo lxd init --auto
-        sudo chmod -R o+r ${{github.workspace}}
-        sudo chown -R :lxd ${{github.workspace}}
-    - name: Patch snapcraft.yaml
-      run: |
-        echo We want to build from the current branch not re-pull from git.
-        sed -i 's#source: https://github.com/FaithLife-Community/OuDedetai.git#source: https://github.com/FaithLife-Community/OuDedetai.git\n    source-commit: ${{ github.sha }}#' snap/snapcraft.yaml
-        sed -zi 's#override-pull: |\n      craftctl default\n      craftctl set version=$(git describe --tag)#override-pull: |\n      craftctl default\n      craftctl set version=dev-$(git rev-parse --short HEAD)#' snap/snapcraft.yaml
-    - name: Debug information
-      run: |
-        sudo ls -al ${{github.workspace}}
-        sudo ls -al ${{github.workspace}}/ou_dedetai/assets
-        cat snap/snapcraft.yaml
-    - name: Build snap
-      working-directory: snap
-      run: |
-        sudo snapcraft || (echo "dumping failure log:";sudo bash -c 'cat /root/.local/state/snapcraft/log/*.log'; exit 1)
-        ls -al
-    - name: Upload snap
-      uses: actions/upload-artifact@v4
-      with:
-        name: oudedetai-${{ github.sha }}.snap
-        path: snap/*.snap
+      - uses: actions/checkout@v4
+      - name: Install Dependencies
+        run: |
+          sudo apt install -y snapd
+          sudo snap install --classic snapcraft
+          # It would be ideal to add current user to the lxd group, but that's not easy in GHA
+          sudo lxd init --auto
+          sudo chmod -R o+r ${{github.workspace}}
+          sudo chown -R :lxd ${{github.workspace}}
+      - name: Patch snapcraft.yaml
+        run: |
+          echo We want to build from the current branch not re-pull from git.
+          sed -i 's#source: https://github.com/FaithLife-Community/OuDedetai.git#source: https://github.com/FaithLife-Community/OuDedetai.git\n    source-commit: ${{ github.sha }}#' snap/snapcraft.yaml
+          sed -zi 's#override-pull: |\n      craftctl default\n      craftctl set version=$(git describe --tag)#override-pull: |\n      craftctl default\n      craftctl set version=dev-$(git rev-parse --short HEAD)#' snap/snapcraft.yaml
+      - name: Debug information
+        run: |
+          sudo ls -al ${{github.workspace}}
+          sudo ls -al ${{github.workspace}}/ou_dedetai/assets
+          cat snap/snapcraft.yaml
+      - name: Build snap
+        working-directory: snap
+        run: |
+          sudo snapcraft || (echo "dumping failure log:";sudo bash -c 'cat /root/.local/state/snapcraft/log/*.log'; exit 1)
+          ls -al
+      - name: Upload snap
+        uses: actions/upload-artifact@v4
+        with:
+          name: oudedetai-${{ github.sha }}.snap
+          path: snap/*.snap

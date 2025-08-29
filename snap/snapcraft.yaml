@@ -26,7 +26,6 @@ contact:
   - https://matrix.to/#/#logosbible:matrix.org
 website: https://github.com/FaithLife-Community/OuDedetai/wiki
 
-
 platforms:
   amd64:
 
@@ -90,9 +89,9 @@ parts:
     source: https://github.com/sil-car/wine-builds/releases/download/wine_10.6/wine_10.6+24.04.tar.xz
     plugin: dump
     organize:
-      'wine_*/bin': bin
-      'wine_*/lib': lib
-      'wine_*/share': share
+      "wine_*/bin": bin
+      "wine_*/lib": lib
+      "wine_*/share": share
     stage-packages:
       - libavcodec60
       - libavformat60
@@ -106,7 +105,7 @@ parts:
       - binutils
       - winbind
 
-  winetricks-deps:  # winetricks itself is downloaded during Logos install
+  winetricks-deps: # winetricks itself is downloaded during Logos install
     plugin: nil
     stage-packages:
       - 7zip
@@ -120,7 +119,6 @@ parts:
       craftctl default
       craftctl set version=$(git describe --tag)
     # override-stage: |
-
     stage-packages:
       - libncurses6
       - libncursesw6
@@ -137,6 +135,11 @@ parts:
       - bin/run.sh
       - assets/
       - img
+
+  browser:
+    plugin: nil
+    stage-packages:
+      - epiphany-browser
 
   cleanup:
     after:
