@@ -6,14 +6,15 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from ou_dedetai import system
 from ou_dedetai.app import App, UserExitedFromAsk
 
 from . import constants
 from . import network
+from . import system
 from . import utils
 from . import wine
 
+from .system import OpenGLIncompatible
 
 # This step doesn't do anything per-say, but "collects" all the choices in one step
 # The app would continue to work without this function
@@ -75,9 +76,30 @@ def ensure_sys_deps(app: App):
         logging.debug("> Skipped.")
 
 
-def ensure_appimage_download(app: App):
+def ensure_opengl(app: App):
     app.installer_step_count += 1
     ensure_sys_deps(app=app)
+    app.installer_step += 1
+    app.status("Checking available OpenGL version…")
+    try:
+        opengl_version, reason = system.get_opengl_version(app)
+        app.status(reason)
+        raise OpenGLIncompatible()
+    except OpenGLIncompatible:
+        app.status(f"Incompatible OpenGL version.")
+        question = "Incompatible OpenGL version. Logos will be unable to launch. Should the install continue anyways?"
+        if app.approve(question):
+            logging.debug("> User continuing with incompatible OpenGL.")
+        else:
+            app.status("Exiting install…")
+            sys.exit()  # Exits the install thread.
+
+    logging.debug("> Done.")
+
+
+def ensure_appimage_download(app: App):
+    app.installer_step_count += 1
+    ensure_opengl(app=app)
     app.installer_step += 1
     if app.conf.faithlife_product_version != '9' and not str(app.conf.wine_binary).lower().endswith('appimage'):
         return
@@ -272,6 +294,7 @@ def ensure_launcher_shortcuts(app: App):
         app.status(
             f"Runmode is '{constants.RUNMODE}'. Won't create desktop shortcuts",
         )
+
 
 def install(app: App):
     """Entrypoint for installing"""
