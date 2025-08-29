@@ -1,7 +1,6 @@
 import re
 
 import distro
-import glfw
 import logging
 import os
 import psutil
