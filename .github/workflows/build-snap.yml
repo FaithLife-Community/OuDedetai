@@ -31,8 +31,9 @@ jobs:
       #     sudo snapcraft || (echo "dumping failure log:";sudo bash -c 'cat /root/.local/state/snapcraft/log/*.log'; exit 1)
       #     ls -al
       - uses: canonical/action-build@v1
+        id: snapcraft
       - name: Upload snap
         uses: actions/upload-artifact@v4
         with:
           name: oudedetai-${{ github.sha }}.snap
-          path: snap/*.snap
+          path: ${{ steps.snapcraft.outputs.snap }}
