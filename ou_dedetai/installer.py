@@ -115,16 +115,12 @@ def check_for_known_bugs(app: App):
             logging.warning("Detected chromium based browser")
         elif snap_or_flatpak_detected:
             logging.warning("Detected snap or flatpak browser")
-        if app.conf._raw.app_wine_release_channel == "stable" and app.approve(
-            "Your default browser is either chromium based or flatpak or snap,\n" \
-            "neither of which currently work with our recommended wine.\n" \
-            "The beta channel for our less supported wine should work.\n"
-            "Would you like to switch to the beta wine that won't have this issue?\n\n" \
-            "Please report any issues you may find that don't already exist.\n" \
-            "If you refuse the sign in button may not launch your browser so long as it's chromium based.\n"
-            "See details at https://github.com/FaithLife-Community/OuDedetai/issues/435"
-        ):
+        if app.conf.wine_binary == constants.WINE_RECOMMENDED_SIGIL:
+            logging.info("Switching user to the beta wine branch due to issue #435")
             app.conf.wine_binary = constants.WINE_BETA_SIGIL
+        else:
+            logging.warning("Sign In button may not launch the browser due to issue #435")
+
     # End workaround #435
 
 
