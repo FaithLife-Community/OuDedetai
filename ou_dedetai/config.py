@@ -814,7 +814,7 @@ class Config:
     def installer_binary_dir(self) -> str:
         if self._overrides.installer_binary_dir is not None:
             return self._overrides.installer_binary_dir
-        return f"{self.install_dir}/data/bin"
+        return f"{self.install_dir}/{constants.RELATIVE_BINARY_DIR}"
 
     @property
     def _logos_appdata_dir(self) -> Optional[str]:
@@ -1060,6 +1060,17 @@ class Config:
             raise ValueError("Failed to find release for wine appimage")
         else:
             return versions.latest.download_url
+    
+    @property
+    def wine_appimage_beta_url(self) -> Optional[str]:
+        """URL to beta appimage.
+        
+        Talks to the network if required"""
+        versions = self._network.wine_appimage_versions()
+        if versions.pre_release is None:
+            return None
+        else:
+            return versions.pre_release.download_url
     
     @property
     def wine_appimage_beta_file_name(self) -> Optional[str]:
