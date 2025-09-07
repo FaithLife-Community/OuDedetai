@@ -197,6 +197,20 @@ def ensure_appimage_download(app: App):
         ):
             appimage_path = app.conf.wine_appimage_beta_file_name
             download_url = app.conf.wine_appimage_beta_url
+    elif (
+        app.conf.wine_binary == constants.WINE_RECOMMENDED_SIGIL
+        or (
+            app.conf.wine_appimage_recommended_file_name is not None 
+            # It was set to this manually.
+            and app.conf.wine_binary ==
+              f"{constants.RELATIVE_BINARY_DIR}/{app.conf.wine_appimage_recommended_file_name}"
+        )
+    ):
+        appimage_path = app.conf.wine_appimage_recommended_file_name
+        download_url = app.conf.wine_appimage_recommended_url
+    else:
+        logging.warning("Could not find which appimage to download, returning early.")
+        return
 
     filename = Path(appimage_path).name
     downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, filename)
