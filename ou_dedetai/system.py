@@ -374,10 +374,10 @@ class OpenGLIncompatible(Exception):
     """OpenGL version is incompatible."""
 
 
-def get_opengl_version(app: App, required_version="3.2"):
+def check_opengl_version(app: App, required_version="3.2") -> tuple[bool, str]:
     try:
         env = wine.get_wine_env(app, None)
-        result = subprocess.run(['glxinfo'], env=fix_ld_library_path(env), capture_output=True, text=True, check=True)
+        result = run_command(['glxinfo'], env=fix_ld_library_path(env), capture_output=True, text=True, check=True)
     except FileNotFoundError:
         return False, "glxinfo command not found. Please install mesa-utils or equivalent."
     except subprocess.CalledProcessError as e:

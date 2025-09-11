@@ -14,7 +14,7 @@ from . import system
 from . import utils
 from . import wine
 
-from .system import OpenGLIncompatible
+from ou_dedetai.system import OpenGLIncompatible
 
 # This step doesn't do anything per-say, but "collects" all the choices in one step
 # The app would continue to work without this function
@@ -165,14 +165,10 @@ def check_for_known_bugs(app: App):
     # End workaround #435
 
 def ensure_opengl(app: App):
-    app.installer_step_count += 1
-    ensure_sys_deps(app=app)
-    app.installer_step += 1
     app.status("Checking available OpenGL version…")
     try:
-        opengl_version, reason = system.get_opengl_version(app)
+        opengl_version, reason = system.check_opengl_version(app)
         app.status(reason)
-        raise OpenGLIncompatible()
     except OpenGLIncompatible:
         app.status(f"Incompatible OpenGL version.")
         question = "Incompatible OpenGL version. Logos will be unable to launch. Should the install continue anyways?"
