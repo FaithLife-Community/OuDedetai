@@ -79,7 +79,8 @@ class TestAppUtils(unittest.TestCase):
         self.app.conf.installer_binary_dir = '/home/user/installdir'
         self.app.conf.wine_appimage_recommended_file_name = 'wine-stable_99.0.AppImage'
         options = [
-            f"{self.app.conf.installer_binary_dir}/{self.app.conf.wine_appimage_recommended_file_name}",
+            constants.WINE_RECOMMENDED_SIGIL,
+            constants.WINE_BETA_SIGIL,
             *self.app.conf.wine_app_image_files,
             *self.app.conf.wine_binary_files,
         ]

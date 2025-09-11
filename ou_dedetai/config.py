@@ -814,7 +814,7 @@ class Config:
     def installer_binary_dir(self) -> str:
         if self._overrides.installer_binary_dir is not None:
             return self._overrides.installer_binary_dir
-        return f"{self.install_dir}/data/bin"
+        return f"{self.install_dir}/{constants.RELATIVE_BINARY_DIR}"
 
     @property
     def _logos_appdata_dir(self) -> Optional[str]:
@@ -921,6 +921,15 @@ class Config:
         # aboslute = self._absolute_from_install_dir(value)
         # if not Path(aboslute).is_file():
         #     raise ValueError("Wine Binary path must be a valid file")
+
+        if value == constants.WINE_RECOMMENDED_SIGIL:
+            value = self.wine_appimage_recommended_file_name
+        elif value == constants.WINE_BETA_SIGIL:
+            if self.wine_appimage_beta_file_name:
+                value = self.wine_appimage_beta_file_name
+            else:
+                logging.info("Failed to find any beta-specific appimage, falling back to latest release.")
+                value = self.wine_appimage_recommended_file_name
 
         if self._raw.wine_binary != relative:
             self._raw.wine_binary = relative
@@ -1046,8 +1055,31 @@ class Config:
         """URL to recommended appimage.
         
         Talks to the network if required"""
-        return self._network.wine_appimage_recommended_url()
+        versions = self._network.wine_appimage_versions()
+        if versions.latest is None:
+            raise ValueError("Failed to find release for wine appimage")
+        else:
+            return versions.latest.download_url
     
+    @property
+    def wine_appimage_beta_url(self) -> Optional[str]:
+        """URL to beta appimage.
+        
+        Talks to the network if required"""
+        versions = self._network.wine_appimage_versions()
+        if versions.pre_release is None:
+            return None
+        else:
+            return versions.pre_release.download_url
+    
+    @property
+    def wine_appimage_beta_file_name(self) -> Optional[str]:
+        """Returns the file name of the recommended appimage with extension"""
+        pre_release = self._network.wine_appimage_versions().pre_release
+        if pre_release is None:
+            return None
+        return os.path.basename(pre_release.download_url)
+
     @property
     def wine_appimage_recommended_file_name(self) -> str:
         """Returns the file name of the recommended appimage with extension"""

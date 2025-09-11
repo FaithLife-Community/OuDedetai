@@ -698,7 +698,6 @@ def enforce_icu_data_files(app: App):
     app.status("ICU files copied.", 100)
 
 
-
 def get_registry_value(reg_path, name, app: App):
     logging.debug(f"Get value for: {reg_path=}; {name=}")
     # FIXME: consider breaking run_wine_proc into a helper function before decoding is attempted

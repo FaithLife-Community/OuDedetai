@@ -40,7 +40,6 @@ def ensure_choices(app: App):
 
     app.status("Install is running…")
 
-
 def ensure_install_dirs(app: App):
     app.installer_step_count += 1
     ensure_choices(app=app)
@@ -75,28 +74,157 @@ def ensure_sys_deps(app: App):
         logging.debug("> Skipped.")
 
 
-def ensure_appimage_download(app: App):
+def check_for_known_bugs(app: App):
+    """Checks for any known bug conditions and recommends user action.
+    This is a best-effort check
+    """
     app.installer_step_count += 1
     ensure_sys_deps(app=app)
     app.installer_step += 1
-    if app.conf.faithlife_product_version != '9' and not str(app.conf.wine_binary).lower().endswith('appimage'):
+
+    # Begin workaround #435
+    # FIXME: #435 Remove this check when the issue is fixed upstream in wine    
+    # Check to see if our default browser is chromium, google-chrome, brave, or vivaldi 
+    # in that case prompt the user to switch to the wine beta channel
+    #
+    # This check is best-effort and may fail if the .desktop entry for chromium uses a naming convention
+    # other than the one used on the debian package.
+
+    chromium_detected: bool = False
+    snap_or_flatpak_detected: bool = False
+
+    try:
+        result = system.run_command(
+            "xdg-mime query default x-scheme-handler/https"
+        )
+        if result:
+            command_output: str = result.stdout
+            desktop_file_name = command_output.strip()
+            command_output = desktop_file_name.lower()
+
+            # Abbr. list from https://en.wikipedia.org/wiki/Chromium_(web_browser)#Browsers_based_on_Chromium
+            # Known chromium based .desktops:
+            # chromium_chromium.desktop - Debian Chromium (.deb and snap)
+            # google-chrome and com.google.Chrome.desktop - Debian Google Chrome
+            # brave-browser.desktop and com.brave.Browser.desktop - Debian Brave
+            # vivaldi-stable.desktop - Debian Vivaldi
+            # dooble.desktop - Debian Dooble
+            # opera.desktop - Debian Opera
+            # org.qutebrowser.qutebrowser.desktop - Debian Qutebrowser
+            # org.kde.falkon.desktop - Debian Falkon
+            if (
+               "chromium" in command_output
+               or "chrome" in command_output
+               or "brave" in command_output
+               or "vivaldi" in command_output
+               or "dooble" in command_output
+               or "falkon" in command_output
+               or "qutebrowser" in command_output
+               or "opera" in command_output
+            ):
+               chromium_detected = True
+            
+            # Now check the .desktop's Exec line for either "flatpak" or "/snap/bin" if either are found, fail as well.
+            xdg_data_dirs = os.getenv("XDG_DATA_DIRS", "/usr/local/share:/usr/share")
+           
+            found: bool = False
+
+            for xdg_data_dir in xdg_data_dirs.split(":"):
+                desktop_file_path = (Path(xdg_data_dir) / "applications" / desktop_file_name)
+                if desktop_file_path.exists():
+                    found = True
+                    lines = desktop_file_path.read_text().splitlines()
+                    lines = list(filter(lambda line: line.lower().startswith("exec="), lines))
+                    if any("/snap/bin" in line or "flatpak" in line for line in lines):
+                        snap_or_flatpak_detected = True
+            
+            if not found:
+                logging.warning("Cannot find the desktop file in question")
+    except subprocess.CalledProcessError as e:
+        logging.warning(
+            "Failed to check if chromium will be used - "
+            "sign in button MAY NOT function if chromium is the default browser. "
+            f"Error was as follows: {e}"
+        )
+
+    if chromium_detected or snap_or_flatpak_detected:
+        if chromium_detected:
+            logging.warning("Detected chromium based browser")
+        elif snap_or_flatpak_detected:
+            logging.warning("Detected snap or flatpak browser")
+        if app.conf.wine_binary == constants.WINE_RECOMMENDED_SIGIL:
+            logging.info("Switching user to the beta wine branch due to issue #435")
+            app.conf.wine_binary = constants.WINE_BETA_SIGIL
+        elif app.conf.wine_binary == constants.WINE_BETA_SIGIL:
+            # No need to do anything
+            pass
+        else:
+            logging.warning("Sign In button may not launch the browser due to issue #435")
+
+    # End workaround #435
+
+
+def ensure_appimage_download(app: App):
+    app.installer_step_count += 1
+    try:
+        check_for_known_bugs(app=app)
+    except Exception:
+        logging.exception("Failed to check for known bugs - assuming everything is fine and continuing install.")
+    app.installer_step += 1
+    if (
+        app.conf.faithlife_product_version != '9' 
+        and not str(app.conf.wine_binary).lower().endswith('appimage')
+        and app.conf.wine_binary not in [constants.WINE_BETA_SIGIL, constants.WINE_RECOMMENDED_SIGIL]
+    ):
         return
     app.status("Ensuring wine AppImage is downloaded…")
 
     downloaded_file = None
     appimage_path = app.conf.wine_appimage_recommended_file_name 
+    download_url = app.conf.wine_appimage_recommended_url
+
+    if (
+        app.conf.wine_binary == constants.WINE_BETA_SIGIL
+        or (
+            app.conf.wine_appimage_beta_file_name is not None 
+            # It was set to this manually.
+            and app.conf.wine_binary == f"{constants.RELATIVE_BINARY_DIR}/{app.conf.wine_appimage_beta_file_name}"
+        )
+    ):
+        if (
+            app.conf.wine_appimage_beta_file_name is not None
+            and app.conf.wine_appimage_beta_url is not None
+        ):
+            appimage_path = app.conf.wine_appimage_beta_file_name
+            download_url = app.conf.wine_appimage_beta_url
+    elif (
+        app.conf.wine_binary == constants.WINE_RECOMMENDED_SIGIL
+        or (
+            app.conf.wine_appimage_recommended_file_name is not None 
+            # It was set to this manually.
+            and app.conf.wine_binary ==
+              f"{constants.RELATIVE_BINARY_DIR}/{app.conf.wine_appimage_recommended_file_name}"
+        )
+    ):
+        appimage_path = app.conf.wine_appimage_recommended_file_name
+        download_url = app.conf.wine_appimage_recommended_url
+    else:
+        logging.warning("Could not find which appimage to download, returning early.")
+        return
+
     filename = Path(appimage_path).name
     downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, filename)
     if not downloaded_file:
-        downloaded_file = Path(f"{app.conf.download_dir}/{filename}")
+        downloaded_file = f"{app.conf.download_dir}/{filename}"
     network.logos_reuse_download(
-        app.conf.wine_appimage_recommended_url,
+        download_url,
         filename,
         app.conf.download_dir,
         app=app,
     )
-    if downloaded_file:
-        logging.debug(f"> File exists?: {downloaded_file}: {Path(downloaded_file).is_file()}")
+    logging.debug(f"> File exists?: {downloaded_file}: {Path(downloaded_file).is_file()}")
+    
+    app.conf.wine_binary = downloaded_file
 
 
 def ensure_wine_executables(app: App):
@@ -373,8 +501,7 @@ Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(addit
     else:
         contents += "StartupNotify=false\n"
 
-    local_share = Path.home() / '.local' / 'share'
-    xdg_data_home = Path(os.getenv('XDG_DATA_HOME', local_share))
+    xdg_data_home = Path(constants.XDG_DATA_HOME)
     launcher_path = xdg_data_home / 'applications' / filename
     if launcher_path.is_file():
         logging.info(f"Removing desktop launcher at {launcher_path}.")
@@ -501,3 +628,9 @@ def create_launcher_shortcuts(app: App):
     except subprocess.CalledProcessError:
         logging.exception("Failed to register MIME types with system")
 
+    # Now best-effort update the desktop database
+    if shutil.which("update-desktop-database") is not None:
+        try:
+            system.run_command(["update-desktop-database", f"{Path(constants.XDG_DATA_HOME) / 'applications'}"])
+        except Exception as e:
+            logging.warning(f"Failed to update the desktop databse (not strictly required on all systems): {e}")

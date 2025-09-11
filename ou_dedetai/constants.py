@@ -45,6 +45,7 @@ REPO_NAME = 'OuDedetai'
 
 REPOSITORY_LINK = f"https://github.com/FaithLife-Community/{REPO_NAME}"
 WIKI_LINK = f"{REPOSITORY_LINK}/wiki"
+REPOSITORY_ISSUES_LINK = f"{REPOSITORY_LINK}/issues"
 REPOSITORY_NEW_ISSUE_LINK = f"{REPOSITORY_LINK}/issues/new"
 TELEGRAM_LINK = "https://t.me/linux_logos"
 MATRIX_LINK = "https://matrix.to/#/#logosbible:matrix.org"
@@ -61,7 +62,8 @@ if RUNMODE == 'snap':
 else:
     CACHE_DIR = str(Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache' / 'FaithLife-Community'))) 
 
-DATA_HOME = str(Path(os.getenv('XDG_DATA_HOME', str(Path.home() / '.local/share'))) / 'FaithLife-Community') 
+XDG_DATA_HOME = str(Path(os.getenv('XDG_DATA_HOME', str(Path.home() / '.local/share'))))
+DATA_HOME = str(Path(XDG_DATA_HOME)/ 'FaithLife-Community') 
 CONFIG_DIR = os.getenv("XDG_CONFIG_HOME", "~/.config") + "/FaithLife-Community"
 STATE_DIR = os.getenv("XDG_STATE_HOME", "~/.local/state") + "/FaithLife-Community"
 
@@ -70,6 +72,9 @@ DEFAULT_CONFIG_PATH = os.path.expanduser(f"{CONFIG_DIR}/{BINARY_NAME}.json")
 DEFAULT_APP_WINE_LOG_PATH = os.path.expanduser(f"{STATE_DIR}/wine.log")
 DEFAULT_APP_LOG_PATH = os.path.expanduser(f"{STATE_DIR}/{BINARY_NAME}.log")
 NETWORK_CACHE_PATH = f"{CACHE_DIR}/network.json"
+
+RELATIVE_BINARY_DIR = "data/bin"
+
 DEFAULT_WINEDEBUG = "err+all"
 LEGACY_CONFIG_FILES = [
     # If the user didn't have XDG_CONFIG_HOME set before, but now does.
@@ -87,6 +92,9 @@ LOGOS_BLUE = '#0082FF'
 LOGOS_GRAY = '#E7E7E7'
 LOGOS_WHITE = '#FCFCFC'
 PID_FILE = f'/tmp/{BINARY_NAME}.pid'
+
+WINE_RECOMMENDED_SIGIL = "Recommended"
+WINE_BETA_SIGIL = "Experimental (AKA Beta)"
 
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
 FAITHLIFE_PRODUCT_VERSIONS = ["10"] # This used to include 9
