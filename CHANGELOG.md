@@ -1,5 +1,8 @@
 # Changelog
 
+- 4.0.0-beta.13
+	- This release fixes some bugs found since beta 12. [N. Shaaban]
+	- This release also adds some initial support for containerized browsers. [N. Shaaban]
 - 4.0.0-beta.12
 	- This release fixes numerous small issues that prevented working installs, while also introducing numerous small UX improvements [N. Shaaban, N. Marti, T. H. Wright, DavidDGTNT, Simpleboy0]
 	- This release fixes a critical issue with beta 11 [N. Shaaban]
