@@ -79,10 +79,6 @@ def check_for_known_bugs(app: App):
     """Checks for any known bug conditions and recommends user action.
     This is a best-effort check
     """
-    app.installer_step_count += 1
-    ensure_sys_deps(app=app)
-    app.installer_step += 1
-
     # Begin workaround #435
     # FIXME: #435 Remove this check when the issue is fixed upstream in wine    
     # Check to see if our default browser is chromium, google-chrome, brave, or vivaldi 
@@ -164,7 +160,7 @@ def check_for_known_bugs(app: App):
 
     # End workaround #435
 
-def ensure_opengl(app: App):
+def check_opengl(app: App):
     app.status("Checking available OpenGL version…")
     try:
         opengl_version, reason = system.check_opengl_version(app)
@@ -181,22 +177,27 @@ def ensure_opengl(app: App):
     logging.debug("> Done.")
 
 
-def ensure_appimage_download(app: App):
-    app.installer_step_count += 1
+def check_system_compatibility(app: App):
     try:
         check_for_known_bugs(app=app)
     except Exception:
         logging.exception("Failed to check for known bugs - assuming everything is fine and continuing install.")
-    app.installer_step += 1
     if (
-        app.conf.faithlife_product_version != '9' 
+        app.conf.faithlife_product_version != '9'
         and not str(app.conf.wine_binary).lower().endswith('appimage')
         and app.conf.wine_binary not in [constants.WINE_BETA_SIGIL, constants.WINE_RECOMMENDED_SIGIL]
     ):
         return
 
-    ensure_opengl(app=app)
+    check_opengl(app=app)
+
+
+def ensure_appimage_download(app: App):
+    app.installer_step_count += 1
+    ensure_sys_deps(app=app)
+    check_system_compatibility(app=app)
     app.installer_step += 1
+
     if app.conf.faithlife_product_version != '9' and not str(app.conf.wine_binary).lower().endswith('appimage'):
         return
     app.status("Ensuring wine AppImage is downloaded…")
