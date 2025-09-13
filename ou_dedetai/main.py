@@ -13,7 +13,7 @@ import logging
 import os
 import sys
 
-from ou_dedetai.repair import detect_and_recover
+from .repair import detect_and_recover
 
 from . import cli
 from . import constants

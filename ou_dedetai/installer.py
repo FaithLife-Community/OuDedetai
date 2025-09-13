@@ -6,14 +6,15 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from ou_dedetai import system
 from ou_dedetai.app import App, UserExitedFromAsk
 
 from . import constants
 from . import network
+from . import system
 from . import utils
 from . import wine
 
+from ou_dedetai.system import OpenGLIncompatible
 
 # This step doesn't do anything per-say, but "collects" all the choices in one step
 # The app would continue to work without this function
@@ -78,10 +79,6 @@ def check_for_known_bugs(app: App):
     """Checks for any known bug conditions and recommends user action.
     This is a best-effort check
     """
-    app.installer_step_count += 1
-    ensure_sys_deps(app=app)
-    app.installer_step += 1
-
     # Begin workaround #435
     # FIXME: #435 Remove this check when the issue is fixed upstream in wine    
     # Check to see if our default browser is chromium, google-chrome, brave, or vivaldi 
@@ -163,19 +160,45 @@ def check_for_known_bugs(app: App):
 
     # End workaround #435
 
+def check_opengl(app: App):
+    app.status("Checking available OpenGL version…")
+    try:
+        opengl_version, reason = system.check_opengl_version(app)
+        app.status(reason)
+    except OpenGLIncompatible:
+        app.status(f"Incompatible OpenGL version.")
+        question = "Incompatible OpenGL version. Logos will be unable to launch. Should the install continue anyways?"
+        if app.approve(question):
+            logging.debug("> User continuing with incompatible OpenGL.")
+        else:
+            app.status("Exiting install…")
+            sys.exit()  # Exits the install thread.
 
-def ensure_appimage_download(app: App):
-    app.installer_step_count += 1
+    logging.debug("> Done.")
+
+
+def check_system_compatibility(app: App):
     try:
         check_for_known_bugs(app=app)
     except Exception:
         logging.exception("Failed to check for known bugs - assuming everything is fine and continuing install.")
-    app.installer_step += 1
     if (
-        app.conf.faithlife_product_version != '9' 
+        app.conf.faithlife_product_version != '9'
         and not str(app.conf.wine_binary).lower().endswith('appimage')
         and app.conf.wine_binary not in [constants.WINE_BETA_SIGIL, constants.WINE_RECOMMENDED_SIGIL]
     ):
+        return
+
+    check_opengl(app=app)
+
+
+def ensure_appimage_download(app: App):
+    app.installer_step_count += 1
+    ensure_sys_deps(app=app)
+    check_system_compatibility(app=app)
+    app.installer_step += 1
+
+    if app.conf.faithlife_product_version != '9' and not str(app.conf.wine_binary).lower().endswith('appimage'):
         return
     app.status("Ensuring wine AppImage is downloaded…")
 
@@ -400,6 +423,7 @@ def ensure_launcher_shortcuts(app: App):
         app.status(
             f"Runmode is '{constants.RUNMODE}'. Won't create desktop shortcuts",
         )
+
 
 def install(app: App):
     """Entrypoint for installing"""

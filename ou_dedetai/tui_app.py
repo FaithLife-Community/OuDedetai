@@ -772,6 +772,12 @@ class TUI(App):
                 self.reset_screen()
                 self.logos.switch_logging()
                 self.go_to_main_menu()
+            elif choice == "Check OpenGL":
+                self.reset_screen()
+                opengl_version, reason = system.check_opengl_version(self)
+                logging.info(reason)
+                self.status(reason)
+                self.go_to_main_menu()
             elif choice == "Uninstall":
                 control.uninstall(self)
                 self.go_to_main_menu()
@@ -1089,6 +1095,7 @@ class TUI(App):
         )
         labels.append(label)
 
+        labels.append("Check OpenGL")
         labels.append("Return to Main Menu")
 
         options = self.which_dialog_options(labels)
