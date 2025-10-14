@@ -4,6 +4,20 @@ start_dir="$PWD"
 script_dir="$(dirname "$0")"
 repo_root="$(dirname "$script_dir")"
 cd "$repo_root"
+
+# If Rust is installed then compile the rust binary
+if which cargo > /dev/null
+then
+    # Begin compiling rust dbus sender
+    cd ou_dedetai_dbus_sender
+    # Compile size optimized build as directed by https://github.com/johnthagen/min-sized-rust?tab=readme-ov-file#optimize-libstd-with-build-std .
+    # Doing it this way rather than using the pre-compiled libstd bring s the binary size from ~312k to 73k at time of writing.
+    RUSTFLAGS="-Zlocation-detail=none -Zfmt-debug=none" cargo +nightly build -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" --target x86_64-unknown-linux-gnu --release
+    cp ./target/x86_64-unknown-linux-gnu/release/ou_dedetai_dbus_sender ../ou_dedetai/assets/
+    cd ..
+fi
+
+# Begin packaging python
 if ! which pyinstaller >/dev/null 2>&1 || ! which oudedetai >/dev/null; then
     # Install build deps.
     python3 -m pip install .[build]
@@ -12,4 +26,5 @@ fi
 python3 -m pip install .
 # Build the installer binary
 pyinstaller --clean --log-level DEBUG ou_dedetai.spec
+
 cd "$start_dir"

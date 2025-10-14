@@ -198,7 +198,11 @@ def ensure_appimage_download(app: App):
     check_system_compatibility(app=app)
     app.installer_step += 1
 
-    if app.conf.faithlife_product_version != '9' and not str(app.conf.wine_binary).lower().endswith('appimage'):
+    if (
+        app.conf.faithlife_product_version != '9'
+        and not str(app.conf.wine_binary).lower().endswith('appimage')
+        and app.conf.wine_binary not in [constants.WINE_RECOMMENDED_SIGIL, constants.WINE_BETA_SIGIL]
+    ):
         return
     app.status("Ensuring wine AppImage is downloaded…")
 
@@ -553,8 +557,12 @@ def create_launcher_shortcuts(app: App):
     logos_icon_path = app_dir / logos_icon_src.name
     app_icon_path = app_dir / app_icon_src.name
 
+    oudedetai_executable: str
+    oudedetai_dbus_sender: Optional[str]
     if constants.RUNMODE == 'binary':
         oudedetai_executable = f"{installdir}/{constants.BINARY_NAME}"
+        oudedetai_dbus_sender = f"{app.conf.installer_binary_dir}/{constants.DBUS_SENDER_BINARY_NAME}"
+        shutil.copy(Path(constants.APP_ASSETS_DIR) / constants.DBUS_SENDER_BINARY_NAME, oudedetai_dbus_sender)
     elif constants.RUNMODE == "source":
         script = Path(sys.argv[0]).expanduser().resolve()
         repo_dir = None
@@ -570,6 +578,10 @@ def create_launcher_shortcuts(app: App):
         if not py_bin.is_file():
             app.exit("Could not locate python binary in virtual environment.")
         oudedetai_executable = f"env DIALOG=tk {py_bin} {script}"
+        oudedetai_dbus_sender = str(Path(repo_dir) / "ou_dedetai" / "assets" / constants.DBUS_SENDER_BINARY_NAME)
+        if not Path(oudedetai_dbus_sender).exists():
+            logging.debug(f"Failed to find {constants.DBUS_SENDER_BINARY_NAME}")
+            oudedetai_dbus_sender = None
     elif constants.RUNMODE in ["snap", "flatpak"]:
         logging.info(f"Not creating launcher shortcuts, {constants.RUNMODE} already handles this") 
         return
@@ -609,8 +621,8 @@ def create_launcher_shortcuts(app: App):
     # logos4 - to facilitate Logos 40.1+ login OAuth flow
     # libronixdls - allows opening of bible links from the browser
 
-    if not app.conf.logos_exe_windows_path:
-        logging.error("Failed to register MIME types with system due to missing wine exe path")
+    if not oudedetai_dbus_sender:
+        logging.error("Failed to register MIME types with system due to missing dbus sender binary")
         return
 
     url_handler_desktop_filename = f"{flproduct}-url-handler.desktop"
@@ -619,7 +631,7 @@ def create_launcher_shortcuts(app: App):
         filename=url_handler_desktop_filename,
         app_name=f"{flproduct} URL Handler",
         comment="Handles logos4: and libronixdls: URL Schemes",
-        exec_cmd=f"{oudedetai_executable} --wine '{app.conf.logos_exe_windows_path.replace('\\','\\\\')}' '%u'",
+        exec_cmd=f"{oudedetai_dbus_sender} '%u'",
         icon_path=app_icon_path,
         mime_types=["x-scheme-handler/logos4","x-scheme-handler/libronixdls"],
         terminal=True

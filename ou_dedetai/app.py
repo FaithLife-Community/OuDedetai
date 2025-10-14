@@ -20,6 +20,11 @@ class UserExitedFromAsk(Exception):
 
 
 class App(abc.ABC):
+    """Generic application front end
+    
+    All implementations of these functions MUST be able to be called from a thread-agnostic context
+    (that is from any thread) unless otherwise specified.
+    """
     # FIXME: consider weighting install steps. Different steps take different lengths
     installer_step_count: int = 0
     """Total steps in the installer, only set the installation process has started."""
@@ -36,6 +41,11 @@ class App(abc.ABC):
     config_updated_hooks: list[Callable[[], None]] = []
     _config_updated_event: threading.Event = threading.Event()
 
+    post_run_action: Optional[Callable[[], None]] = None
+    """Action to run after the app is started"""
+
+    is_running: bool = False
+
     def __init__(self, config, **kwargs) -> None:
         # This lazy load is required otherwise these would be circular imports
         from ou_dedetai.config import Config
@@ -47,18 +57,6 @@ class App(abc.ABC):
         self._threads = []
         # Ensure everything is good to start
         check_incompatibilities(self)
-
-        def _config_updated_hook_runner():
-            while True:
-                self._config_updated_event.wait()
-                self._config_updated_event.clear()
-                for hook in self.config_updated_hooks:
-                    try:
-                        hook()
-                    except Exception:
-                        logging.exception("Failed to run config update hook")
-        _config_updated_hook_runner.__name__ = "Config Update Hook"
-        self.start_thread(_config_updated_hook_runner, daemon_bool=True)
 
     def ask(self, question: str, options: list[str]) -> str:
         """Asks the user a question with a list of supplied options
@@ -145,12 +143,13 @@ class App(abc.ABC):
         message = (f"{context}\n" if context else "") + message
         self._info(message)
 
-    def _exit(self, reason: str, intended: bool = False) -> None:
+    def _exit(self, reason: Optional[str], intended: bool = False) -> None:
         """Cleanup any lingering objects, per-implementation specific"""
 
-    def exit(self, reason: str, intended: bool = False) -> NoReturn:
+    def exit(self, reason: Optional[str], intended: bool = False, exit_process=True) -> NoReturn:
         """Exits the application cleanly with a reason."""
         logging.debug(f"Closing {constants.APP_NAME}.")
+        self.is_running = False
         self._exit(reason, intended)
         # Shutdown logos/indexer if we spawned it
         self.logos.end_processes()
@@ -303,3 +302,30 @@ class App(abc.ABC):
         self._threads.append(thread)
         thread.start()
         return thread
+
+    def start(self):
+        """Starts the app. This function needs to be launched from the main loop.
+        It MAY spawn additional threads as-needed.
+        """
+        self.is_running = True
+        def _config_updated_hook_runner():
+            while self.is_running:
+                self._config_updated_event.wait()
+                self._config_updated_event.clear()
+                for hook in self.config_updated_hooks:
+                    try:
+                        hook()
+                    except Exception:
+                        logging.exception("Failed to run config update hook")
+        _config_updated_hook_runner.__name__ = "Config Update Hook"
+        self.start_thread(_config_updated_hook_runner, daemon_bool=True)
+        self._start()
+
+    @abc.abstractmethod
+    def _start(self):
+        """Starts the app. This function needs to be launched from the main loop.
+        It MAY spawn additional threads as-needed.
+        
+        Implementations MUST handle the post_run_action callable in a way that makes
+        sense with their threading situations.
+        """

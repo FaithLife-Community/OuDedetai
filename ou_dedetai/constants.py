@@ -43,6 +43,8 @@ BINARY_NAME = 'oudedetai'
 PACKAGE_NAME = 'ou_dedetai'
 REPO_NAME = 'OuDedetai'
 
+DBUS_SENDER_BINARY_NAME = "ou_dedetai_dbus_sender"
+
 REPOSITORY_LINK = f"https://github.com/FaithLife-Community/{REPO_NAME}"
 WIKI_LINK = f"{REPOSITORY_LINK}/wiki"
 REPOSITORY_ISSUES_LINK = f"{REPOSITORY_LINK}/issues"
@@ -103,6 +105,8 @@ SUPPORT_MESSAGE = f"""If you need help, please consult:
 {WIKI_LINK}
 If the install failed, use the \"Get Support\" operation
 """
+
+INSTALL_REQUIRED_MESSAGE = "App is not installed, but required for this operation. Consider installing first."
 
 DEFAULT_SUPPORT_FILE_NAME = "FaithlifeCommunitySupport.zip"
 

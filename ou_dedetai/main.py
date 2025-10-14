@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 import argparse
-import curses
-import logging.handlers
-from typing import Callable, Tuple
+import asyncio
+import threading
+import time
+from typing import Optional, Tuple
 
-from ou_dedetai.app import UserExitedFromAsk
+from ou_dedetai.app import App, UserExitedFromAsk
 from ou_dedetai.config import (
     EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path
 )
+from ou_dedetai.dbus import main as dbus_main
 
 import logging
 import os
@@ -204,7 +206,7 @@ def get_parser():
     return parser
 
 
-def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]: 
+def parse_args(args, parser) -> Tuple[EphemeralConfiguration, App]: 
     if args.config:
         ephemeral_config = EphemeralConfiguration.load_from_path(args.config)
     else:
@@ -261,15 +263,12 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
         ephemeral_config.agreed_to_faithlife_terms = True
 
 
-    def cli_operation(action: str) -> Callable[[EphemeralConfiguration], None]:
-        """Wrapper for a function pointer to a given function under CLI
-        
-        Lazily instantiates CLI at call-time"""
-        def _run(config: EphemeralConfiguration):
-            getattr(cli.CLI(config), action)()
-        output = _run
-        output.__name__ = action
-        return output
+    def cli_operation(action: str, config: EphemeralConfiguration) -> cli.CLI:
+        """Wrapper for a function pointer to a given function under CLI"""
+        app = cli.CLI(config)
+        output = getattr(app, action)
+        app.post_run_action = output
+        return app
 
     # Set action return function.
     actions = [
@@ -294,7 +293,7 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
         "get_support"
     ]
 
-    run_action = None
+    app: Optional[App] = None
     for arg in actions:
         if getattr(args, arg) or getattr(args, arg) == []:
             if arg == "set_appimage":
@@ -308,46 +307,40 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
             # Re-use this variable for either wine or winetricks execution
             elif arg == 'wine' or arg == 'winetricks':
                 ephemeral_config.wine_args = getattr(args, arg)
-            run_action = cli_operation(arg)
+            app = cli_operation(arg, ephemeral_config)
             break
     if getattr(args, "install_app"):
-        run_action = install_app
-    if run_action is None:
-        run_action = run_control_panel
-    logging.debug(f"{run_action=}")
-    return ephemeral_config, run_action
+        app = install_app(ephemeral_config)
+    if app is None:
+        app = initialize_control_panel_app(ephemeral_config)
+
+    logging.debug(f"App will run the following when it's ready: {app.post_run_action=}")
+    return ephemeral_config, app
 
 
-def run_control_panel(ephemeral_config: EphemeralConfiguration):
+def initialize_control_panel_app(ephemeral_config: EphemeralConfiguration) -> App:
     dialog = ephemeral_config.dialog or system.get_dialog()
     logging.info(f"Using DIALOG: {dialog}")
     if dialog == 'tk':
-        gui_app.start_gui_app(ephemeral_config)
+        return gui_app.ControlWindowGuiApp(ephemeral_config)
     else:
-        try:
-            curses.wrapper(tui_app.control_panel_app, ephemeral_config)
-        except KeyboardInterrupt:
-            raise
-        except SystemExit:
-            logging.info("Caught SystemExit, exiting gracefully…")
-            raise
-        except curses.error as e:
-            logging.error(f"Curses error in run_control_panel(): {e}")
-            raise e
-        except Exception as e:
-            logging.error(f"An error occurred in run_control_panel(): {e}")
-            raise e
+        # CLI doesn't have a control panel, and we've already parsed the cli args.
+        # When args are lacking, use the TUI
+        return tui_app.TUI(ephemeral_config)
 
-def install_app(ephemeral_config: EphemeralConfiguration):
+def install_app(ephemeral_config: EphemeralConfiguration) -> App:
     dialog = ephemeral_config.dialog or system.get_dialog()
     logging.info(f"Using DIALOG: {dialog}")
     if dialog == 'tk':
-        gui_app.start_gui_app(ephemeral_config, install_only=True)
+        return gui_app.InstallerGuiApp(ephemeral_config)
     else:
-        cli.CLI(ephemeral_config).install_app()
+        # No need to handle the TUI menu-ing, terminal users can see the output raw.
+        app = cli.CLI(ephemeral_config)
+        app.post_run_action = app.install_app
+        return app
 
 
-def setup_config() -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]: 
+def setup_config() -> Tuple[EphemeralConfiguration, App]: 
     parser = get_parser()
     cli_args = parser.parse_args()  # parsing early lets 'help' run immediately
 
@@ -376,54 +369,35 @@ def is_app_installed(ephemeral_config: EphemeralConfiguration):
     wine_prefix = ephemeral_config.wine_prefix or get_wine_prefix_path(str(persistent_config.install_dir)) 
     return utils.find_installed_product(persistent_config.faithlife_product, wine_prefix) 
 
-
-def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralConfiguration], None]): 
-    # Attempt to repair installation if it is broken.
-    # Must be done before calling the action to avoid errosly thinking the app isn't
-    # installed when it's broken
-    detect_and_recover(ephemeral_config)
-    # Run desired action (requested function, defaults to control_panel)
-    if action == "disabled":
-        print("That option is disabled.", file=sys.stderr)
-        sys.exit(1)
-    if action.__name__ == 'run_control_panel':
-        # if utils.app_is_installed():
-        #     wine.set_logos_paths()
-        action(ephemeral_config)  # run control_panel right away
+async def async_main(app: App):
+    started = time.time()
+    # Give the app 20 seconds to start
+    while not app.is_running and time.time() - started < 5:
+        # Sleep only a tiny bit of time as we need to catch the app while it's running.
+        await asyncio.sleep(.1)
+    if not app.is_running:
+        logging.debug("Never saw the app start, refusing to launch dbus daemon")
         return
-    
-    # Proceeding with the CLI interface
-
-    install_required = [
-        'backup',
-        'create_shortcuts',
-        'install_icu',
-        'remove_index_files',
-        'remove_library_catalog',
-        'restore',
-        'run_indexing',
-        'run_installed_app',
-        'stop_installed_app',
-        'set_appimage',
-        'toggle_app_logging',
-    ]
-    if action.__name__ not in install_required:
-        logging.info(f"Running function: {action.__name__}")
-        action(ephemeral_config)
-    elif is_app_installed(ephemeral_config):  # install_required; checking for app
-        # wine.set_logos_paths()
-        # Run the desired Logos action.
-        logging.info(f"Running function: {action.__name__}")
-        action(ephemeral_config)
-    else:  # install_required, but app not installed
-        print("App is not installed, but required for this operation. Consider installing first.", file=sys.stderr) 
-        sys.exit(1)
-
+    # Then start dbus' main
+    await dbus_main(app)
+    # Then wait for app to stop
+    while app.is_running:
+        await asyncio.sleep(1)
 
 def main():
     msg.initialize_logging()
-    ephemeral_config, action = setup_config()
+    ephemeral_config, app = setup_config()
     system.check_architecture()
+
+    # Start dbus listening
+    # Spawn an asyncio worker thread in the background
+    #
+    # Example code for how to spawn async functions using this worker (where main is an async function):
+    # asyncio.run_coroutine_threadsafe(main(), asyncio.get_event_loop())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    asyncio_worker_thread = threading.Thread(target=loop.run_until_complete, name="Asyncio Event Loop", args=[async_main(app)])
+    asyncio_worker_thread.start()
 
     # NOTE: DELETE_LOG is an outlier here. It's an action, but it's one that
     # can be run in conjunction with other actions, so it gets special
@@ -449,12 +423,21 @@ def main():
     logging.info(f"{constants.APP_NAME}, {constants.LLI_CURRENT_VERSION} by {constants.LLI_AUTHOR}.")
 
     try:
-        run(ephemeral_config, action)
+        # Attempt to repair installation if it is broken.
+        # Must be done before calling the action to avoid erroneously thinking the app isn't
+        # installed when it's broken
+        detect_and_recover(ephemeral_config)
+
+        # Start App's main thread (which is expected to block)
+        app.start()
     except UserExitedFromAsk:
         # This isn't a critical failure, the user doesn't need a traceback,
         # they are the ones who told us to exit.
         pass
 
+    # Cleanup
+    app.is_running=False
+    app.exit(reason=None, intended=True)
 
 if __name__ == '__main__':
     try:

@@ -10,7 +10,6 @@ from queue import Queue
 
 import shutil
 from threading import Event
-import threading
 import time
 from tkinter import PhotoImage, messagebox
 from tkinter import Tk
@@ -115,9 +114,9 @@ class GuiApp(App):
         message = f"{question}\n\n{context}"
         return messagebox.askquestion(question, message.strip()) == 'yes'
 
-    def _exit(self, reason: str, intended: bool = False):
+    def _exit(self, reason: Optional[str], intended: bool = False):
         # Create a little dialog before we die so the user can see why this happened
-        if not intended:
+        if not intended and reason:
             gui.show_error(reason, detail=constants.SUPPORT_MESSAGE, fatal=False)
         self.root.destroy()
     
@@ -174,6 +173,12 @@ class GuiApp(App):
             wine_choices = utils.get_wine_options(self)
             if len(wine_choices) > 0:
                 self.conf.wine_binary = wine_choices[0]
+    
+    def _start(self):
+        if self.post_run_action:
+            # Run the post run action on TK's event loop 1 second (arbitrary) after startup
+            self.root.after(1000, self.post_run_action)
+        self.root.mainloop()
 
 class Root(Tk):
     def __init__(self, *args, **kwargs):
@@ -425,14 +430,14 @@ class InstallerWindow:
         self.start_thread(_install)
 
 
-class ControlWindow(GuiApp):
-    def __init__(self, root, control_gui: gui.ControlGui, 
-                 ephemeral_config: EphemeralConfiguration, *args, **kwargs):
-        super().__init__(root, control_gui, ephemeral_config)
-
+class ControlWindowGuiApp(GuiApp):
+    def __init__(self, ephemeral_config: EphemeralConfiguration, *args, **kwargs):
         # Set root parameters.
-        self.root = root
-        self.gui = control_gui
+        self.root = create_root()
+        self.gui = control_gui = gui.ControlGui(self.root)
+
+        super().__init__(self.root, control_gui, ephemeral_config)
+
         self.actioncmd: Optional[Callable[[], None]] = None
 
         ver = constants.LLI_CURRENT_VERSION
@@ -542,7 +547,12 @@ class ControlWindow(GuiApp):
 
     def on_action_radio_clicked(self, evt=None):
         logging.debug("gui_app.ControlPanel.on_action_radio_clicked START")
-        if self.is_installed():
+        self.gui.actions_button.state(['disabled'])
+        # We always want to be able to uninstall as a failsafe.
+        if self.gui.actionsvar.get() == 'uninstall':
+            self.gui.actions_button.state(['!disabled'])
+            self.actioncmd = self.uninstall
+        elif self.is_installed():
             self.gui.actions_button.state(['!disabled'])
             if self.gui.actionsvar.get() == 'run-indexing':
                 self.actioncmd = self.run_indexing
@@ -552,8 +562,6 @@ class ControlWindow(GuiApp):
                 self.actioncmd = self.remove_indexes
             elif self.gui.actionsvar.get() == 'install-icu':
                 self.actioncmd = self.install_icu
-            elif self.gui.actionsvar.get() == 'uninstall':
-                self.actioncmd = self.uninstall
 
     def run_indexing(self):
         self.start_thread(self.logos.index)
@@ -805,12 +813,7 @@ def set_style(tkapp):
         )]
     )
 
-
-def start_gui_app(
-    ephemeral_config: EphemeralConfiguration,
-    recovery: Optional[Callable[[App], None]] = None,
-    install_only: bool = False
-):
+def create_root() -> Root:
     classname = constants.BINARY_NAME
     root = Root(className=classname)
 
@@ -820,42 +823,26 @@ def start_gui_app(
     # To allow them to ask questions while the mainloop is running
     root.title(f"{constants.APP_NAME} Control Panel")
     root.resizable(False, False)
+    return root
 
-    def _start_install() -> Callable[[], None]:
-        # This needs to be created before root.mainloop is called
+
+class InstallerGuiApp(GuiApp):
+    def __init__(self, ephemeral_config):
+        root = create_root()
         installer_gui = gui.StatusWithLabelGui(root, "Installing FaithLife app")
+
         def _run():
-            app = GuiApp(root, installer_gui, ephemeral_config)
             # This may take a minute to run, as it may need to reach out to the internet
-            app.populate_defaults()
-            installer.install(app)
+            self.populate_defaults()
+            installer.install(self)
             # Wait for a couple seconds so user can understand they're done.
             time.sleep(3)
-            root.destroy()
-        return _run
+            self.root.destroy()
+        self.post_run_action = _run
+        super().__init__(root, installer_gui, ephemeral_config)
 
-    def _start_control_panel() -> Callable[[], None]:
-        # This needs to be created before root.mainloop is called
-        control_gui = gui.ControlGui(root)
-        def _run():
-            if recovery:
-                recovery_gui = gui.StatusWithLabelGui(root, "Recovering FaithLife app")
-                recovery(GuiApp(root, recovery_gui, ephemeral_config))
-                recovery_gui.destroy()
-            ControlWindow(root, control_gui, ephemeral_config, class_=classname)
-        return _run
-
-    if install_only:
-        target=_start_install()
-    else:
-        target=_start_control_panel()
-
-    # Start the control panel on a new thread so it can open dialogs
-    # as a part of it's constructor
-    threading.Thread(
-        name=f"{constants.APP_NAME} GUI main loop",
-        target=target,
-        daemon=True
-    ).start()
-
-    root.mainloop()
+class StatusWithLabelGuiApp(GuiApp):
+    def __init__(self, label: str, ephemeral_config: EphemeralConfiguration):
+        root = create_root()
+        recovery_gui = gui.StatusWithLabelGui(root, label)
+        super().__init__(root, recovery_gui, ephemeral_config)
