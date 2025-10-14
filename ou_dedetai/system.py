@@ -382,6 +382,9 @@ def check_opengl_version(app: App, required_version="3.2") -> tuple[bool, str]:
         return False, "glxinfo command not found. Please install mesa-utils or equivalent."
     except subprocess.CalledProcessError as e:
         return False, f"glxinfo command failed: {e.stderr.strip()}"
+    
+    if not result:
+        return False, "failed to launch glxinfo."
 
     match = re.search(r"OpenGL version string:\s+([\d\.]+)", result.stdout)
     if not match:

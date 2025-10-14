@@ -60,18 +60,18 @@ def text_centered(app: App, stdscr: curses.window, text: str, start_y=0) -> tupl
     text_lines = wrap_text(app, text)
     text_start_y = start_y
     text_width = max(len(line) for line in text_lines)
-    column_margin = app.terminal_margin * 2
     for i, line in enumerate(text_lines):
         if text_start_y + i < app.window_height:
-            x = app.window_width // 2 - text_width // 2
+            # Terminal margin is subtracted to account for wrapping
+            x = app.window_width // 2 - text_width // 2 # - app.terminal_margin
             write_line(
                 app,
                 stdscr,
                 text_start_y + i,
-                max(column_margin, x),
+                max(app.terminal_margin, x),
                 line,
                 # column_margin is doubled to account for the left side's column_margin
-                app.window_width - (column_margin * 2),
+                app.window_width - (app.terminal_margin * 2),
                 curses.A_BOLD
             )
 

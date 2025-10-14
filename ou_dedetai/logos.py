@@ -8,8 +8,9 @@ import logging
 import psutil
 import threading
 
-from ou_dedetai import database
+from ou_dedetai import constants, database
 from ou_dedetai.app import App
+from ou_dedetai.config import get_logos_user_id
 
 from . import system
 from . import utils
@@ -100,6 +101,57 @@ class LogosManager:
             # Useful if the install directory got deleted while executing
             self.logos_state = State.STOPPED
 
+    def monitor_for_potential_issues(self):
+        """A function to be run in parallel with running Logos to detect common issues and suggest workarounds"""
+        # Make sure we have a logos appdata, without it we can't reliably do any checks
+        logos_appdata_dir = self.app.conf._logos_appdata_dir
+        if logos_appdata_dir is None:
+            logging.warning("The user should have installed the Logos application by now and have this populated."
+                            " Waiting until that is resolved...")
+            while logos_appdata_dir is None:
+                time.sleep(1)
+                logos_appdata_dir = self.app.conf._logos_appdata_dir
+        
+        # See if the user is logged in, this may change which things we look for
+        is_user_logged_in: bool = False
+        if get_logos_user_id(logos_appdata_dir) is not None:
+            is_user_logged_in = True
+
+        sent_trouble_singing_in_message: bool = False
+
+        time_logos_started = time.time()
+
+        while True:
+            # Now we wait...
+            time.sleep(10)
+
+            if not is_user_logged_in:
+                if get_logos_user_id(logos_appdata_dir) is not None:
+                    # User's now logged in - no fuss.
+                    is_user_logged_in = True
+                else:
+                    # Took me about ~1.5 minutes to sign on while simulating a little dilly-dallying and a couple
+                    # incorrect password attempts. Should still be longer than most people take to sign on, but not SO
+                    # long that people close OD in frustration to try again - fine line of balance.
+                    if not sent_trouble_singing_in_message and time.time() - time_logos_started > 60 * 1.75:
+                        # It's been five minutes since the user launched Logos and yet they haven't logged in yet.
+                        # Are they having trouble?
+                        self.app.pop_up(
+                            "Trouble Signing In?",
+                            "If you're having trouble signing in, try these workarounds:\n\n" \
+                            "If the browser isn't launching after you hit \"Sign In\" in the Logos application "
+                            "consider installing firefox from your system's package manager and temporarily setting "
+                            "that as your default browser.\n\n"
+                            "If the browser opens and entering your credentials is successful but nothing happens: "
+                            "on the Logos browser page try hitting the button for not being redirected automatically "
+                            "then click on the link that shows up that suggests to click it if you're still having "
+                            "trouble. That should cause you to sign in on the Logos application.\n\n"
+                            f"If you still need help use \"Get Support\" on the main page of {constants.APP_NAME}"
+                        )
+                        # We only want to send this message once
+                        sent_trouble_singing_in_message = True
+
+
     def start(self):
         self.logos_state = State.STARTING
         wine_release, _ = wine.get_wine_release(self.app.conf.wine_binary)
@@ -132,6 +184,7 @@ class LogosManager:
             wine.wineserver_kill(self.app)
             # Don't send "Running" message to GUI b/c it never clears.
             logging.info(f"Running {self.app.conf.faithlife_product}…")
+            self.app.start_thread(self.monitor_for_potential_issues, daemon_bool=False)
             self.app.start_thread(run_logos, daemon_bool=False)
             # NOTE: The following code would keep the CLI open while running
             # Logos, but since wine logging is sent directly to wine.log,

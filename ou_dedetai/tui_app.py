@@ -549,6 +549,7 @@ class TUI(App):
             1: self.custom_appimage_select,
             2: self.handle_ask_response,
             8: self.waiting,
+            9: self.pop_up_select,
             10: self.waiting_releases,
             11: self.wineconfig_menu_select,
             12: self.logos.start,
@@ -798,6 +799,13 @@ class TUI(App):
         self.appimage_q.put(str(self.conf.wine_appimage_path))
         self.appimage_e.set()
 
+    def pop_up_select(self, choice):
+        # Only one option - go back to the main menu.
+        # Ideally this would just remove the current screen, however ran into issues when trying to implement that.
+        # Don't want to risk the stability of the app for fixing the aforementioned bug ()
+        if choice == self._exit_option:
+            self.go_to_main_menu()
+
     def waiting(self, choice):
         pass
 
@@ -926,6 +934,18 @@ class TUI(App):
             message,
             wait=True,
             percent=percent or 0,
+        )
+
+    def _pop_up(self, title, message):
+        self.console_log.append(message)
+        self.stack_confirm(
+            9,
+            self.status_q,
+            self.status_e,
+            message,
+            no_text="",
+            secondary=title,
+            options=[self._exit_option]
         )
 
     def _config_update_hook(self):

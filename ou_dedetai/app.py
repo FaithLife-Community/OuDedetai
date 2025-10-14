@@ -235,7 +235,7 @@ class App(abc.ABC):
     # Perhaps this should just raise NotImplementedError to avoid confusion?
     @abc.abstractmethod
     def _status(self, message: str, percent: Optional[int] = None):
-        """Implementation for updating status pre-front end
+        """Implementation for updating status per-front end
         
         Args:
             message: str - message to send to user
@@ -276,7 +276,32 @@ class App(abc.ABC):
                 print(f"{message}")
                 if bar:
                     print(bar)
+
+    def pop_up(self, title: str, message: str):
+        """An intrusive message requiring user attention
         
+        Args:
+            title: str - title of the alert
+            message: str - message to send to user
+        """
+        # Check to see if we want to suppress all output
+        if self.conf._overrides.quiet:
+            return
+
+        self._pop_up(title=title,message=message)
+
+    # FIXME: This implementation is overridden in every implementation
+    # Perhaps this should just raise NotImplementedError to avoid confusion?
+    @abc.abstractmethod
+    def _pop_up(self, title: str, message: str):
+        """Implementation for opening a pop up per-front end
+        
+        Args:
+            title: str - title of the alert
+            message: str - message to send to user
+        """
+        # Fallback to just sending a status if pop up isn't implemented.
+        self._status(message=message)
 
     @property
     def superuser_command(self) -> str:
