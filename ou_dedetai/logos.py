@@ -5,6 +5,7 @@ import subprocess
 import time
 from enum import Enum
 import logging
+from typing import Optional
 import psutil
 import threading
 
@@ -100,7 +101,9 @@ class LogosManager:
             # Useful if the install directory got deleted while executing
             self.logos_state = State.STOPPED
 
-    def start(self):
+    def start(self, args: Optional[list[str]] = None):
+        if args is None:
+            args = []
         self.logos_state = State.STARTING
         wine_release, _ = wine.get_wine_release(self.app.conf.wine_binary)
 
@@ -112,7 +115,8 @@ class LogosManager:
             process = wine.run_wine_application(
                 self.app,
                 self.app.conf.wine_binary,
-                exe=self.app.conf.logos_exe
+                exe=self.app.conf.logos_exe,
+                exe_args=args
             )
             if process is not None:
                 self.processes[self.app.conf.logos_exe] = process

@@ -28,12 +28,20 @@ class CLI(App):
         self.input_q: queue.Queue[Tuple[str, list[str]] | None] = queue.Queue()
         self.input_event = threading.Event()
         self.choice_event = threading.Event()
+
+    def _start(self):
         self.start_thread(self.user_input_processor)
+        if self.post_run_action:
+            self.post_run_action()
 
     def backup(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         backup.backup(app=self)
 
     def create_shortcuts(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         installer.create_launcher_shortcuts(self)
 
     def edit_config(self):
@@ -41,30 +49,41 @@ class CLI(App):
 
     def install_app(self):
         installer.install(self)
-        self.exit("Install has finished", intended=True)
 
     def install_dependencies(self):
         utils.install_dependencies(app=self)
 
     def install_icu(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         wine.enforce_icu_data_files(self)
 
     def remove_index_files(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         control.remove_all_index_files(self)
 
     def uninstall(self):
         control.uninstall(self)
 
     def remove_library_catalog(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         control.remove_library_catalog(self)
 
     def restore(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         backup.restore(app=self)
 
     def run_indexing(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         self.logos.index()
 
     def run_installed_app(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         self.logos.start()
         # Keep the process running so that our background threads can keep running
         while self.logos.logos_state != LogosRunningState.STOPPED:
@@ -72,6 +91,8 @@ class CLI(App):
             self.logos.monitor()
 
     def stop_installed_app(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         self.logos.stop()
 
     def winetricks(self):
@@ -101,9 +122,13 @@ class CLI(App):
             sys.exit(process.returncode)
 
     def set_appimage(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         utils.set_appimage_symlink(app=self)
 
     def toggle_app_logging(self):
+        if not self.is_installed():
+            self.exit(constants.INSTALL_REQUIRED_MESSAGE)
         self.logos.switch_logging()
 
     def update_latest_appimage(self):
@@ -160,15 +185,15 @@ class CLI(App):
             end=""
         )
 
-    def exit(self, reason: str, intended: bool = False):
+    def _exit(self, reason: Optional[str], intended: bool = False):
         # Signal CLI.user_input_processor to stop.
         self.input_q.put(None)
         self.input_event.set()
         # Signal CLI itself to stop.
         self.running = False
         # We always want this to return regardless of level
-        self.print(f"Closing {constants.APP_NAME} due to: {reason}")
-        return super().exit(reason, intended)
+        if reason:
+            self.print(f"Closing {constants.APP_NAME} due to: {reason}")
     
     def _status(self, message: str, percent: Optional[int] = None):
         """Implementation for updating status pre-front end

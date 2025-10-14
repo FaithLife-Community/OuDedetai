@@ -104,6 +104,8 @@ SUPPORT_MESSAGE = f"""If you need help, please consult:
 If the install failed, use the \"Get Support\" operation
 """
 
+INSTALL_REQUIRED_MESSAGE = "App is not installed, but required for this operation. Consider installing first."
+
 DEFAULT_SUPPORT_FILE_NAME = "FaithlifeCommunitySupport.zip"
 
 # Strings for choosing a follow up file or directory

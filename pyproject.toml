@@ -16,6 +16,7 @@ dependencies = [
     "inotify", # Required for watching when the auto-update setting changes
 #    "tkinter",  # actually provided by a system package, not a python package
 #    "urllib3",
+    "dbus-next"
 ]
 name = "ou_dedetai"
 dynamic = ["readme", "version"]

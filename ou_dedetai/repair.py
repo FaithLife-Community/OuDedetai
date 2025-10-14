@@ -6,7 +6,7 @@ from enum import Enum, auto
 import logging
 from pathlib import Path
 import time
-from typing import Callable, Optional
+from typing import Optional
 
 import ou_dedetai
 from ou_dedetai.app import App
@@ -78,18 +78,6 @@ def detect_broken_install(
     return None
 
 
-# FIXME: This logic doesn't belong here, but it's not used anywhere else
-# As running the control panel in addition to the base python app logic
-# are distinct operations
-# It's possible to add a control panel function to app and make this generic
-def run_under_app(ephemeral_config: EphemeralConfiguration, func: Callable[[App], None]): 
-    dialog = ephemeral_config.dialog or ou_dedetai.system.get_dialog()
-    if dialog == 'tk':
-        return ou_dedetai.gui_app.start_gui_app(ephemeral_config, func)
-    else:
-        app = ou_dedetai.cli.CLI(ephemeral_config)
-        func(app)
-
 def detect_and_recover(ephemeral_config: EphemeralConfiguration):
     persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path) 
     if (
@@ -129,13 +117,29 @@ def detect_and_recover(ephemeral_config: EphemeralConfiguration):
         persistent_config.faithlife_product_release = None
         persistent_config.write_config()
 
-        def _run(app: App):
+        dialog = ephemeral_config.dialog or ou_dedetai.system.get_dialog()
+        app: App
+        if dialog == 'tk':
+            app = ou_dedetai.gui_app.StatusWithLabelGuiApp("Recovering FaithLife app", ephemeral_config)
+        else:
+            app = ou_dedetai.cli.CLI(ephemeral_config)
+
+        def _run():
             app.status(f"Recovering {persistent_config.faithlife_product} after failed upgrade") 
             # Wait for a second so user can see this message
             time.sleep(1)
             ou_dedetai.installer.install(app)
-            app.status(f"Recovery attempt of {app.conf.faithlife_product} complete")
-        run_under_app(ephemeral_config, _run)
+            message= f"Recovery attempt of {app.conf.faithlife_product} complete"
+            app.status(message)
+            # Wait for a second so user can see this message
+            time.sleep(1)
+            # Call _exit rather than exit so the process isn't exited as well
+            app._exit(message, intended=True)
+
+        app.post_run_action = _run
+
+        # This will stop eventually as .stop is called from the post_run_action
+        app._start()
 
     # FIXME: Read the LogosCrash.log and suggest other recovery methods
     # and ensure it's fresh by comparing against LogosError.log

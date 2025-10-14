@@ -1,0 +1,14 @@
+[package]
+name = "ou_dedetai_dbus_sender"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dbus = "0.9.9"
+
+[profile.release]
+strip = true  # Automatically strip symbols from the binary.
+opt-level = "z"  # Optimize for size.
+lto = true
+codegen-units = 1
+panic = "abort"

@@ -34,9 +34,9 @@ console_message = ""
 
 # TODO: Fix hitting cancel in Dialog Screens; currently crashes program.
 class TUI(App):
-    def __init__(self, stdscr: curses.window, ephemeral_config: EphemeralConfiguration):
+    def __init__(self, ephemeral_config: EphemeralConfiguration):
         super().__init__(ephemeral_config)
-        self.stdscr = stdscr
+        os.environ.setdefault("ESCDELAY", "100")
         self.set_title()
         # else:
         #    self.title = f"Welcome to {constants.APP_NAME} ({constants.LLI_CURRENT_VERSION})"
@@ -389,12 +389,13 @@ class TUI(App):
             logging.error(f"An error occurred in end_curses(): {e}")
             raise
 
-    def _exit(self, reason, intended = False):
-        message = f"Exiting {constants.APP_NAME} due to {reason}…"
-        if not intended:
-            message += "\n" + constants.SUPPORT_MESSAGE
-        self._status(message)
-        time.sleep(30)
+    def _exit(self, reason: Optional[str], intended = False):
+        if reason:
+            message = f"Exiting {constants.APP_NAME} due to {reason}…"
+            if not intended:
+                message += "\n" + constants.SUPPORT_MESSAGE
+            self._status(message)
+            time.sleep(30)
         self.end(None, None)
 
     def end(self, signal, frame):
@@ -528,16 +529,30 @@ class TUI(App):
                 # The screen has changed sizes since we last checked. Resize
                 self.resize_curses()
 
-    def run(self):
-        try:
-            self.init_curses()
-            self.display()
-        except KeyboardInterrupt:
-            self.end_curses()
-            signal.signal(signal.SIGINT, self.end)
-        finally:
-            self.end_curses()
-            signal.signal(signal.SIGINT, self.end)
+    def _start(self):
+        def _run(window: curses.window):
+            try:
+                self.stdscr = window
+                self.init_curses()
+                # XXX: consider if this is the best place for this or if it has to be later
+                if self.post_run_action:
+                    self.post_run_action()
+                self.display()
+            except KeyboardInterrupt:
+                pass
+            except SystemExit:
+                logging.info("Caught SystemExit, exiting gracefully…")
+            except curses.error as e:
+                logging.error(f"Curses error in run_control_panel(): {e}")
+                raise e
+            except Exception as e:
+                logging.error(f"An error occurred in run_control_panel(): {e}")
+                raise e
+            finally:
+                self.end_curses()
+                signal.signal(signal.SIGINT, self.end)
+
+        curses.wrapper(_run)
 
     def installing_pw_waiting(self):
         # self.start_thread(self.get_waiting, screen_id=15)
@@ -1309,8 +1324,3 @@ class TUI(App):
 
     def get_main_window(self):
         return self.main_window
-
-
-def control_panel_app(stdscr: curses.window, ephemeral_config: EphemeralConfiguration):
-    os.environ.setdefault("ESCDELAY", "100")
-    TUI(stdscr, ephemeral_config).run()
