@@ -198,7 +198,11 @@ def ensure_appimage_download(app: App):
     check_system_compatibility(app=app)
     app.installer_step += 1
 
-    if app.conf.faithlife_product_version != '9' and not str(app.conf.wine_binary).lower().endswith('appimage'):
+    if (
+        app.conf.faithlife_product_version != '9'
+        and not str(app.conf.wine_binary).lower().endswith('appimage')
+        and app.conf.wine_binary not in [constants.WINE_RECOMMENDED_SIGIL, constants.WINE_BETA_SIGIL]
+    ):
         return
     app.status("Ensuring wine AppImage is downloaded…")
 
