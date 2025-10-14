@@ -43,6 +43,8 @@ BINARY_NAME = 'oudedetai'
 PACKAGE_NAME = 'ou_dedetai'
 REPO_NAME = 'OuDedetai'
 
+DBUS_SENDER_BINARY_NAME = "ou_dedetai_dbus_sender"
+
 REPOSITORY_LINK = f"https://github.com/FaithLife-Community/{REPO_NAME}"
 WIKI_LINK = f"{REPOSITORY_LINK}/wiki"
 REPOSITORY_ISSUES_LINK = f"{REPOSITORY_LINK}/issues"

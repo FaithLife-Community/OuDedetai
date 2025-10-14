@@ -372,10 +372,12 @@ def is_app_installed(ephemeral_config: EphemeralConfiguration):
 async def async_main(app: App):
     started = time.time()
     # Give the app 20 seconds to start
-    while not app.is_running and time.time() - started < 20:
-        await asyncio.sleep(1)
+    while not app.is_running and time.time() - started < 5:
+        # Sleep only a tiny bit of time as we need to catch the app while it's running.
+        await asyncio.sleep(.1)
     if not app.is_running:
-        raise RuntimeError
+        logging.debug("Never saw the app start, refusing to launch dbus daemon")
+        return
     # Then start dbus' main
     await dbus_main(app)
     # Then wait for app to stop

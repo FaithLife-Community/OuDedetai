@@ -10,3 +10,6 @@ venv/
 *.egg-info
 .vscode
 /.flatpak-builder
+
+# We don't want this checked into git - large file
+/ou_dedetai/assets/ou_dedetai_dbus_sender
