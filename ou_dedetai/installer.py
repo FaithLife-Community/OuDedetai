@@ -166,7 +166,7 @@ def check_opengl(app: App):
         opengl_version, reason = system.check_opengl_version(app)
         app.status(reason)
     except OpenGLIncompatible:
-        app.status(f"Incompatible OpenGL version.")
+        app.status("Incompatible OpenGL version.")
         question = "Incompatible OpenGL version. Logos will be unable to launch. Should the install continue anyways?"
         if app.approve(question):
             logging.debug("> User continuing with incompatible OpenGL.")
