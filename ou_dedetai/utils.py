@@ -543,6 +543,18 @@ def update_to_latest_lli_release(app: App):
         logging.debug(f"{constants.APP_NAME} is at a newer version than the latest.") # noqa: 501
 
 
+def update_faithlife_product(app: App):
+    from ou_dedetai import installer  # local import to avoid circular dependency
+    releases = app.conf.faithlife_product_releases
+    if not releases:
+        app.status(f"No releases found for {app.conf.faithlife_product}; cannot update.")
+        return
+    latest = releases[0]  # feed is ordered newest-first
+    app.status(f"Updating {app.conf.faithlife_product} to {latest}…")
+    app.conf.faithlife_product_release = latest
+    installer.install(app)
+
+
 # FIXME: consider moving this to control
 def update_to_latest_recommended_appimage(app: App):
     if app.conf.wine_binary_code not in ["AppImage", "Recommended"]:

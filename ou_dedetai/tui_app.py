@@ -608,6 +608,10 @@ class TUI(App):
             finally:
                 self.conf._overrides.assume_yes = original_assume_yes
                 self.go_to_main_menu()
+        
+        def _update_faithlife_product(app: "TUI"):
+            utils.update_faithlife_product(app)
+            app.go_to_main_menu()
 
         if choice is None or choice == "Exit":
             logging.info("Exiting installation.")
@@ -637,6 +641,9 @@ class TUI(App):
             )
         elif choice.startswith(f"Update {constants.APP_NAME}"):
             utils.update_to_latest_lli_release(self)
+        elif self.conf._raw.faithlife_product and choice == f"Update {self.conf.faithlife_product}":
+            self.reset_screen()
+            self.start_thread(_update_faithlife_product, app=self, daemon_bool=True)
         elif self.conf._raw.faithlife_product and choice == f"Run {self.conf._raw.faithlife_product}": 
             self.reset_screen()
             self.logos.start()
@@ -1002,7 +1009,7 @@ class TUI(App):
                 indexing = "Stop Indexing"
             elif self.logos.indexing_state == logos.State.STOPPED:
                 indexing = "Run Indexing"
-            labels_default = [run, indexing]
+            labels_default = [run, indexing, f"Update {self.conf.faithlife_product}"]
         else:
             labels_default = ["Install", "Advanced Install"]
         labels.extend(labels_default)

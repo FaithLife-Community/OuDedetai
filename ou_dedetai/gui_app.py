@@ -489,6 +489,7 @@ class ControlWindow(GuiApp):
         self.gui.deps_button.config(command=self.install_deps)
         self.gui.backup_button.config(command=self.run_backup)
         self.gui.restore_button.config(command=self.run_restore)
+        self.gui.update_product_button.config(command=self.update_faithlife_product)
         self.gui.update_lli_button.config(
             command=self.update_to_latest_lli_release
         )
@@ -601,6 +602,10 @@ class ControlWindow(GuiApp):
             ],
         )
         return file_path
+
+    def update_faithlife_product(self, evt=None):
+        self.status(f"Updating {self.conf.faithlife_product} to latest release…")
+        self.start_thread(utils.update_faithlife_product, app=self)
 
     def update_to_latest_lli_release(self, evt=None):
         self.status(f"Updating to latest {constants.APP_NAME} version…")
@@ -746,6 +751,9 @@ class ControlWindow(GuiApp):
             self.update_latest_appimage_button()
         except Exception:
             logging.exception("Failed to update appimage button")
+        product = self.conf._raw.faithlife_product
+        if product:
+            self.gui.update_product_labelvar.set(f"Update {product}")
 
 
     def current_logging_state_value(self) -> str:
