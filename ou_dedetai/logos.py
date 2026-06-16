@@ -267,7 +267,9 @@ class LogosManager:
         """Thread target: delegates to MemoryWatchdog and exits the app on a kill."""
         self._memory_watchdog.run()
         if self._memory_watchdog.kill_reason:
-            self.app.exit(self._memory_watchdog.kill_reason)
+            self.app.status(self._memory_watchdog.kill_reason)
+            # We don't want to kill the entire app here - CLI/TUI and GUI each handle when logos terminates differently.
+            # Existing code will already find out that Logos terminated and handle accordinly.
 
     def index(self):
         self.indexing_state = State.STARTING
