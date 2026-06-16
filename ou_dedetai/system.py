@@ -238,6 +238,91 @@ def get_pids(query) -> list[psutil.Process]:
     return results
 
 
+MEMORY_CAP_FRACTION = 0.9
+"""Fraction of available system memory a spawned process is allowed to use."""
+
+
+def get_memory_cap(process_rss: int = 0, fraction: float = MEMORY_CAP_FRACTION) -> int:
+    """Resident-memory ceiling (bytes) a spawned process is allowed to use.
+
+    Defined as a fraction (default 90%) of the memory that would be available if
+    the process weren't running: current available memory *plus* the process's
+    own resident usage (``process_rss``). Adding the process's own usage back is
+    what keeps the cap stable as the process grows — only *other* processes'
+    memory use should move its ceiling, not its own.
+
+    On Linux ``psutil.virtual_memory().available`` is a single read+parse of
+    ``/proc/meminfo`` (the kernel's ``MemAvailable``), so it's cheap enough to
+    recompute on every check rather than caching a spawn-time snapshot.
+    """
+    available = psutil.virtual_memory().available + process_rss
+    return int(available * fraction)
+
+
+def get_process_tree_rss(pid: int) -> int:
+    """Total resident set size (bytes) of a process and all its descendants.
+
+    Wine spawns helper processes, so the whole tree must be summed to know how
+    much memory the launched application is really using.
+    """
+    proc = psutil.Process(pid)
+    processes = [proc]
+    try:
+        processes.extend(proc.children(recursive=True))
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        pass
+    total = 0
+    for p in processes:
+        try:
+            total += p.memory_info().rss
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    return total
+
+
+_systemd_run_usable: Optional[bool] = None
+
+
+def _can_use_systemd_run() -> bool:
+    """Return True if systemd-run can create a user scope on this host.
+
+    Checks that the binary exists *and* that a real user manager / D-Bus session
+    is available. Result is cached after the first call.
+    """
+    global _systemd_run_usable
+    if _systemd_run_usable is not None:
+        return _systemd_run_usable
+    if not shutil.which('systemd-run'):
+        _systemd_run_usable = False
+        return False
+    try:
+        result = subprocess.run(
+            ['systemd-run', '--user', '--scope', '--quiet', '--collect', '--', 'true'],
+            capture_output=True,
+            timeout=5,
+        )
+        _systemd_run_usable = result.returncode == 0
+    except Exception:
+        _systemd_run_usable = False
+    return _systemd_run_usable
+
+
+def systemd_run_memory_prefix(cap_bytes: int) -> list[str]:
+    """Return the systemd-run arg list to wrap a command in a memory-capped scope.
+
+    Returns an empty list when systemd-run is not usable, so callers can simply
+    prepend the result unconditionally. The list ends with '--' to separate
+    systemd-run options from the wrapped command.
+    """
+    if not _can_use_systemd_run():
+        return []
+    return [
+        'systemd-run', '--user', '--scope', '--quiet', '--collect',
+        f'-p', f'MemoryMax={cap_bytes}',
+        '--',
+    ]
+
+
 def reboot(superuser_command: str):
     logging.info("Rebooting system.")
     command = f"{superuser_command} reboot now"

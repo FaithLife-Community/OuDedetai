@@ -78,5 +78,55 @@ class TestMemoryLimits(unittest.TestCase):
             child.stdout.close()
 
 
+class TestSystemdRunPrefix(unittest.TestCase):
+    """Covers systemd_run_memory_prefix() and _can_use_systemd_run()."""
+
+    def setUp(self):
+        # Reset the module-level cache between tests.
+        system._systemd_run_usable = None
+
+    def tearDown(self):
+        system._systemd_run_usable = None
+
+    def test_returns_empty_when_not_usable(self):
+        with patch('ou_dedetai.system._can_use_systemd_run', return_value=False):
+            self.assertEqual(system.systemd_run_memory_prefix(1024), [])
+
+    def test_returns_prefix_when_usable(self):
+        with patch('ou_dedetai.system._can_use_systemd_run', return_value=True):
+            prefix = system.systemd_run_memory_prefix(2 * 1024 * 1024 * 1024)
+        self.assertIn('systemd-run', prefix)
+        self.assertIn('--user', prefix)
+        self.assertIn('--scope', prefix)
+        self.assertIn('--', prefix)
+        # MemoryMax must be present with the exact byte value, no swap limit.
+        self.assertIn(f'MemoryMax={2 * 1024 * 1024 * 1024}', ' '.join(prefix))
+        self.assertNotIn('MemorySwapMax', ' '.join(prefix))
+
+    def test_prefix_ends_with_separator(self):
+        with patch('ou_dedetai.system._can_use_systemd_run', return_value=True):
+            prefix = system.systemd_run_memory_prefix(512)
+        self.assertEqual(prefix[-1], '--')
+
+    def test_can_use_systemd_run_false_when_binary_missing(self):
+        with patch('ou_dedetai.system.shutil.which', return_value=None):
+            self.assertFalse(system._can_use_systemd_run())
+
+    def test_can_use_systemd_run_false_when_probe_fails(self):
+        with patch('ou_dedetai.system.shutil.which', return_value='/usr/bin/systemd-run'):
+            with patch('ou_dedetai.system.subprocess.run') as mock_run:
+                mock_run.return_value = Mock(returncode=1)
+                self.assertFalse(system._can_use_systemd_run())
+
+    def test_can_use_systemd_run_caches_result(self):
+        with patch('ou_dedetai.system.shutil.which', return_value='/usr/bin/systemd-run'):
+            with patch('ou_dedetai.system.subprocess.run') as mock_run:
+                mock_run.return_value = Mock(returncode=0)
+                system._can_use_systemd_run()
+                system._can_use_systemd_run()
+                # Probe subprocess should only run once.
+                self.assertEqual(mock_run.call_count, 1)
+
+
 if __name__ == '__main__':
     unittest.main()

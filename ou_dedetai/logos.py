@@ -7,6 +7,7 @@ from enum import Enum
 import logging
 import psutil
 import threading
+from typing import Optional
 
 from ou_dedetai import database
 from ou_dedetai.app import App
@@ -32,6 +33,10 @@ class LogosManager:
         """These are sub-processes we started"""
         self.existing_processes: dict[str, list[psutil.Process]] = {}
         """These are processes we discovered already running"""
+        self._memory_watchdog_interval = 2
+        """Seconds between memory checks by the watchdog."""
+        self._memory_watchdog_stop = threading.Event()
+        self._memory_watchdog_thread: Optional[threading.Thread] = None
 
     def monitor_indexing(self):
         if self.app.conf.logos_indexer_exe_windows_path in self.existing_processes:
@@ -132,6 +137,7 @@ class LogosManager:
             wine.wineserver_kill(self.app)
             # Don't send "Running" message to GUI b/c it never clears.
             logging.info(f"Running {self.app.conf.faithlife_product}…")
+            self._ensure_memory_watchdog()
             self.app.start_thread(run_logos, daemon_bool=False)
             # NOTE: The following code would keep the CLI open while running
             # Logos, but since wine logging is sent directly to wine.log,
@@ -237,6 +243,7 @@ class LogosManager:
         # wine.wineserver_wait(self.app)
 
     def end_processes(self):
+        self._memory_watchdog_stop.set()
         for process_name, process in self.processes.items():
             if isinstance(process, subprocess.Popen):
                 logging.debug(f"Found {process_name} in Processes. Attempting to close {process}.")
@@ -246,6 +253,60 @@ class LogosManager:
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid, signal.SIGTERM)
                     os.waitpid(-process.pid, 0)
+
+    def _ensure_memory_watchdog(self):
+        """Starts the memory watchdog thread if it isn't already running."""
+        if (
+            self._memory_watchdog_thread is not None
+            and self._memory_watchdog_thread.is_alive()
+        ):
+            return
+        self._memory_watchdog_stop.clear()
+        self._memory_watchdog_thread = self.app.start_thread(self._memory_watchdog)
+
+    def _memory_watchdog(self):
+        """Hard-kills a tracked Wine/Logos process whose resident memory grows
+        past 90% of currently-available system RAM, so a runaway process (e.g.
+        the indexer) can't exhaust the host.
+
+        Resident (not virtual) memory is used deliberately: Wine reserves a huge
+        virtual address space, so a virtual-memory cap would refuse to start it.
+        """
+        while not self._memory_watchdog_stop.wait(self._memory_watchdog_interval):
+            if not self.processes:
+                continue
+            for name, process in list(self.processes.items()):
+                if not isinstance(process, subprocess.Popen) or process.poll() is not None:
+                    continue
+                try:
+                    rss = system.get_process_tree_rss(process.pid)
+                except psutil.NoSuchProcess:
+                    continue
+                # The cap is 90% of the memory free of this process, so its own
+                # usage isn't counted against its budget as it grows.
+                cap = system.get_memory_cap(rss)
+                if rss > cap:
+                    display = name.replace('\\', '/').rstrip('/').rsplit('/', 1)[-1]
+                    logging.warning(
+                        f"{display} exceeded the memory cap "
+                        f"({rss // 1024 // 1024} MB > {cap // 1024 // 1024} MB); "
+                        "terminating it."
+                    )
+                    self._hard_kill(process)
+                    self.app.exit(f"{display} used too much memory and was stopped.")
+
+    def _hard_kill(self, process: subprocess.Popen):
+        """Terminates a process group, escalating to SIGKILL after a grace."""
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        except ProcessLookupError:
+            pass
 
     def index(self):
         self.indexing_state = State.STARTING
@@ -287,6 +348,7 @@ class LogosManager:
 
         wine.wineserver_kill(self.app)
         self.app.status("Indexing has begun…", 0)
+        self._ensure_memory_watchdog()
         index_thread = self.app.start_thread(run_indexing, daemon_bool=False)
         self.indexing_state = State.RUNNING
         self.app.start_thread(
