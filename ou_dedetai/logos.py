@@ -11,6 +11,7 @@ from typing import Optional
 
 from ou_dedetai import database
 from ou_dedetai.app import App
+from ou_dedetai.watchdog import MemoryWatchdog
 
 from . import system
 from . import utils
@@ -33,9 +34,7 @@ class LogosManager:
         """These are sub-processes we started"""
         self.existing_processes: dict[str, list[psutil.Process]] = {}
         """These are processes we discovered already running"""
-        self._memory_watchdog_interval = 2
-        """Seconds between memory checks by the watchdog."""
-        self._memory_watchdog_stop = threading.Event()
+        self._memory_watchdog = MemoryWatchdog(self.processes)
         self._memory_watchdog_thread: Optional[threading.Thread] = None
 
     def monitor_indexing(self):
@@ -243,7 +242,7 @@ class LogosManager:
         # wine.wineserver_wait(self.app)
 
     def end_processes(self):
-        self._memory_watchdog_stop.set()
+        self._memory_watchdog.stop()
         for process_name, process in self.processes.items():
             if isinstance(process, subprocess.Popen):
                 logging.debug(f"Found {process_name} in Processes. Attempting to close {process}.")
@@ -261,52 +260,14 @@ class LogosManager:
             and self._memory_watchdog_thread.is_alive()
         ):
             return
-        self._memory_watchdog_stop.clear()
-        self._memory_watchdog_thread = self.app.start_thread(self._memory_watchdog)
+        self._memory_watchdog.reset()
+        self._memory_watchdog_thread = self.app.start_thread(self._run_watchdog)
 
-    def _memory_watchdog(self):
-        """Hard-kills a tracked Wine/Logos process whose resident memory grows
-        past 90% of currently-available system RAM, so a runaway process (e.g.
-        the indexer) can't exhaust the host.
-
-        Resident (not virtual) memory is used deliberately: Wine reserves a huge
-        virtual address space, so a virtual-memory cap would refuse to start it.
-        """
-        while not self._memory_watchdog_stop.wait(self._memory_watchdog_interval):
-            if not self.processes:
-                continue
-            for name, process in list(self.processes.items()):
-                if not isinstance(process, subprocess.Popen) or process.poll() is not None:
-                    continue
-                try:
-                    rss = system.get_process_tree_rss(process.pid)
-                except psutil.NoSuchProcess:
-                    continue
-                # The cap is 90% of the memory free of this process, so its own
-                # usage isn't counted against its budget as it grows.
-                cap = system.get_memory_cap(rss)
-                if rss > cap:
-                    display = name.replace('\\', '/').rstrip('/').rsplit('/', 1)[-1]
-                    logging.warning(
-                        f"{display} exceeded the memory cap "
-                        f"({rss // 1024 // 1024} MB > {cap // 1024 // 1024} MB); "
-                        "terminating it."
-                    )
-                    self._hard_kill(process)
-                    self.app.exit(f"{display} used too much memory and was stopped.")
-
-    def _hard_kill(self, process: subprocess.Popen):
-        """Terminates a process group, escalating to SIGKILL after a grace."""
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        except ProcessLookupError:
-            pass
+    def _run_watchdog(self):
+        """Thread target: delegates to MemoryWatchdog and exits the app on a kill."""
+        self._memory_watchdog.run()
+        if self._memory_watchdog.kill_reason:
+            self.app.exit(self._memory_watchdog.kill_reason)
 
     def index(self):
         self.indexing_state = State.STARTING
