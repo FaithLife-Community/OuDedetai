@@ -115,6 +115,12 @@ class GuiApp(App):
         message = f"{question}\n\n{context}"
         return messagebox.askquestion(question, message.strip()) == 'yes'
 
+    def _schedule_exit_on_main_thread(self, reason: str, intended: bool) -> None:
+        # root.after is the supported way to run work on the mainloop (main)
+        # thread from another thread. The callback re-invokes exit() there, so
+        # _exit() (and root.destroy()) run on the main thread.
+        self.root.after(0, lambda: self.exit(reason, intended))
+
     def _exit(self, reason: str, intended: bool = False):
         # Create a little dialog before we die so the user can see why this happened
         if not intended:
