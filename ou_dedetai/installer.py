@@ -372,7 +372,7 @@ def ensure_product_installed(app: App):
     try:
         installed_release = app.conf.installed_faithlife_product_release
     except Exception:
-        logging.warning("Failed to determine installed version; will install.", exc_info=True)
+        logging.warning("Failed to determine the installed version proceeding with install.", exc_info=True)
         installed_release = None
 
     target_release = app.conf._raw.faithlife_product_release

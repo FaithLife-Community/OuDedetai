@@ -547,7 +547,7 @@ def update_faithlife_product(app: App):
     from ou_dedetai import installer  # local import to avoid circular dependency
     releases = app.conf.faithlife_product_releases
     if not releases:
-        app.status(f"No releases found for {app.conf.faithlife_product}; cannot update.")
+        app.status(f"No releases were found for {app.conf.faithlife_product}. Refusing to update.")
         return
     latest = releases[0]  # feed is ordered newest-first
     app.status(f"Updating {app.conf.faithlife_product} to {latest}…")
