@@ -560,6 +560,9 @@ def run_wine_process(
     if exe_args:
         command.extend(exe_args)
 
+    prefix = system.systemd_run_memory_prefix(system.get_memory_cap())
+    command = prefix + command
+
     cmd = f"Running wine cmd: '{' '.join(command)}'"
     logging.debug(cmd)
     try:

@@ -7,9 +7,11 @@ from enum import Enum
 import logging
 import psutil
 import threading
+from typing import Optional
 
 from ou_dedetai import database
 from ou_dedetai.app import App
+from ou_dedetai.watchdog import MemoryWatchdog
 
 from . import system
 from . import utils
@@ -32,6 +34,8 @@ class LogosManager:
         """These are sub-processes we started"""
         self.existing_processes: dict[str, list[psutil.Process]] = {}
         """These are processes we discovered already running"""
+        self._memory_watchdog = MemoryWatchdog(self.processes)
+        self._memory_watchdog_thread: Optional[threading.Thread] = None
 
     def monitor_indexing(self):
         if self.app.conf.logos_indexer_exe_windows_path in self.existing_processes:
@@ -132,6 +136,7 @@ class LogosManager:
             wine.wineserver_kill(self.app)
             # Don't send "Running" message to GUI b/c it never clears.
             logging.info(f"Running {self.app.conf.faithlife_product}…")
+            self._ensure_memory_watchdog()
             self.app.start_thread(run_logos, daemon_bool=False)
             # NOTE: The following code would keep the CLI open while running
             # Logos, but since wine logging is sent directly to wine.log,
@@ -237,6 +242,7 @@ class LogosManager:
         # wine.wineserver_wait(self.app)
 
     def end_processes(self):
+        self._memory_watchdog.stop()
         for process_name, process in self.processes.items():
             if isinstance(process, subprocess.Popen):
                 logging.debug(f"Found {process_name} in Processes. Attempting to close {process}.")
@@ -246,6 +252,24 @@ class LogosManager:
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid, signal.SIGTERM)
                     os.waitpid(-process.pid, 0)
+
+    def _ensure_memory_watchdog(self):
+        """Starts the memory watchdog thread if it isn't already running."""
+        if (
+            self._memory_watchdog_thread is not None
+            and self._memory_watchdog_thread.is_alive()
+        ):
+            return
+        self._memory_watchdog.reset()
+        self._memory_watchdog_thread = self.app.start_thread(self._run_watchdog)
+
+    def _run_watchdog(self):
+        """Thread target: delegates to MemoryWatchdog and exits the app on a kill."""
+        self._memory_watchdog.run()
+        if self._memory_watchdog.kill_reason:
+            self.app.status(self._memory_watchdog.kill_reason)
+            # We don't want to kill the entire app here - CLI/TUI and GUI each handle when logos terminates differently.
+            # Existing code will already find out that Logos terminated and handle accordinly.
 
     def index(self):
         self.indexing_state = State.STARTING
@@ -287,6 +311,7 @@ class LogosManager:
 
         wine.wineserver_kill(self.app)
         self.app.status("Indexing has begun…", 0)
+        self._ensure_memory_watchdog()
         index_thread = self.app.start_thread(run_indexing, daemon_bool=False)
         self.indexing_state = State.RUNNING
         self.app.start_thread(
