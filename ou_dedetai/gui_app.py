@@ -444,6 +444,10 @@ class ControlWindow(GuiApp):
             self.update_latest_lli_release_button()
         self.gui.update_lli_button.state(['disabled'])
         self.start_thread(_update_lli_version)
+
+        if self.conf._raw.faithlife_product:
+            control_gui.update_product_labelvar.set(f"Update {self.conf._raw.faithlife_product}")
+
         # Spawn a thread to ensure our logos state stays up to date
         def _monitor_faithlife_product_pids():
             last_state = copy.copy(self.logos.logos_state)
