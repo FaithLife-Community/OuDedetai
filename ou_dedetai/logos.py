@@ -117,7 +117,7 @@ class LogosManager:
         if get_logos_user_id(logos_appdata_dir) is not None:
             is_user_logged_in = True
 
-        sent_trouble_singing_in_message: bool = False
+        sent_trouble_signing_in_message: bool = False
 
         time_logos_started = time.time()
 
@@ -133,7 +133,7 @@ class LogosManager:
                     # Took me about ~1.5 minutes to sign on while simulating a little dilly-dallying and a couple
                     # incorrect password attempts. Should still be longer than most people take to sign on, but not SO
                     # long that people close OD in frustration to try again - fine line of balance.
-                    if not sent_trouble_singing_in_message and time.time() - time_logos_started > 60 * 1.75:
+                    if not sent_trouble_signing_in_message and time.time() - time_logos_started > 60 * 1.75:
                         # It's been five minutes since the user launched Logos and yet they haven't logged in yet.
                         # Are they having trouble?
                         self.app.pop_up(
@@ -149,7 +149,7 @@ class LogosManager:
                             f"If you still need help use \"Get Support\" on the main page of {constants.APP_NAME}"
                         )
                         # We only want to send this message once
-                        sent_trouble_singing_in_message = True
+                        sent_trouble_signing_in_message = True
 
 
     def start(self):
