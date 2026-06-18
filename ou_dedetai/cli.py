@@ -210,6 +210,9 @@ class CLI(App):
         if progress_str:
             print(progress_str, end="\r")
 
+    def _pop_up(self, title, message):
+        self._status(message=message)
+
     @property
     def superuser_command(self) -> str:
         if shutil.which('sudo'):

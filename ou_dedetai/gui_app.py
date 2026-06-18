@@ -92,6 +92,12 @@ class GuiApp(App):
         """Display information to the user"""
         InfoPopUp(message)
 
+    def _pop_up(self, title, message):
+        messagebox.showinfo(
+            title=title,
+            message=message
+        )
+
     def _status(self, message, percent = None):
         message = message.strip()
         if percent is not None:

@@ -201,8 +201,7 @@ def ensure_appimage_download(app: App):
     if (
         app.conf.faithlife_product_version != '9'
         and not str(app.conf.wine_binary).lower().endswith('appimage')
-        and app.conf.wine_binary != constants.WINE_RECOMMENDED_SIGIL
-        and app.conf.wine_binary != constants.WINE_BETA_SIGIL
+        and app.conf.wine_binary not in [constants.WINE_RECOMMENDED_SIGIL, constants.WINE_BETA_SIGIL]
     ):
         return
     app.status("Ensuring wine AppImage is downloaded…")
@@ -634,7 +633,13 @@ def create_launcher_shortcuts(app: App):
         filename=url_handler_desktop_filename,
         app_name=f"{flproduct} URL Handler",
         comment="Handles logos4: and libronixdls: URL Schemes",
-        exec_cmd=f"{oudedetai_executable} --wine '{app.conf.logos_exe_windows_path.replace('\\','\\\\')}' '%u'",
+        exec_cmd=(
+            f"/bin/sh -c \""
+            f"({oudedetai_executable} --wine '{app.conf.logos_exe_windows_path.replace('\\','\\\\')}' ''%u'') "
+            "|| (echo 'Failed to spawn logos. If you are logging in please hit the link for not being redirected "
+            "automatically then the link for still having trouble. If you contact support please attach this log'"
+            "; sleep 60; exit 1); wait\""
+        ),
         icon_path=app_icon_path,
         mime_types=["x-scheme-handler/logos4","x-scheme-handler/libronixdls"],
         terminal=True
