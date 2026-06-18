@@ -107,7 +107,7 @@ class LogosManager:
         logos_appdata_dir = self.app.conf._logos_appdata_dir
         if logos_appdata_dir is None:
             logging.warning("The user should have installed the Logos application by now and have this populated."
-                            " Waiting until that is resolved...")
+                            " Waiting until that is resolved…")
             while logos_appdata_dir is None:
                 time.sleep(1)
                 logos_appdata_dir = self.app.conf._logos_appdata_dir
