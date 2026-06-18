@@ -28,6 +28,9 @@ class _TestApp(App):
 
     def _status(self, message, percent=None):
         raise NotImplementedError
+    
+    def _pop_up(self, title: str, message: str):
+        raise NotImplementedError
 
 
 class TestAppExit(unittest.TestCase):
