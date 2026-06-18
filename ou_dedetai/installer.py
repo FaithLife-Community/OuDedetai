@@ -380,13 +380,13 @@ def ensure_product_installed(app: App):
     if not app.is_installed() or (
         target_release is not None and installed_release != target_release
     ):
-        # Clear out the stale cache before installing the MSI so the new value can be retrieved
-        app.conf._installed_faithlife_product_release = None
         # FIXME: Should we try to cleanup on a failed msi?
         # Like terminating msiexec if already running for Logos
         process = wine.install_msi(app)
         if process:
             process.wait()
+        # Clear out the stale cache after installing the MSI so the new value can be retrieved
+        app.conf._installed_faithlife_product_release = None
 
     # Clear installed version cache
     app.conf._installed_faithlife_product_release = None
