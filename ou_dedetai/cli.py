@@ -43,6 +43,10 @@ class CLI(App):
         installer.install(self)
         self.exit("Install has finished", intended=True)
 
+    def update_installed_app(self):
+        utils.update_faithlife_product(self)
+        self.exit("Update has finished", intended=True)
+
     def install_dependencies(self):
         utils.install_dependencies(app=self)
 

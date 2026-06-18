@@ -369,13 +369,23 @@ def ensure_product_installed(app: App):
     app.installer_step += 1
     app.status(f"Ensuring {app.conf.faithlife_product} is installed…")
 
-    if not app.is_installed():
+    try:
+        installed_release = app.conf.installed_faithlife_product_release
+    except Exception:
+        logging.warning("Failed to determine the installed version. Proceeding with install.", exc_info=True)
+        installed_release = None
+
+    target_release = app.conf._raw.faithlife_product_release
+
+    if not app.is_installed() or (
+        target_release is not None and installed_release != target_release
+    ):
         # FIXME: Should we try to cleanup on a failed msi?
         # Like terminating msiexec if already running for Logos
         process = wine.install_msi(app)
         if process:
             process.wait()
-    
+
     # Clear installed version cache
     app.conf._installed_faithlife_product_release = None
 
