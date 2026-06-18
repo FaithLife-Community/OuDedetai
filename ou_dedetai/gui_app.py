@@ -121,6 +121,12 @@ class GuiApp(App):
         message = f"{question}\n\n{context}"
         return messagebox.askquestion(question, message.strip()) == 'yes'
 
+    def _schedule_exit_on_main_thread(self, reason: str, intended: bool) -> None:
+        # root.after is the supported way to run work on the mainloop (main)
+        # thread from another thread. The callback re-invokes exit() there, so
+        # _exit() (and root.destroy()) run on the main thread.
+        self.root.after(0, lambda: self.exit(reason, intended))
+
     def _exit(self, reason: str, intended: bool = False):
         # Create a little dialog before we die so the user can see why this happened
         if not intended:
@@ -450,6 +456,10 @@ class ControlWindow(GuiApp):
             self.update_latest_lli_release_button()
         self.gui.update_lli_button.state(['disabled'])
         self.start_thread(_update_lli_version)
+
+        if self.conf._raw.faithlife_product:
+            control_gui.update_product_labelvar.set(f"Update {self.conf._raw.faithlife_product}")
+
         # Spawn a thread to ensure our logos state stays up to date
         def _monitor_faithlife_product_pids():
             last_state = copy.copy(self.logos.logos_state)
@@ -495,6 +505,7 @@ class ControlWindow(GuiApp):
         self.gui.deps_button.config(command=self.install_deps)
         self.gui.backup_button.config(command=self.run_backup)
         self.gui.restore_button.config(command=self.run_restore)
+        self.gui.update_product_button.config(command=self.update_faithlife_product)
         self.gui.update_lli_button.config(
             command=self.update_to_latest_lli_release
         )
@@ -607,6 +618,10 @@ class ControlWindow(GuiApp):
             ],
         )
         return file_path
+
+    def update_faithlife_product(self, evt=None):
+        self.status(f"Updating {self.conf.faithlife_product} to latest release…")
+        self.start_thread(utils.update_faithlife_product, app=self)
 
     def update_to_latest_lli_release(self, evt=None):
         self.status(f"Updating to latest {constants.APP_NAME} version…")
@@ -752,6 +767,9 @@ class ControlWindow(GuiApp):
             self.update_latest_appimage_button()
         except Exception:
             logging.exception("Failed to update appimage button")
+        product = self.conf._raw.faithlife_product
+        if product:
+            self.gui.update_product_labelvar.set(f"Update {product}")
 
 
     def current_logging_state_value(self) -> str:

@@ -23,6 +23,7 @@ requires-python = ">=3.12"
 
 [project.optional-dependencies]
 build = ["pyinstaller"]
+dev = ["mypy", "ruff"]
 
 [project.scripts]
 oudedetai = "ou_dedetai.main:main"

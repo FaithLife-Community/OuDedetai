@@ -389,6 +389,11 @@ class TUI(App):
             logging.error(f"An error occurred in end_curses(): {e}")
             raise
 
+    def _schedule_exit_on_main_thread(self, reason: str, intended: bool) -> None:
+        # No wake needed: the display() loop already spins every ~100ms (the
+        # stdscr timeout) and polls _pending_exit, which App.exit() has set.
+        pass
+
     def _exit(self, reason, intended = False):
         message = f"Exiting {constants.APP_NAME} due to {reason}…"
         if not intended:
@@ -469,6 +474,11 @@ class TUI(App):
         check_resize_last_time = last_time = time.time()
 
         while self.is_running:
+            # A worker thread (e.g. the memory watchdog) may have asked us to
+            # exit; run it here on the main thread so curses cleanup and the
+            # process exit happen on the correct thread.
+            if self._pending_exit is not None:
+                self.exit(*self._pending_exit)
             if self.window_height >= self.window_height_min and self.window_width >= 35:
                 self.terminal_margin = 2
                 if not self.resizing:
@@ -609,6 +619,10 @@ class TUI(App):
             finally:
                 self.conf._overrides.assume_yes = original_assume_yes
                 self.go_to_main_menu()
+        
+        def _update_faithlife_product(app: "TUI"):
+            utils.update_faithlife_product(app)
+            app.go_to_main_menu()
 
         if choice is None or choice == "Exit":
             logging.info("Exiting installation.")
@@ -638,6 +652,9 @@ class TUI(App):
             )
         elif choice.startswith(f"Update {constants.APP_NAME}"):
             utils.update_to_latest_lli_release(self)
+        elif self.conf._raw.faithlife_product and choice == f"Update {self.conf.faithlife_product}":
+            self.reset_screen()
+            self.start_thread(_update_faithlife_product, app=self, daemon_bool=True)
         elif self.conf._raw.faithlife_product and choice == f"Run {self.conf._raw.faithlife_product}": 
             self.reset_screen()
             self.logos.start()
@@ -1022,7 +1039,7 @@ class TUI(App):
                 indexing = "Stop Indexing"
             elif self.logos.indexing_state == logos.State.STOPPED:
                 indexing = "Run Indexing"
-            labels_default = [run, indexing]
+            labels_default = [run, indexing, f"Update {self.conf.faithlife_product}"]
         else:
             labels_default = ["Install", "Advanced Install"]
         labels.extend(labels_default)

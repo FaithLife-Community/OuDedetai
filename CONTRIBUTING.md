@@ -83,7 +83,8 @@ OuDedetai$ source env/bin/activate # activate the env
 (env) OuDedetai$ python --version # verify python version
 Python 3.12.5
 (env) OuDedetai$ python -m tkinter # verify that tkinter test window opens
-(env) OuDedetai$ pip install -r .[build] # install python packages
+(env) OuDedetai$ pip install .[build] # install python packages
+(env) OuDedetai$ pip install .[dev] # optional: install mypy + ruff for linting/type-checking
 (env) OuDedetai$ python -m ou_dedetai.main --help # run the script
 ```
 

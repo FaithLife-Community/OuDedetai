@@ -251,6 +251,10 @@ class ControlGui(StatusGui):
         # Install deps button
         self.deps_label = Label(self, text="Install dependencies")
         self.deps_button = Button(self, text="Install")
+        # Update Faithlife product button
+        self.update_product_labelvar = StringVar(value="Update Faithlife Product")
+        self.update_product_label = Label(self, textvariable=self.update_product_labelvar)
+        self.update_product_button = Button(self, text="Update")
         # Backup/restore data buttons
         self.backups_label = Label(self, text="Backup/restore data")
         self.backup_button = Button(self, text="Backup")
@@ -305,6 +309,9 @@ class ControlGui(StatusGui):
         row += 1
         self.deps_label.grid(column=0, row=row, sticky='w', pady=2)
         self.deps_button.grid(column=1, row=row, sticky='w', pady=2)
+        row += 1
+        self.update_product_label.grid(column=0, row=row, sticky='w', pady=2)
+        self.update_product_button.grid(column=1, row=row, sticky='w', pady=2)
         # row += 1
         # self.backups_label.grid(column=0, row=row, sticky='w', pady=2)
         # self.backup_button.grid(column=1, row=row, sticky='w', pady=2)

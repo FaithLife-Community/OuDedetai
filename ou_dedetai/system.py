@@ -455,7 +455,7 @@ def get_package_manager() -> PackageManager | None:
             "binutils wget winbind "  # wine
             "p7zip-full cabextract " # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
-            "mesa-utils"  # verify opengl version
+            "mesa-utils "  # verify opengl version
         )
 
         # Now set the appimage packages, this has changed over time
@@ -554,7 +554,7 @@ def get_package_manager() -> PackageManager | None:
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks (7zip used to be called p7zip)
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
-            "mesa-utils"  # verify opengl version
+            "mesa-utils "  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('pacman') is not None:  # arch, steamOS
@@ -576,7 +576,7 @@ def get_package_manager() -> PackageManager | None:
                 "lib32-ncurses ocl-icd lib32-ocl-icd libxslt lib32-libxslt libva lib32-libva gtk3 lib32-gtk3 "
                 "gst-plugins-base-libs lib32-gst-plugins-base-libs vulkan-icd-loader lib32-vulkan-icd-loader "
                 "xdg-utils " # For xdg-mime needed for custom url scheme registration
-                "mesa-utils"  # verify opengl version
+                "mesa-utils "  # verify opengl version
             )
         else:  # arch
             packages = (
@@ -589,7 +589,7 @@ def get_package_manager() -> PackageManager | None:
                 "libva mpg123 v4l-utils "  # video
                 "libxslt sqlite "  # misc
                 "xdg-utils " # For xdg-mime needed for custom url scheme registration
-                "mesa-utils"  # verify opengl version
+                "mesa-utils "  # verify opengl version
             )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif os_name == "org.freedesktop.platform":

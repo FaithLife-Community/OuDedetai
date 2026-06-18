@@ -112,6 +112,10 @@ def get_parser():
         help='install FaithLife app',
     )
     cmd.add_argument(
+        '--update-installed-app', action='store_true',
+        help='update the installed FaithLife app to the latest release',
+    )
+    cmd.add_argument(
         '--run-installed-app', '-C', action='store_true',
         help='run installed FaithLife app',
     )
@@ -284,6 +288,7 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
         'restore',
         'run_indexing',
         'run_installed_app',
+        'update_installed_app',
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
@@ -403,6 +408,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         'restore',
         'run_indexing',
         'run_installed_app',
+        'update_installed_app',
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
