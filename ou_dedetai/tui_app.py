@@ -389,6 +389,11 @@ class TUI(App):
             logging.error(f"An error occurred in end_curses(): {e}")
             raise
 
+    def _schedule_exit_on_main_thread(self, reason: str, intended: bool) -> None:
+        # No wake needed: the display() loop already spins every ~100ms (the
+        # stdscr timeout) and polls _pending_exit, which App.exit() has set.
+        pass
+
     def _exit(self, reason, intended = False):
         message = f"Exiting {constants.APP_NAME} due to {reason}…"
         if not intended:
@@ -469,6 +474,11 @@ class TUI(App):
         check_resize_last_time = last_time = time.time()
 
         while self.is_running:
+            # A worker thread (e.g. the memory watchdog) may have asked us to
+            # exit; run it here on the main thread so curses cleanup and the
+            # process exit happen on the correct thread.
+            if self._pending_exit is not None:
+                self.exit(*self._pending_exit)
             if self.window_height >= self.window_height_min and self.window_width >= 35:
                 self.terminal_margin = 2
                 if not self.resizing:

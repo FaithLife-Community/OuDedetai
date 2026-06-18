@@ -72,6 +72,10 @@ class CLI(App):
         self.logos.start()
         # Keep the process running so that our background threads can keep running
         while self.logos.logos_state != LogosRunningState.STOPPED:
+            # A worker thread (e.g. the memory watchdog) may have asked us to
+            # exit; run it here on the main thread so the process truly stops.
+            if self._pending_exit is not None:
+                self.exit(*self._pending_exit)
             time.sleep(3)
             self.logos.monitor()
 
@@ -119,7 +123,7 @@ class CLI(App):
     def get_support(self):
         control.get_support(self)
 
-    _exit_option: str = "Exit"
+    _exit_option: str | None = "Exit"
 
     def _ask(self, question: str, options: list[str] | str) -> str:
         """Passes the user input to the user_input_processor thread
@@ -163,6 +167,10 @@ class CLI(App):
             ).decode(),
             end=""
         )
+
+    def _schedule_exit_on_main_thread(self, reason: str, intended: bool) -> None:
+        # Same handling - exit happens to be thread safe today.
+        self._exit(reason=reason, intended=intended)
 
     def exit(self, reason: str, intended: bool = False):
         # Signal CLI.user_input_processor to stop.
