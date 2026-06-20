@@ -1039,7 +1039,12 @@ class TUI(App):
                 indexing = "Stop Indexing"
             elif self.logos.indexing_state == logos.State.STOPPED:
                 indexing = "Run Indexing"
-            labels_default = [run, indexing, f"Update {self.conf.faithlife_product}"]
+            labels_default = [run, indexing]
+
+            # This request goes out to the internet but uses the cache.
+            # May slow TUI responsiveness on open on very slow ping networks
+            if not self.conf.is_installed_faithlife_product_release_latest:
+                labels_default.append(f"Update {self.conf.faithlife_product}")
         else:
             labels_default = ["Install", "Advanced Install"]
         labels.extend(labels_default)

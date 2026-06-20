@@ -725,6 +725,25 @@ class Config:
         options = self.faithlife_product_releases
         return self._ask_if_not_found("faithlife_product_release", question, options)
 
+    @property
+    def is_installed_faithlife_product_release_latest(self) -> Optional[bool]:
+        releases = self.faithlife_product_releases
+        if not releases:
+            # We didn't get any releases back. Strange.
+            logging.debug("No faithlife releases on the given channel.")
+            return None
+        installed = self.installed_faithlife_product_release
+        if installed is None:
+            return None
+        # Now unfortunately the format differs between the releases and the installed one
+        # the releases has it in the form 51.1.0.0003 (notice the padded 0 on the build number)
+        # While the installed version has it in the form 51.1.0.3
+        # Normalize both to tuples of ints so the padding doesn't matter.
+        def _normalize(version: str) -> tuple[int, ...]:
+            return tuple(int(part) for part in version.split("."))
+
+        return _normalize(releases[0]) == _normalize(installed)
+
     @faithlife_product_release.setter
     def faithlife_product_release(self, value: Optional[str]):
         if self._raw.faithlife_product_release != value:
