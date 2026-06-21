@@ -1,5 +1,9 @@
 # Changelog
 
+- 4.0.0-beta.14
+	- This release adds an update Logos button [N. Shaaban]
+	- OD now detects OpenGL version [T. H. Wright]
+	- Various bugs and AI agent files [N. Shaaban]
 - 4.0.0-beta.13
 	- This release fixes some bugs found since beta 12. [N. Shaaban]
 	- This release also adds some initial support for containerized browsers. [N. Shaaban]
