@@ -702,6 +702,21 @@ class ControlWindow(GuiApp):
                 self.gui.app_button.state(['disabled'])
                 self.gui.app_install_advanced.state(['disabled'])
 
+    def update_product_button(self, evt=None):
+        msg = None
+        if not self.is_installed():
+            state = 'disabled'
+            msg = "This button is disabled. Please install first."
+        elif self.conf.is_installed_faithlife_product_release_latest:
+            state = 'disabled'
+            msg = f"This button is disabled. {self.conf.faithlife_product} is up-to-date."
+        else:
+            state = '!disabled'
+        if msg:
+            gui.ToolTip(self.gui.update_product_button, msg)
+        self.clear_status()
+        self.gui.update_product_button.state([state])
+
     def update_latest_lli_release_button(self, evt=None):
         msg = None
         result = utils.compare_logos_linux_installer_version(self)
@@ -767,6 +782,10 @@ class ControlWindow(GuiApp):
             self.update_latest_appimage_button()
         except Exception:
             logging.exception("Failed to update appimage button")
+        try:
+            self.update_product_button()
+        except Exception:
+            logging.exception("Failed to update product button")
         product = self.conf._raw.faithlife_product
         if product:
             self.gui.update_product_labelvar.set(f"Update {product}")
