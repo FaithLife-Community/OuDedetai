@@ -255,6 +255,17 @@ class TestGeneralUtils(unittest.TestCase):
     def test_get_path_size_notexists(self):
         self.assertEqual(0, utils.get_path_size('./no_dir'))
 
+    def test_format_bytes(self):
+        self.assertEqual('0 B', utils.format_bytes(0))
+        self.assertEqual('512 B', utils.format_bytes(512))
+        self.assertEqual('1.0 KiB', utils.format_bytes(1024))
+        self.assertEqual('1.5 KiB', utils.format_bytes(1536))
+        self.assertEqual('1.0 MiB', utils.format_bytes(1024 ** 2))
+        self.assertEqual('2.0 GiB', utils.format_bytes(2 * 1024 ** 3))
+        self.assertEqual('1.0 TiB', utils.format_bytes(1024 ** 4))
+        # Values beyond TiB keep the TiB unit rather than overflowing
+        self.assertEqual('1024.0 TiB', utils.format_bytes(1024 ** 5))
+
     # @unittest.skip("Unused function")
     # def test_get_procs_using_file(self):
     #     with tempfile.TemporaryFile() as tf:
