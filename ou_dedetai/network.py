@@ -101,7 +101,7 @@ class UrlProps(Props):
             r = requests.head(self.path, allow_redirects=True, headers=h)
         except requests.exceptions.ConnectionError:
             logging.critical("Failed to connect to the server.")
-            raise
+            return requests.structures.CaseInsensitiveDict()
         except Exception as e:
             logging.error(e)
             raise
@@ -622,7 +622,8 @@ def _get_release_data(repository) -> GithubSoftwareReleasesInfo:
     releases_url = f"https://api.github.com/repos/{repository}/releases"
     data = _net_get(releases_url)
     if data is None:
-        raise Exception("Could not get releases from github.")
+        logging.warning("Could not get releases from github.")
+        return GithubSoftwareReleasesInfo(latest=None, pre_release=None)
     try:
         json_data: list[dict] = json.loads(data.decode())
     except json.JSONDecodeError as e:
@@ -677,7 +678,8 @@ def _get_faithlife_product_releases(
     
     response_xml_bytes = _net_get(url)
     if response_xml_bytes is None:
-        raise Exception("Failed to get logos releases")
+        logging.warning("Failed to get logos releases")
+        return []
 
     # Parse XML
     root = ET.fromstring(response_xml_bytes.decode('utf-8-sig'))
