@@ -64,3 +64,14 @@ class LogosNotebook:
     @classmethod
     def from_row(cls, row: Row) -> "LogosNotebook":
         return cls(**dict(row))
+
+
+@dataclass
+class LogosTag:
+    TagId: int
+    Text: str
+    FoldedText: str
+
+    @classmethod
+    def from_row(cls, row: Row) -> "LogosTag":
+        return cls(**dict(row))
