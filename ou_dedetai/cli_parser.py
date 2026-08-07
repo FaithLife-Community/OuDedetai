@@ -230,16 +230,6 @@ def add_database_parser(subparsers):
         "count",
         help="show note counts",
     )
-    dump_parser = notes_commands.add_parser(
-        "dump",
-        help="dump sample notes",
-    )
-    dump_parser.add_argument(
-        "--limit",
-        type=int,
-        default=5,
-        help="number of notes to dump",
-    )
     get_parser = notes_commands.add_parser(
         "get",
         help="show a single note",

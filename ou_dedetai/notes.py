@@ -43,3 +43,24 @@ class LogosNote:
     @classmethod
     def from_row(cls, row: Row) -> "LogosNote":
         return cls(**dict(row))
+
+
+@dataclass(slots=True)
+class LogosNotebook:
+    NotebookId: int
+    ExternalId: str
+    RevisionToken: str
+    CreatedDate: str
+    ModifiedDate: str
+    CreatedBy: Optional[str]
+    ModifiedBy: Optional[str]
+    IsDeleted: bool
+    IsTrashed: bool
+    IsSyncing: bool
+    Title: str
+    ImportId: Optional[str]
+    Role: int
+
+    @classmethod
+    def from_row(cls, row: Row) -> "LogosNotebook":
+        return cls(**dict(row))
