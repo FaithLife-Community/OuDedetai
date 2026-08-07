@@ -351,7 +351,10 @@ class NotesDatabase(FaithlifeDatabase):
               AND IsTrashed = 0
             ORDER BY ModifiedDate DESC
         """)
-        return [LogosNote.from_row(row) for row in rows]
+        return [
+            self.hydrate_note(LogosNote.from_row(row))
+            for row in rows
+        ]
 
     def note_count(self) -> int:
         return self.scalar("""
@@ -361,6 +364,14 @@ class NotesDatabase(FaithlifeDatabase):
               AND IsTrashed = 0
         """) or 0
 
+    def hydrate_note(
+        self,
+        note: LogosNote,
+    ) -> LogosNote:
+        note.Notebook = self.get_notebook_for_note(note)
+        note.Tags = self.get_tags_for_note(note)
+        return note
+
     def get_note(self, note_id: int) -> LogosNote:
         row = self.fetch_one(
             "SELECT * FROM Notes WHERE NoteId = ?",
@@ -368,7 +379,8 @@ class NotesDatabase(FaithlifeDatabase):
         )
         if row is None:
             raise RuntimeError(f"Note not found: {note_id}")
-        return LogosNote.from_row(row)
+        note = LogosNote.from_row(row)
+        return self.hydrate_note(LogosNote.from_row(row))
 
     def __enter__(self):
         super().__enter__()
