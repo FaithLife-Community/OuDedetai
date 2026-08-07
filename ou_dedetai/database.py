@@ -8,8 +8,6 @@ from pathlib import Path
 from typing import Any, Optional
 from collections.abc import Sequence
 
-from ou_dedetai.paths import LogosPaths
-
 
 class SQLiteDatabase(contextlib.AbstractContextManager):
     """Class for interacting with internal Faithlife databases.
@@ -405,6 +403,21 @@ class DatabaseInspector:
         database: SQLiteDatabase,
     ):
         self.database = database
+
+    def tables(self) -> list[str]:
+        rows = self.database.query("""
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+            ORDER BY name
+        """)
+
+        return [row["name"] for row in rows]
+
+    def schema(self, table: str):
+        return self.database.query(
+            f"PRAGMA table_info('{table}')"
+        )
 
     def summary(self) -> dict[str, Any]:
         return self.database.database_info()

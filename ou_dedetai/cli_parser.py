@@ -2,7 +2,7 @@ import argparse
 import os
 from typing import Tuple, Callable
 
-from . import constants, database_cli, msg, cli, utils, actions
+from . import constants, cli_parser_database, msg, cli, utils, actions
 from .config import EphemeralConfiguration
 
 
@@ -202,7 +202,7 @@ def get_parser():
         help="run winetricks command",
     )
 
-    database_cli.add_database_parser(
+    cli_parser_database.add_database_parser(
         parser.add_subparsers(
             dest="command",
             title="commands",
@@ -221,7 +221,7 @@ def parse_args(logging, args, parser) -> Tuple[EphemeralConfiguration, Callable[
     if args.command == "database":
         return (
             ephemeral_config,
-            database_cli.parse_database_command(
+            cli_parser_database.parse_database_command(
                 args,
                 ephemeral_config,
             ),
