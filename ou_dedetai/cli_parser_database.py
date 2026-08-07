@@ -17,7 +17,7 @@ def add_database_parser(subparsers):
     )
     dump_parser = db_commands.add_parser(
         "dump",
-        help="dump sample notes",
+        help="dump rows from a database table",
     )
     dump_parser.add_argument(
         "table",
@@ -76,11 +76,23 @@ def add_database_parser(subparsers):
         type=int,
         help="NoteId to display",
     )
+    render_parser = notes_commands.add_parser(
+        "render",
+        help="render a note as Markdown",
+    )
+    render_parser.add_argument(
+        "note_id",
+        type=int,
+        help="NoteId to render",
+    )
     return db_parser
 
 
 def parse_database_command(args, ephemeral_config):
     ephemeral_config.database_command = args.database_command
+    if args.database_command == "inspect":
+        ephemeral_config.database_path = args.path
+        return actions_database.database_operation
 
     if args.database_command == "list":
         return actions_database.database_list_operation
@@ -92,26 +104,20 @@ def parse_database_command(args, ephemeral_config):
 
     if args.database_command == "notes":
         ephemeral_config.notes_command = args.notes_command
-
         if args.notes_command == "count":
             return actions_database.database_notes_count_operation
-
         if args.notes_command == "info":
             return actions_database.database_notes_info_operation
-
         if args.notes_command == "tables":
             return actions_database.database_notes_tables_operation
-
         if args.notes_command == "schema":
             ephemeral_config.database_table = args.table
             return actions_database.database_notes_schema_operation
-
         if args.notes_command == "get":
             ephemeral_config.note_id = args.note_id
             return actions_database.database_notes_get_operation
-
-    if args.database_command == "inspect":
-        ephemeral_config.database_path = args.path
-        return actions_database.database_operation
+        if args.notes_command == "render":
+            ephemeral_config.note_id = args.note_id
+            return actions_database.database_notes_render_operation
 
     raise RuntimeError(f"Unknown database command: {args.database_command}")

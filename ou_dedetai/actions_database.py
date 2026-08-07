@@ -106,8 +106,13 @@ def database_notes_schema_operation(ephemeral_config):
 
 def database_notes_get_operation(ephemeral_config: EphemeralConfiguration):
     paths = get_logos_paths(ephemeral_config)
-
     with NotesDatabase(paths.appdata, paths.user_id) as db:
         note = db.get_note(ephemeral_config.note_id)
-
     print(note)
+
+
+def database_notes_render_operation(ephemeral_config: EphemeralConfiguration):
+    paths = get_logos_paths(ephemeral_config)
+    with NotesDatabase(paths.appdata, paths.user_id) as db:
+        note = db.get_note(ephemeral_config.note_id)
+    print(note.to_markdown())
