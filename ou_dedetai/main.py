@@ -66,6 +66,12 @@ def database_notes_get_operation(ephemeral_config: EphemeralConfiguration):
         note = db.get_note(ephemeral_config.note_id)
 
     print(note)
+
+def database_notes_render_operation(ephemeral_config: EphemeralConfiguration):
+    paths = utils.get_logos_paths(ephemeral_config)
+    with database.NotesDatabase(paths.appdata, paths.user_id) as db:
+        note = db.get_note(ephemeral_config.note_id)
+    print(note.to_markdown())
 # End Program Actions
 
 def parse_database_command(args):

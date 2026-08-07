@@ -219,7 +219,7 @@ class EphemeralConfiguration:
     # Start internal values
     config_path: str
     """Path this config was loaded from"""
-    
+
     assume_yes: bool = False
     """Whether to assume yes to all prompts or ask the user
     

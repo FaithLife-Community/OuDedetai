@@ -239,6 +239,15 @@ def add_database_parser(subparsers):
         type=int,
         help="NoteId to display",
     )
+    render_parser = notes_commands.add_parser(
+        "render",
+        help="render a note as Markdown",
+    )
+    render_parser.add_argument(
+        "note_id",
+        type=int,
+        help="NoteId to render",
+    )
     return db_parser
 
 
@@ -251,11 +260,11 @@ def parse_database_command(args, ephemeral_config):
 
     if args.database_command == "notes":
         if args.notes_command == "dump":
-            ephemeral_config.database_limit = args.limit
             return main.database_notes_dump_operation
         if args.notes_command == "get":
-            ephemeral_config.note_id = args.note_id
             return main.database_notes_get_operation
+        if args.notes_command == "render":
+            return main.database_notes_render_operation
 
     raise RuntimeError(f"Unknown database command: {args.database_command}")
 
