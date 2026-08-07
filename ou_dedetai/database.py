@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Optional
 from collections.abc import Sequence
 
-from ou_dedetai.notes import LogosNote, LogosNotebook
+from ou_dedetai.notes import LogosNote, LogosNotebook, LogosTag
 
 
 @dataclass(frozen=True)
@@ -374,7 +374,6 @@ class NotesDatabase(FaithlifeDatabase):
         super().__enter__()
         return self
 
-
     def notebooks(self) -> list[LogosNotebook]:
         rows = self.query("""
             SELECT *
@@ -385,7 +384,6 @@ class NotesDatabase(FaithlifeDatabase):
         """)
         return [LogosNotebook.from_row(row) for row in rows]
 
-
     def get_notebook(self, notebook_id: int) -> LogosNotebook:
         row = self.query_one(
             "SELECT * FROM Notebooks WHERE NotebookId = ?",
@@ -395,6 +393,13 @@ class NotesDatabase(FaithlifeDatabase):
             raise RuntimeError(f"Notebook not found: {notebook_id}")
         return LogosNotebook.from_row(row)
 
+    def tags(self) -> list[LogosTag]:
+        rows = self.query("""
+            SELECT *
+            FROM Tags
+            ORDER BY Text
+        """)
+        return [LogosTag.from_row(row) for row in rows]
 
     def get_notebook_by_external_id(
         self,
@@ -416,8 +421,35 @@ class NotesDatabase(FaithlifeDatabase):
     ) -> LogosNotebook | None:
         if not note.NotebookExternalId:
             return None
-
         return self.get_notebook_by_external_id(note.NotebookExternalId)
+
+    def get_tag(self, tag_id: int) -> LogosTag:
+        row = self.fetch_one(
+            "SELECT * FROM Tags WHERE TagId = ?",
+            (tag_id,),
+        )
+        if row is None:
+            raise RuntimeError(
+                f"Tag not found: {tag_id}"
+            )
+        return LogosTag.from_row(row)
+
+    def get_tags_for_note(
+        self,
+        note: LogosNote,
+    ) -> list[LogosTag]:
+        rows = self.query(
+            """
+            SELECT Tags.*
+            FROM Tags
+            JOIN NoteTags
+                ON Tags.TagId = NoteTags.TagId
+            WHERE NoteTags.NoteId = ?
+            ORDER BY Tags.Text
+            """,
+            (note.NoteId,),
+        )
+        return [LogosTag.from_row(row) for row in rows]
 
 
 # FIXME: refactor into FaithlifeDatabase class
