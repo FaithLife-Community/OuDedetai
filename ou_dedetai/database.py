@@ -2,9 +2,12 @@ import abc
 import contextlib
 import logging
 import sqlite3
+from typing_extensions import deprecated
+
 import inotify.adapters # type: ignore
 from pathlib import Path
 from typing import Any, Optional
+from collections.abc import Sequence
 
 
 class FaithlifeDatabase(contextlib.AbstractContextManager):
@@ -23,30 +26,230 @@ class FaithlifeDatabase(contextlib.AbstractContextManager):
     ):
         self.logos_app_dir = logos_app_dir
         self.logos_user_id = logos_user_id
+        self._db = None
 
     @abc.abstractmethod
     def _database_path(self) -> Path:
         """Path to the database"""
         pass
 
-    def execute_sql(
+    def execute(
         self,
         sql_statement: str,
-        parameters: list[str] = list(frozenset())
-    ) -> list[Any]:
-        return self.database.execute(sql_statement, parameters).fetchall()
-        
+        parameters: Sequence[Any] = None,
+    ) -> sqlite3.Cursor:
+        if parameters is None:
+            parameters = ()
+        return self.database.execute(sql_statement, parameters)
+
+    def query(
+        self,
+        sql_statement: str,
+        parameters: Sequence[Any] = None,
+    ) -> list[sqlite3.Row]:
+        if parameters is None:
+            parameters = ()
+        return self.execute(sql_statement, parameters).fetchall()
+
+    def query_one(
+        self,
+        sql_statement: str,
+        parameters: Sequence[Any] = None,
+    ) -> Optional[sqlite3.Row]:
+        if parameters is None:
+            parameters = ()
+        return self.execute(sql_statement, parameters).fetchone()
+
+    def scalar(
+        self,
+        sql_statement: str,
+        parameters: Sequence[Any] = None,
+    ) -> Optional[Any]:
+        row = self.query_one(sql_statement, parameters)
+        return None if row is None else row[0]
+
     def fetch_one(
         self,
         sql_statement: str,
-        parameters: list[str] = list(frozenset())
+        parameters: Sequence[Any] = None,
     ) -> Optional[Any]:
-        contents = self.execute_sql(sql_statement, parameters)
-        if contents and len(contents) > 0:
-            # Content comes in as a tuple, trailing , unpacks first argument
-            content, = contents[0]
-            return content
-        return None
+        return self.scalar(sql_statement, parameters)
+
+    def table_names(self) -> list[str]:
+        rows = self.query("""
+            SELECT name
+            FROM sqlite_master
+            WHERE type='table'
+            ORDER BY name
+        """)
+        return [row["name"] for row in rows]
+
+    def column_names(
+        self,
+        table: str,
+    ) -> list[str]:
+        return [
+            column["name"]
+            for column in self.columns(table)
+        ]
+
+    def views(self) -> list[str]:
+        rows = self.query("""
+            SELECT name
+            FROM sqlite_master
+            WHERE type='view'
+            ORDER BY name
+        """)
+        return [row["name"] for row in rows]
+
+    def indexes(self) -> list[str]:
+        rows = self.query("""
+            SELECT name
+            FROM sqlite_master
+            WHERE type='index'
+            ORDER BY name
+        """)
+        return [row["name"] for row in rows]
+
+    def has_table(
+        self,
+        table: str,
+    ) -> bool:
+        return table in self.table_names()
+
+    def columns(
+        self,
+        table: str,
+    ) -> list[sqlite3.Row]:
+        if not self.has_table(table):
+            raise ValueError(f"Unknown table: {table}")
+        return self.query(f"PRAGMA table_info([{table}])")
+
+    def schema(self) -> list[sqlite3.Row]:
+        return self.query("""
+            SELECT
+                type,
+                name,
+                tbl_name,
+                sql
+            FROM sqlite_master
+            ORDER BY type, name
+        """)
+
+    def table_schema(
+        self,
+        table: str,
+    ) -> str | None:
+        return self.scalar(
+            """
+            SELECT sql
+            FROM sqlite_master
+            WHERE type='table'
+              AND name=?
+            """,
+            [table],
+        )
+
+    def count(
+        self,
+        table: str,
+    ) -> int:
+        if not self.has_table(table):
+            raise ValueError(f"Unknown table: {table}")
+        return self.scalar(f"SELECT COUNT(*) FROM {table}") or 0
+
+    def table_indexes(
+            self,
+            table: str,
+    ) -> list[str]:
+        if not self.has_table(table):
+            raise ValueError(f"Unknown table: {table}")
+
+        rows = self.query(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type='index'
+              AND tbl_name=?
+            ORDER BY name
+            """,
+            [table],
+        )
+
+        return [row["name"] for row in rows]
+
+    def describe(
+        self,
+        table: str,
+    ) -> dict[str, Any]:
+        if not self.has_table(table):
+            raise ValueError(f"Unknown table: {table}")
+
+        return {
+            "table": table,
+            "columns": [
+                dict(row)
+                for row in self.columns(table)
+            ],
+            "indexes": self.table_indexes(table),
+            "count": self.count(table),
+            "schema": self.table_schema(table),
+        }
+
+    def foreign_keys(
+        self,
+        table: str,
+    ) -> list[sqlite3.Row]:
+        if not self.has_table(table):
+            raise ValueError(f"Unknown table: {table}")
+
+        return self.query(
+            f"PRAGMA foreign_key_list([{table}])"
+        )
+
+    def sample(
+        self,
+        table: str,
+        limit: int = 5,
+    ) -> list[sqlite3.Row]:
+        if not self.has_table(table):
+            raise ValueError(f"Unknown table: {table}")
+
+        return self.query(
+            f"""
+            SELECT *
+            FROM [{table}]
+            LIMIT ?
+            """,
+            [limit],
+        )
+
+    def triggers(self) -> list[str]:
+        rows = self.query("""
+            SELECT name
+            FROM sqlite_master
+            WHERE type='trigger'
+            ORDER BY name
+        """)
+        return [row["name"] for row in rows]
+
+    def database_info(self) -> dict[str, Any]:
+        return {
+            "path": str(self._database_path()),
+            "size": self._database_path().stat().st_size,
+            "tables": self.table_names(),
+            "views": self.views(),
+            "indexes": self.indexes(),
+            "triggers": self.triggers(),
+        }
+
+    def dump(
+        self,
+        table: str,
+        limit: int = 10,
+    ) -> None:
+        for row in self.sample(table, limit):
+            print(dict(row))
 
     @property
     def database(self) -> sqlite3.Connection:
@@ -55,14 +258,19 @@ class FaithlifeDatabase(contextlib.AbstractContextManager):
         return self._db
 
     def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(str(self._database_path()), autocommit=True)
+        db = sqlite3.connect(
+            str(self._database_path()),
+            autocommit=True,
+        )
+        db.row_factory = sqlite3.Row
+        return db
 
     def close(self):
         if self._db:
             self._db.close()
+            self._db = None
 
     def __enter__(self):
-        self._db = self._connect()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -83,7 +291,7 @@ class LocalUserPreferencesManager(FaithlifeDatabase):
     
     @app_local_preferences.setter
     def app_local_preferences(self, value: str):
-        self.execute_sql(
+        self.query(
             "UPDATE Preferences SET Data= ? WHERE `Type`='AppLocalPreferences'", 
             [value]
         )
