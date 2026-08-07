@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Optional
 from collections.abc import Sequence
 
+from ou_dedetai.notes import LogosNote
+
 
 class SQLiteDatabase(contextlib.AbstractContextManager):
     """Class for interacting with internal Faithlife databases.
@@ -65,7 +67,15 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
         sql_statement: str,
         parameters: Sequence[Any] = None,
     ) -> Optional[Any]:
-        return self.scalar(sql_statement, parameters)
+        if parameters is None:
+            parameters = ()
+        return self.execute(sql_statement, parameters).fetchone()
+
+    def fetch_value(self, query, params=()):
+        row = self.fetch_one(query, params)
+        if row is None:
+            return None
+        return row[0]
 
     def table_names(self) -> list[str]:
         rows = self.query("""
@@ -334,6 +344,15 @@ class NotesDatabase(FaithlifeDatabase):
             WHERE IsDeleted = 0
               AND IsTrashed = 0
         """) or 0
+
+    def get_note(self, note_id: int) -> LogosNote:
+        row = self.fetch_one(
+            "SELECT * FROM Notes WHERE NoteId = ?",
+            (note_id,)
+        )
+        if row is None:
+            raise RuntimeError(f"Note not found: {note_id}")
+        return LogosNote.from_row(row)
 
     def __enter__(self):
         super().__enter__()

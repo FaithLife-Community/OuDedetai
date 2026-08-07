@@ -1,4 +1,4 @@
-import actions_database
+from . import actions_database
 
 
 def add_database_parser(subparsers):
@@ -63,6 +63,15 @@ def add_database_parser(subparsers):
         default=5,
         help="number of notes to dump",
     )
+    get_parser = notes_commands.add_parser(
+        "get",
+        help="show a single note",
+    )
+    get_parser.add_argument(
+        "note_id",
+        type=int,
+        help="NoteId to display",
+    )
     return db_parser
 
 
@@ -91,6 +100,10 @@ def parse_database_command(args, ephemeral_config):
         if args.notes_command == "dump":
             ephemeral_config.database_limit = args.limit
             return actions_database.database_notes_dump_operation
+
+        if args.notes_command == "get":
+            ephemeral_config.note_id = args.note_id
+            return actions_database.database_notes_get_operation
 
     if args.database_command == "inspect":
         ephemeral_config.database_path = args.path
