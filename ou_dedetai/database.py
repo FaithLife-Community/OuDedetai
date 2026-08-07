@@ -2,15 +2,16 @@ import abc
 import contextlib
 import logging
 import sqlite3
-from typing_extensions import deprecated
 
 import inotify.adapters # type: ignore
 from pathlib import Path
 from typing import Any, Optional
 from collections.abc import Sequence
 
+from ou_dedetai.paths import LogosPaths
 
-class FaithlifeDatabase(contextlib.AbstractContextManager):
+
+class SQLiteDatabase(contextlib.AbstractContextManager):
     """Class for interacting with internal Faithlife databases.
     
     Use with python's context manager"""
@@ -19,19 +20,12 @@ class FaithlifeDatabase(contextlib.AbstractContextManager):
     logos_user_id: str
     _db: Optional[sqlite3.Connection]
 
-    def __init__(
-        self,
-        logos_app_dir: Path,
-        logos_user_id: str
-    ):
-        self.logos_app_dir = logos_app_dir
-        self.logos_user_id = logos_user_id
+    def __init__(self, path: Path):
+        self.path = path
         self._db = None
 
-    @abc.abstractmethod
     def _database_path(self) -> Path:
-        """Path to the database"""
-        pass
+        return self.path
 
     def execute(
         self,
@@ -279,9 +273,20 @@ class FaithlifeDatabase(contextlib.AbstractContextManager):
             self._db = None
 
 
+class FaithlifeDatabase(SQLiteDatabase):
+    def __init__(self, logos_app_dir: Path, logos_user_id: str):
+        self.logos_app_dir = logos_app_dir
+        self.logos_user_id = logos_user_id
+        super().__init__(self._database_path())
+
+    @abc.abstractmethod
+    def _database_path(self) -> Path:
+        pass
+
+
 class LocalUserPreferencesManager(FaithlifeDatabase):
     def _database_path(self):
-        return self.logos_app_dir / "Documents" / self.logos_user_id / "LocalUserPreferences" / "PreferencesManager.db" 
+        return self.logos_app_dir / "Documents" / self.logos_user_id / "LocalUserPreferences" / "PreferencesManager.db"
     
     @property
     def app_local_preferences(self) -> Optional[str]:
@@ -297,6 +302,41 @@ class LocalUserPreferencesManager(FaithlifeDatabase):
         )
     
     # Need to override __enter__ to return the proper type.
+    def __enter__(self):
+        super().__enter__()
+        return self
+
+
+class NotesDatabase(FaithlifeDatabase):
+    def _database_path(self):
+        return self.logos_app_dir / "Documents" / self.logos_user_id / "NotesToolManager" / "notestool.db"
+
+    def notebooks(self) -> list[sqlite3.Row]:
+        return self.query("""
+            SELECT *
+            FROM Notebooks
+            WHERE IsDeleted = 0
+              AND IsTrashed = 0
+            ORDER BY Name
+        """)
+
+    def notes(self) -> list[sqlite3.Row]:
+        return self.query("""
+            SELECT *
+            FROM Notes
+            WHERE IsDeleted = 0
+              AND IsTrashed = 0
+            ORDER BY ModifiedDate DESC
+        """)
+
+    def note_count(self) -> int:
+        return self.scalar("""
+            SELECT COUNT(*)
+            FROM Notes
+            WHERE IsDeleted = 0
+              AND IsTrashed = 0
+        """) or 0
+
     def __enter__(self):
         super().__enter__()
         return self
@@ -358,3 +398,83 @@ def watch_db(path: str, sql_statements: list[str]):
         # Shouldn't be possible to get here, but on the off-chance it happens, 
         # we'd like to know and cleanup
         logging.debug(f"Stopped watching {path}")
+
+class DatabaseInspector:
+    def __init__(
+        self,
+        database: SQLiteDatabase,
+    ):
+        self.database = database
+
+    def summary(self) -> dict[str, Any]:
+        return self.database.database_info()
+
+    def print_summary(self) -> None:
+        info = self.summary()
+
+        print("Database:")
+        print(f"  {info['path']}")
+        print()
+
+        print("Tables:")
+        for table in info["tables"]:
+            print(f"  {table}")
+
+        print()
+
+        print("Views:")
+        if info["views"]:
+            for view in info["views"]:
+                print(f"  {view}")
+        else:
+            print("  none")
+
+        print()
+
+        print("Indexes:")
+        for index in info["indexes"]:
+            print(f"  {index}")
+
+    def describe_table(
+        self,
+        table: str,
+    ) -> None:
+        info = self.database.describe(table)
+
+        print(f"Table: {table}")
+        print()
+
+        print(f"Rows: {info['count']}")
+        print()
+
+        print("Columns:")
+
+        for column in info["columns"]:
+            name = column["name"]
+            dtype = column["type"]
+            nullable = not column["notnull"]
+
+            print(
+                f"  {name:<20} "
+                f"{dtype:<15} "
+                f"{'NULL' if nullable else 'NOT NULL'}"
+            )
+
+        print()
+
+        print("Indexes:")
+        for index in info["indexes"]:
+            print(f"  {index}")
+
+    def sample_table(
+        self,
+        table: str,
+        limit: int = 5,
+    ) -> None:
+
+        print(f"Sample rows from {table}:")
+        print()
+
+        for row in self.database.sample(table, limit):
+            print(dict(row))
+            print()

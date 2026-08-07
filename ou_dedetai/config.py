@@ -222,6 +222,15 @@ class EphemeralConfiguration:
     config_path: str
     """Path this config was loaded from"""
 
+    database_command: Optional[str] = None
+    """Database subcommand to execute"""
+
+    database_path: Optional[str] = None
+    """SQLite database path for database commands"""
+
+    database_args: Optional[list[str]] = None
+    """"Database CLI args to utilize"""
+
     assume_yes: bool = False
     """Whether to assume yes to all prompts or ask the user
     
