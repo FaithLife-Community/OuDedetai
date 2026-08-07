@@ -165,10 +165,14 @@ class LogosRichTextRenderer:
         self,
         document: RichTextDocument,
     ) -> str:
-        lines = []
+        blocks = []
         for block in document.blocks:
-            lines.append(self.block_to_markdown(block))
-        return "\n\n".join(lines)
+            markdown = self.block_to_markdown(block)
+
+            if markdown.strip():
+                blocks.append(markdown)
+
+        return "\n\n".join(blocks)
 
     def block_to_markdown(
         self,
