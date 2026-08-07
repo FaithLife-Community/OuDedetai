@@ -2,18 +2,22 @@
 import argparse
 import curses
 import logging.handlers
+from pathlib import Path
 from typing import Callable, Tuple
 
 from ou_dedetai.app import UserExitedFromAsk
 from ou_dedetai.config import (
-    EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path
+    EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path, get_wine_user, get_logos_appdata_dir,
+    get_logos_user_id
 )
 
 import logging
 import os
 import sys
 
+from .database import NotesDatabase, DatabaseInspector
 from .repair import detect_and_recover
+from .paths import LogosPaths
 
 from . import cli
 from . import constants
@@ -205,7 +209,142 @@ def get_parser():
         '--winetricks', nargs='*',
         help="run winetricks command",
     )
+    database = parser.add_subparsers(
+        dest="command",
+        title="commands",
+    )
+    db_parser = database.add_parser(
+        "database",
+        help="inspect Logos SQLite databases",
+    )
+    db_commands = db_parser.add_subparsers(
+        dest="database_command",
+        title="database commands",
+        required=True,
+    )
+    db_list_parser = db_commands.add_parser(
+        "list",
+        help="list Logos SQLite databases",
+    )
+    inspect_parser = db_commands.add_parser(
+        "inspect",
+        help="inspect a SQLite database",
+    )
+    inspect_parser.add_argument(
+        "--path",
+        metavar="DATABASE",
+        help="Path to SQLite database. Defaults to installed Logos database.",
+    )
+    db_notes_parser = db_commands.add_parser(
+        "notes",
+        help="inspect Logos Notes database",
+    )
+    notes_commands = db_notes_parser.add_subparsers(
+        dest="notes_command",
+        title="notes commands",
+        required=True,
+    )
+    notes_count_parser = notes_commands.add_parser(
+        "count",
+        help="show Notes database counts",
+    )
+    notes_info_parser = notes_commands.add_parser(
+        "info",
+        help="show notes database information",
+    )
+    notes_dump_parser = notes_commands.add_parser(
+        "dump",
+        help="dump sample notes",
+    )
+    notes_dump_parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="number of notes to dump",
+    )
     return parser
+
+
+def get_logos_paths(
+    ephemeral_config: EphemeralConfiguration,
+) -> LogosPaths:
+    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
+    if persistent_config.install_dir is None:
+        raise RuntimeError("No Logos installation found")
+    if persistent_config.faithlife_product is None:
+        raise RuntimeError("No Logos product found")
+    wine_prefix = (
+        ephemeral_config.wine_prefix
+        or get_wine_prefix_path(persistent_config.install_dir)
+    )
+    wine_user = get_wine_user(wine_prefix)
+    if wine_user is None:
+        raise RuntimeError("Unable to find Wine user")
+
+    appdata = Path(get_logos_appdata_dir(wine_prefix, wine_user, persistent_config.faithlife_product))
+    logos_user_id = get_logos_user_id(str(appdata))
+    if logos_user_id is None:
+        raise RuntimeError("Unable to find Logos user ID")
+
+    return LogosPaths(
+        appdata=appdata,
+        data=appdata / "Data" / logos_user_id,
+        documents=appdata / "Documents" / logos_user_id,
+        user_id=logos_user_id
+    )
+
+
+def get_logos_databases(ephemeral_config: EphemeralConfiguration) -> list[Path]:
+    return get_logos_paths(ephemeral_config).databases
+
+
+def database_operation(ephemeral_config: EphemeralConfiguration):
+    from .database import SQLiteDatabase, DatabaseInspector
+
+    if ephemeral_config.database_path:
+        databases = [Path(ephemeral_config.database_path)]
+    else:
+        databases = get_logos_databases(ephemeral_config)
+
+    for database_path in databases:
+        print(f"\n=== {database_path.name} ===")
+
+        with SQLiteDatabase(database_path) as db:
+            inspector = DatabaseInspector(db)
+            inspector.print_summary()
+
+
+def database_list_operation(ephemeral_config: EphemeralConfiguration):
+    for database in get_logos_databases(ephemeral_config):
+        print(database)
+
+
+def database_notes_count_operation(ephemeral_config: EphemeralConfiguration):
+    paths = get_logos_paths(ephemeral_config)
+    with NotesDatabase(paths.appdata, paths.user_id) as db:
+        counts = {
+            "Notes": db.count("Notes"),
+            "Notebooks": db.count("Notebooks"),
+            "Tags": db.count("Tags"),
+        }
+    for name, count in counts.items():
+        print(f"{name}: {count}")
+
+
+def database_notes_info_operation(ephemeral_config: EphemeralConfiguration):
+    paths = get_logos_paths(ephemeral_config)
+
+    with NotesDatabase(paths.appdata, paths.user_id) as db:
+        inspector = DatabaseInspector(db)
+        inspector.print_summary()
+
+
+def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration):
+    paths = get_logos_paths(ephemeral_config)
+    with NotesDatabase(paths.appdata, paths.user_id) as db:
+        for note in db.sample("Notes", ephemeral_config.database_limit):
+            print(dict(note))
+            print()
 
 
 def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]: 
@@ -213,6 +352,29 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
         ephemeral_config = EphemeralConfiguration.load_from_path(args.config)
     else:
         ephemeral_config = EphemeralConfiguration.load()
+
+    if args.command == "database":
+        ephemeral_config.database_command = args.database_command
+        if args.database_command == "list":
+            return ephemeral_config, database_list_operation
+
+        if args.database_command == "notes":
+            ephemeral_config.notes_command = args.notes_command
+            if args.notes_command == "count":
+                return ephemeral_config, database_notes_count_operation
+            if args.notes_command == "info":
+                return ephemeral_config, database_notes_info_operation
+            if args.notes_command == "dump":
+                ephemeral_config.database_limit = args.limit
+                return ephemeral_config, database_notes_dump_operation
+
+        if args.path:
+            ephemeral_config.database_path = args.path
+        else:
+            ephemeral_config.database_path = None
+        ephemeral_config.database_command = args.database_command
+
+        return ephemeral_config, database_operation
 
     if args.quiet:
         msg.update_log_level(logging.WARNING)
@@ -391,6 +553,9 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
     if action == "disabled":
         print("That option is disabled.", file=sys.stderr)
         sys.exit(1)
+    if action.__name__ == "database_operation":
+        action(ephemeral_config)
+        return
     if action.__name__ == 'run_control_panel':
         # if utils.app_is_installed():
         #     wine.set_logos_paths()
