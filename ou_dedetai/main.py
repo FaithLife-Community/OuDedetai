@@ -1,495 +1,25 @@
 #!/usr/bin/env python3
-import argparse
-import curses
-import logging.handlers
-from pathlib import Path
-from typing import Callable, Tuple
-
-from ou_dedetai.app import UserExitedFromAsk
-from ou_dedetai.config import (
-    EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path, get_wine_user, get_logos_appdata_dir,
-    get_logos_user_id
-)
-
 import logging
+import logging.handlers
 import os
 import sys
-
-from .database import NotesDatabase, DatabaseInspector
-from .repair import detect_and_recover
-from .paths import LogosPaths
+from typing import Callable, Tuple
 
 from . import cli
+from . import database
 from . import constants
 from . import gui_app
 from . import msg
 from . import system
 from . import tui_app
 from . import utils
+from .app import UserExitedFromAsk
+from .cli_parser import get_parser, od_parse_args
+from .config import EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path
+from .repair import detect_and_recover
 
 
-def get_parser():
-    desc = "Installs FaithLife Bible Software with Wine."
-    parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument(
-        '-v', '--version', action='version',
-        version=(
-            f"{constants.APP_NAME}, "
-            f"{constants.LLI_CURRENT_VERSION} by {constants.LLI_AUTHOR}"
-        ),
-    )
-
-    # Define options that affect runtime config.
-    cfg = parser.add_argument_group(title="runtime config options")
-    cfg.add_argument(
-        '-a', '--check-for-updates', action='store_true',
-        help='force a check for updates'
-    )
-    cfg.add_argument(
-        '-K', '--skip-dependencies', action='store_true',
-        help='skip dependencies check and installation',
-    )
-    cfg.add_argument(
-        '-V', '--verbose', action='store_true',
-        help='enable verbose mode',
-    )
-    cfg.add_argument(
-        '-D', '--debug', action='store_true',
-        help='enable Wine debug output',
-    )
-    cfg.add_argument(
-        '-c', '--config', metavar='CONFIG_FILE',
-        help=(
-            "use a custom config file during installation "
-            f"[default: {constants.DEFAULT_CONFIG_PATH}]"
-        ),
-    )
-    cfg.add_argument(
-        '-f', '--force-root', action='store_true',
-        help=(
-            "Running Wine as root is highly discouraged. "
-            "Set this to do allow it anyways"
-        ),
-    )
-    cfg.add_argument(
-        '-p', '--custom-binary-path', metavar='CUSTOMBINPATH',
-        help='specify a custom wine binary path',
-    )
-    cfg.add_argument(
-        '-L', '--delete-log', action='store_true',
-        help='delete the log file',
-    )
-    # FIXME: remove this deprecated option.
-    # If we remove this today, scripts using -P will fail, as now it's an "unknown option"
-    cfg.add_argument(
-        '-P', '--passive', action='store_true',
-        help='Legacy argument that used to specify to run the product installer non-interactively. '
-        'Now this is the default. '
-        'Consider agreeing to the terms as well --i-agree-to-faithlife-terms',
-    )
-    cfg.add_argument(
-        '-y', '--assume-yes', action='store_true',
-        help='Assumes yes (or default) to all prompts. '
-        'Useful for entirely non-interactive installs. '
-        'Consider agreeing to the terms as well --i-agree-to-faithlife-terms',
-    )
-    cfg.add_argument(
-        '--i-agree-to-faithlife-terms', action='store_true',
-        help='By passing this flag you agree to https://faithlife.com/terms',
-    )
-    cfg.add_argument(
-        '-q', '--quiet', action='store_true',
-        help='Suppress all non-error output',
-    )
-
-    # Define runtime actions (mutually exclusive).
-    grp = parser.add_argument_group(
-        title="subcommands",
-        description=(
-            "these options run specific subcommands; "
-            "only 1 at a time is accepted"
-        ),
-    )
-    cmd = grp.add_mutually_exclusive_group()
-    cmd.add_argument(
-        '--install-app', action='store_true',
-        help='install FaithLife app',
-    )
-    cmd.add_argument(
-        '--update-installed-app', action='store_true',
-        help='update the installed FaithLife app to the latest release',
-    )
-    cmd.add_argument(
-        '--run-installed-app', '-C', action='store_true',
-        help='run installed FaithLife app',
-    )
-    cmd.add_argument(
-        '--stop-installed-app', action='store_true',
-        help='stop the installed FaithLife app if running',
-    )
-    cmd.add_argument(
-        '--run-indexing', action='store_true',
-        help='perform indexing',
-    )
-    cmd.add_argument(
-        '--remove-library-catalog', action='store_true',
-        # help='remove library catalog database file'
-        help=argparse.SUPPRESS,
-    )
-    cmd.add_argument(
-        '--remove-index-files', action='store_true',
-        help=argparse.SUPPRESS,
-    )
-    cmd.add_argument(
-        '--edit-config', action='store_true',
-        help='edit configuration file',
-    )
-    cmd.add_argument(
-        '--install-dependencies', '-I', action='store_true',
-        help="install your distro's dependencies",
-    )
-    cmd.add_argument(
-        '--backup', action='store_true',
-        help='backup current data',
-    )
-    cmd.add_argument(
-        '--restore', action='store_true',
-        help='restore data from backup',
-    )
-    cmd.add_argument(
-        '--update-self', '-u', action='store_true',
-        help=f'Update {constants.APP_NAME} to the latest release.',
-    )
-    cmd.add_argument(
-        '--update-latest-appimage', '-U', action='store_true',
-        help='Update the to the latest AppImage.',
-    )
-    cmd.add_argument(
-        '--set-appimage', nargs=1, metavar=('APPIMAGE_FILE_PATH'),
-        help='Update the AppImage symlink. Requires a path.',
-    )
-    cmd.add_argument(
-        '--install-icu', action='store_true',
-        help='Install ICU data files for Logos 30+',
-    )
-    cmd.add_argument(
-        '--toggle-app-logging', action='store_true',
-        help='enable/disable app logs',
-    )
-    cmd.add_argument(
-        '--toggle-media-support', action='store_true',
-        help='enable/disable experimental media support',
-    )
-    cmd.add_argument(
-        '--create-shortcuts', action='store_true',
-        help='[re-]create app shortcuts',
-    )
-    cmd.add_argument(
-        '--uninstall', action='store_true',
-        help='Completely delete the faithlife software from your system',
-    )
-    cmd.add_argument(
-        '--dirlink', action='store_true',
-        # help='create directory link',
-        help=argparse.SUPPRESS,
-    )
-    cmd.add_argument(
-        '--check-resources', action='store_true',
-        # help='check resources'
-        help=argparse.SUPPRESS,
-    )
-    cmd.add_argument(
-        '--get-support', action='store_true',
-        help='Generates a support bundle and prints out where to go for support',
-    )
-    cmd.add_argument(
-        '--wine', nargs="+",
-        help=(
-            'run wine command'
-            '; WARNING: wine will not accept user input!'
-        ),
-    )
-    cmd.add_argument(
-        '--winetricks', nargs='*',
-        help="run winetricks command",
-    )
-    database = parser.add_subparsers(
-        dest="command",
-        title="commands",
-    )
-    db_parser = database.add_parser(
-        "database",
-        help="inspect Logos SQLite databases",
-    )
-    db_commands = db_parser.add_subparsers(
-        dest="database_command",
-        title="database commands",
-        required=True,
-    )
-    db_list_parser = db_commands.add_parser(
-        "list",
-        help="list Logos SQLite databases",
-    )
-    inspect_parser = db_commands.add_parser(
-        "inspect",
-        help="inspect a SQLite database",
-    )
-    inspect_parser.add_argument(
-        "--path",
-        metavar="DATABASE",
-        help="Path to SQLite database. Defaults to installed Logos database.",
-    )
-    db_notes_parser = db_commands.add_parser(
-        "notes",
-        help="inspect Logos Notes database",
-    )
-    notes_commands = db_notes_parser.add_subparsers(
-        dest="notes_command",
-        title="notes commands",
-        required=True,
-    )
-    notes_count_parser = notes_commands.add_parser(
-        "count",
-        help="show Notes database counts",
-    )
-    notes_info_parser = notes_commands.add_parser(
-        "info",
-        help="show notes database information",
-    )
-    notes_dump_parser = notes_commands.add_parser(
-        "dump",
-        help="dump sample notes",
-    )
-    notes_dump_parser.add_argument(
-        "--limit",
-        type=int,
-        default=5,
-        help="number of notes to dump",
-    )
-    return parser
-
-
-def get_logos_paths(
-    ephemeral_config: EphemeralConfiguration,
-) -> LogosPaths:
-    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
-    if persistent_config.install_dir is None:
-        raise RuntimeError("No Logos installation found")
-    if persistent_config.faithlife_product is None:
-        raise RuntimeError("No Logos product found")
-    wine_prefix = (
-        ephemeral_config.wine_prefix
-        or get_wine_prefix_path(persistent_config.install_dir)
-    )
-    wine_user = get_wine_user(wine_prefix)
-    if wine_user is None:
-        raise RuntimeError("Unable to find Wine user")
-
-    appdata = Path(get_logos_appdata_dir(wine_prefix, wine_user, persistent_config.faithlife_product))
-    logos_user_id = get_logos_user_id(str(appdata))
-    if logos_user_id is None:
-        raise RuntimeError("Unable to find Logos user ID")
-
-    return LogosPaths(
-        appdata=appdata,
-        data=appdata / "Data" / logos_user_id,
-        documents=appdata / "Documents" / logos_user_id,
-        user_id=logos_user_id
-    )
-
-
-def get_logos_databases(ephemeral_config: EphemeralConfiguration) -> list[Path]:
-    return get_logos_paths(ephemeral_config).databases
-
-
-def database_operation(ephemeral_config: EphemeralConfiguration):
-    from .database import SQLiteDatabase, DatabaseInspector
-
-    if ephemeral_config.database_path:
-        databases = [Path(ephemeral_config.database_path)]
-    else:
-        databases = get_logos_databases(ephemeral_config)
-
-    for database_path in databases:
-        print(f"\n=== {database_path.name} ===")
-
-        with SQLiteDatabase(database_path) as db:
-            inspector = DatabaseInspector(db)
-            inspector.print_summary()
-
-
-def database_list_operation(ephemeral_config: EphemeralConfiguration):
-    for database in get_logos_databases(ephemeral_config):
-        print(database)
-
-
-def database_notes_count_operation(ephemeral_config: EphemeralConfiguration):
-    paths = get_logos_paths(ephemeral_config)
-    with NotesDatabase(paths.appdata, paths.user_id) as db:
-        counts = {
-            "Notes": db.count("Notes"),
-            "Notebooks": db.count("Notebooks"),
-            "Tags": db.count("Tags"),
-        }
-    for name, count in counts.items():
-        print(f"{name}: {count}")
-
-
-def database_notes_info_operation(ephemeral_config: EphemeralConfiguration):
-    paths = get_logos_paths(ephemeral_config)
-
-    with NotesDatabase(paths.appdata, paths.user_id) as db:
-        inspector = DatabaseInspector(db)
-        inspector.print_summary()
-
-
-def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration):
-    paths = get_logos_paths(ephemeral_config)
-    with NotesDatabase(paths.appdata, paths.user_id) as db:
-        for note in db.sample("Notes", ephemeral_config.database_limit):
-            print(dict(note))
-            print()
-
-
-def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]: 
-    if args.config:
-        ephemeral_config = EphemeralConfiguration.load_from_path(args.config)
-    else:
-        ephemeral_config = EphemeralConfiguration.load()
-
-    if args.command == "database":
-        ephemeral_config.database_command = args.database_command
-        if args.database_command == "list":
-            return ephemeral_config, database_list_operation
-
-        if args.database_command == "notes":
-            ephemeral_config.notes_command = args.notes_command
-            if args.notes_command == "count":
-                return ephemeral_config, database_notes_count_operation
-            if args.notes_command == "info":
-                return ephemeral_config, database_notes_info_operation
-            if args.notes_command == "dump":
-                ephemeral_config.database_limit = args.limit
-                return ephemeral_config, database_notes_dump_operation
-
-        if args.path:
-            ephemeral_config.database_path = args.path
-        else:
-            ephemeral_config.database_path = None
-        ephemeral_config.database_command = args.database_command
-
-        return ephemeral_config, database_operation
-
-    if args.quiet:
-        msg.update_log_level(logging.WARNING)
-        ephemeral_config.quiet = True
-
-    if args.verbose:
-        msg.update_log_level(logging.INFO)
-
-    if args.debug:
-        msg.update_log_level(logging.DEBUG)
-        if not ephemeral_config.wine_debug:
-            ephemeral_config.wine_debug = constants.DEFAULT_WINEDEBUG
-        # Developers may want to consider adding +relay for excessive debug output
-        ephemeral_config.wine_debug+=',+loaddll,+pid,+threadname'
-
-    if args.delete_log:
-        ephemeral_config.delete_log = True
-
-    if args.set_appimage:
-        ephemeral_config.wine_appimage_path = args.set_appimage[0]
-
-    # FIXME: Should this have been args.check_for_updates?
-    # Should this even be an option?
-    # if network.check_for_updates:
-    #     ephemeral_config.check_updates_now = True
-
-    if args.skip_dependencies or constants.RUNMODE == 'snap':
-        ephemeral_config.install_dependencies_skip = True
-
-    if args.force_root:
-        ephemeral_config.app_run_as_root_permitted = True
-
-    if args.custom_binary_path:
-        if os.path.isdir(args.custom_binary_path):
-            # Set legacy environment variable for config to pick up
-            os.environ["CUSTOMBINPATH"] = args.custom_binary_path
-        else:
-            message = f"Custom binary path does not exist: \"{args.custom_binary_path}\"\n"
-            parser.exit(status=1, message=message)
-
-    if args.assume_yes and not args.i_agree_to_faithlife_terms:
-        message = ("Non-interactive installations MUST also agree to the EULA https://faithlife.com/terms "
-                   "via the flag --i-agree-to-faithlife-terms\n")
-        parser.exit(status=1, message=message)
-
-    if args.assume_yes:
-        ephemeral_config.assume_yes = True
-
-    if args.i_agree_to_faithlife_terms:
-        ephemeral_config.agreed_to_faithlife_terms = True
-
-
-    def cli_operation(action: str) -> Callable[[EphemeralConfiguration], None]:
-        """Wrapper for a function pointer to a given function under CLI
-        
-        Lazily instantiates CLI at call-time"""
-        def _run(config: EphemeralConfiguration):
-            getattr(cli.CLI(config), action)()
-        output = _run
-        output.__name__ = action
-        return output
-
-    # Set action return function.
-    actions = [
-        'backup',
-        'create_shortcuts',
-        'edit_config',
-        'install_dependencies',
-        'install_icu',
-        'remove_index_files',
-        'uninstall',
-        'remove_library_catalog',
-        'restore',
-        'run_indexing',
-        'run_installed_app',
-        'update_installed_app',
-        'stop_installed_app',
-        'set_appimage',
-        'toggle_app_logging',
-        'toggle_media_support',
-        'update_self',
-        'update_latest_appimage',
-        'wine',
-        'winetricks',
-        "get_support"
-    ]
-
-    run_action = None
-    for arg in actions:
-        if getattr(args, arg) or getattr(args, arg) == []:
-            if arg == "set_appimage":
-                ephemeral_config.wine_appimage_path = getattr(args, arg)[0]
-                if not utils.file_exists(ephemeral_config.wine_appimage_path):
-                    e = f"Invalid file path: '{ephemeral_config.wine_appimage_path}'. File does not exist."
-                    raise argparse.ArgumentTypeError(e)
-                if not utils.check_appimage(ephemeral_config.wine_appimage_path):
-                    e = f"{ephemeral_config.wine_appimage_path} is not an AppImage."
-                    raise argparse.ArgumentTypeError(e)
-            # Re-use this variable for either wine or winetricks execution
-            elif arg == 'wine' or arg == 'winetricks':
-                ephemeral_config.wine_args = getattr(args, arg)
-            run_action = cli_operation(arg)
-            break
-    if getattr(args, "install_app"):
-        run_action = install_app
-    if run_action is None:
-        run_action = run_control_panel
-    logging.debug(f"{run_action=}")
-    return ephemeral_config, run_action
-
-
+# Begin Program Actions
 def run_control_panel(ephemeral_config: EphemeralConfiguration):
     dialog = ephemeral_config.dialog or system.get_dialog()
     logging.info(f"Using DIALOG: {dialog}")
@@ -503,12 +33,10 @@ def run_control_panel(ephemeral_config: EphemeralConfiguration):
         except SystemExit:
             logging.info("Caught SystemExit, exiting gracefully…")
             raise
-        except curses.error as e:
-            logging.error(f"Curses error in run_control_panel(): {e}")
-            raise e
         except Exception as e:
             logging.error(f"An error occurred in run_control_panel(): {e}")
             raise e
+
 
 def install_app(ephemeral_config: EphemeralConfiguration):
     dialog = ephemeral_config.dialog or system.get_dialog()
@@ -519,11 +47,43 @@ def install_app(ephemeral_config: EphemeralConfiguration):
         cli.CLI(ephemeral_config).install_app()
 
 
-def setup_config() -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]: 
-    parser = get_parser()
-    cli_args = parser.parse_args()  # parsing early lets 'help' run immediately
+def database_list_operation(ephemeral_config: EphemeralConfiguration):
+    for database in utils.get_logos_databases(ephemeral_config):
+        print(database)
 
-    # Get config based on env and configuration file temporarily just to load a couple 
+
+def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration, limit: int):
+    paths = utils.get_logos_paths(ephemeral_config)
+    with database.NotesDatabase(paths.appdata, paths.user_id) as db:
+        for note in db.sample("Notes", limit):
+            print(dict(note))
+            print()
+
+
+# End Program Actions
+
+def parse_database_command(args):
+    if args.database_command == "list":
+        return database_list_operation
+
+    if args.database_command == "notes":
+        if args.notes_command == "dump":
+            def database_notes_dump_action(config):
+                return database_notes_dump_operation(config, args.limit)
+
+            database_notes_dump_action.__name__ = "database_notes_dump_operation"
+            return database_notes_dump_action
+
+    raise RuntimeError(
+        f"Unknown database command: {args.database_command}"
+    )
+
+
+def setup_config() -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]:
+    parser = get_parser()
+    args = parser.parse_args()
+
+    # Get config based on env and configuration file temporarily just to load a couple
     # values out. We'll load this fully later.
     temp = EphemeralConfiguration.load()
     log_level = temp.log_level or constants.DEFAULT_LOG_LEVEL
@@ -537,19 +97,19 @@ def setup_config() -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfigura
     # test = logging.getLogger().handlers
 
     # Parse CLI args and update affected config vars.
-    return parse_args(cli_args, parser)
+    return od_parse_args(args, parser)
 
 
 def is_app_installed(ephemeral_config: EphemeralConfiguration):
-    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path) 
-    if persistent_config.faithlife_product is None or persistent_config.install_dir is None: 
+    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
+    if persistent_config.faithlife_product is None or persistent_config.install_dir is None:
         # Not enough information stored to find the product
         return False
-    wine_prefix = ephemeral_config.wine_prefix or get_wine_prefix_path(str(persistent_config.install_dir)) 
-    return utils.find_installed_product(persistent_config.faithlife_product, wine_prefix) 
+    wine_prefix = ephemeral_config.wine_prefix or get_wine_prefix_path(str(persistent_config.install_dir))
+    return utils.find_installed_product(persistent_config.faithlife_product, wine_prefix)
 
 
-def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralConfiguration], None]): 
+def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralConfiguration], None]):
     # Attempt to repair installation if it is broken.
     # Must be done before calling the action to avoid errosly thinking the app isn't
     # installed when it's broken
@@ -566,7 +126,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         #     wine.set_logos_paths()
         action(ephemeral_config)  # run control_panel right away
         return
-    
+
     # Proceeding with the CLI interface
 
     install_required = [
@@ -582,7 +142,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
-        'toggle_media_support',
+        'toggle_media_support'
     ]
     if action.__name__ not in install_required:
         logging.info(f"Running function: {action.__name__}")
@@ -593,7 +153,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         logging.info(f"Running function: {action.__name__}")
         action(ephemeral_config)
     else:  # install_required, but app not installed
-        print("App is not installed, but required for this operation. Consider installing first.", file=sys.stderr) 
+        print("App is not installed, but required for this operation. Consider installing first.", file=sys.stderr)
         sys.exit(1)
 
 
