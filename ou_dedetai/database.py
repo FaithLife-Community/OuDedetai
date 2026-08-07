@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Optional
 from collections.abc import Sequence
 
-from ou_dedetai.notes import LogosNote
+from ou_dedetai.notes import LogosNote, LogosNotebook
 
 
 class SQLiteDatabase(contextlib.AbstractContextManager):
@@ -319,23 +319,15 @@ class NotesDatabase(FaithlifeDatabase):
     def _database_path(self):
         return self.logos_app_dir / "Documents" / self.logos_user_id / "NotesToolManager" / "notestool.db"
 
-    def notebooks(self) -> list[sqlite3.Row]:
-        return self.query("""
-            SELECT *
-            FROM Notebooks
-            WHERE IsDeleted = 0
-              AND IsTrashed = 0
-            ORDER BY Name
-        """)
-
     def notes(self) -> list[sqlite3.Row]:
-        return self.query("""
+        rows = self.query("""
             SELECT *
             FROM Notes
             WHERE IsDeleted = 0
               AND IsTrashed = 0
             ORDER BY ModifiedDate DESC
         """)
+        return [LogosNote.from_row(row) for row in rows]
 
     def note_count(self) -> int:
         return self.scalar("""
@@ -357,6 +349,51 @@ class NotesDatabase(FaithlifeDatabase):
     def __enter__(self):
         super().__enter__()
         return self
+
+
+    def notebooks(self) -> list[LogosNotebook]:
+        rows = self.query("""
+            SELECT *
+            FROM Notebooks
+            WHERE IsDeleted = 0
+              AND IsTrashed = 0
+            ORDER BY Title
+        """)
+        return [LogosNotebook.from_row(row) for row in rows]
+
+
+    def get_notebook(self, notebook_id: int) -> LogosNotebook:
+        row = self.query_one(
+            "SELECT * FROM Notebooks WHERE NotebookId = ?",
+            (notebook_id,),
+        )
+        if row is None:
+            raise RuntimeError(f"Notebook not found: {notebook_id}")
+        return LogosNotebook.from_row(row)
+
+
+    def get_notebook_by_external_id(
+        self,
+        external_id: str,
+    ) -> LogosNotebook:
+        row = self.query_one(
+            "SELECT * FROM Notebooks WHERE ExternalId = ?",
+            (external_id,),
+        )
+        if row is None:
+            raise RuntimeError(
+                f"Notebook not found: {external_id}"
+            )
+        return LogosNotebook.from_row(row)
+
+    def get_notebook_for_note(
+        self,
+        note: LogosNote,
+    ) -> LogosNotebook | None:
+        if not note.NotebookExternalId:
+            return None
+
+        return self.get_notebook_by_external_id(note.NotebookExternalId)
 
 
 # FIXME: refactor into FaithlifeDatabase class

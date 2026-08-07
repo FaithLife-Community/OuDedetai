@@ -3,7 +3,6 @@ from pathlib import Path
 from ou_dedetai.config import EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path, get_wine_user, \
     get_logos_appdata_dir, get_logos_user_id
 from ou_dedetai.database import NotesDatabase, DatabaseInspector
-from ou_dedetai.notes import LogosNote
 from ou_dedetai.paths import LogosPaths
 
 
@@ -59,6 +58,17 @@ def database_list_operation(ephemeral_config: EphemeralConfiguration):
         print(database)
 
 
+def database_dump_operation(ephemeral_config: EphemeralConfiguration):
+    paths = get_logos_paths(ephemeral_config)
+    with NotesDatabase(paths.appdata, paths.user_id) as db:
+        for row in db.sample(
+                ephemeral_config.database_table,
+                ephemeral_config.database_limit,
+        ):
+            print(dict(row))
+            print()
+
+
 def database_notes_count_operation(ephemeral_config: EphemeralConfiguration):
     paths = get_logos_paths(ephemeral_config)
     with NotesDatabase(paths.appdata, paths.user_id) as db:
@@ -92,14 +102,6 @@ def database_notes_schema_operation(ephemeral_config):
         inspector = DatabaseInspector(db)
         for column in inspector.schema(ephemeral_config.database_table):
             print(f"{column['name']}: {column['type']}")
-
-
-def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration):
-    paths = get_logos_paths(ephemeral_config)
-    with NotesDatabase(paths.appdata, paths.user_id) as db:
-        for note in db.sample("Notes", ephemeral_config.database_limit):
-            print(dict(note))
-            print()
 
 
 def database_notes_get_operation(ephemeral_config: EphemeralConfiguration):

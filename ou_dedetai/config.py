@@ -229,7 +229,13 @@ class EphemeralConfiguration:
     """SQLite database path for database commands"""
 
     database_args: Optional[list[str]] = None
-    """"Database CLI args to utilize"""
+    """Database CLI args to utilize"""
+
+    database_table: str | None = None
+    """Table used in recent database command"""
+
+    database_limit: int = 10
+    """Limit of how many rows to return"""
 
     assume_yes: bool = False
     """Whether to assume yes to all prompts or ask the user

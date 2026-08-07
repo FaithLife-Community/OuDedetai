@@ -15,6 +15,20 @@ def add_database_parser(subparsers):
         "list",
         help="list Logos SQLite databases",
     )
+    dump_parser = db_commands.add_parser(
+        "dump",
+        help="dump sample notes",
+    )
+    dump_parser.add_argument(
+        "table",
+        help="table to dump",
+    )
+    dump_parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="maximum number of rows",
+    )
     inspect_parser = db_commands.add_parser(
         "inspect",
         help="inspect a SQLite database",
@@ -41,10 +55,6 @@ def add_database_parser(subparsers):
         "info",
         help="show Notes database information",
     )
-    dump_parser = notes_commands.add_parser(
-        "dump",
-        help="dump sample notes",
-    )
     notes_commands.add_parser(
         "tables",
         help="list Notes database tables",
@@ -56,12 +66,6 @@ def add_database_parser(subparsers):
     schema_parser.add_argument(
         "table",
         help="table name",
-    )
-    dump_parser.add_argument(
-        "--limit",
-        type=int,
-        default=5,
-        help="number of notes to dump",
     )
     get_parser = notes_commands.add_parser(
         "get",
@@ -81,6 +85,11 @@ def parse_database_command(args, ephemeral_config):
     if args.database_command == "list":
         return actions_database.database_list_operation
 
+    if args.database_command == "dump":
+        ephemeral_config.database_table = args.table
+        ephemeral_config.database_limit = args.limit
+        return actions_database.database_dump_operation
+
     if args.database_command == "notes":
         ephemeral_config.notes_command = args.notes_command
 
@@ -96,10 +105,6 @@ def parse_database_command(args, ephemeral_config):
         if args.notes_command == "schema":
             ephemeral_config.database_table = args.table
             return actions_database.database_notes_schema_operation
-
-        if args.notes_command == "dump":
-            ephemeral_config.database_limit = args.limit
-            return actions_database.database_notes_dump_operation
 
         if args.notes_command == "get":
             ephemeral_config.note_id = args.note_id
