@@ -41,6 +41,9 @@ class LogosNote:
     ClippingExcerptRichText: Optional[str]
     Role: int
 
+    Notebook: Optional["LogosNotebook"] = None
+    Tags: list["LogosTag"] = field(default_factory=list)
+
     @classmethod
     def from_row(cls, row: Row) -> "LogosNote":
         return cls(**dict(row))
@@ -72,6 +75,9 @@ class LogosNotebook:
     def from_row(cls, row: Row) -> "LogosNotebook":
         return cls(**dict(row))
 
+    def __repr__(self):
+        return f"LogosNotebook({self.NotebookId}, {self.Title!r})"
+
 
 @dataclass
 class LogosTag:
@@ -82,6 +88,9 @@ class LogosTag:
     @classmethod
     def from_row(cls, row: Row) -> "LogosTag":
         return cls(**dict(row))
+
+    def __repr__(self):
+        return f"LogosTag({self.TagId}, {self.Text!r})"
 
 
 @dataclass
