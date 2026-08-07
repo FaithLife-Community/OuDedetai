@@ -58,6 +58,14 @@ def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration, limi
         for note in db.sample("Notes", limit):
             print(dict(note))
             print()
+
+def database_notes_get_operation(ephemeral_config: EphemeralConfiguration):
+    paths = utils.get_logos_paths(ephemeral_config)
+
+    with database.NotesDatabase(paths.appdata, paths.user_id) as db:
+        note = db.get_note(ephemeral_config.note_id)
+
+    print(note)
 # End Program Actions
 
 def parse_database_command(args):

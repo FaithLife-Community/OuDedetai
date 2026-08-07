@@ -9,20 +9,6 @@ from .config import EphemeralConfiguration
 
 def get_parser():
     desc = "Installs FaithLife Bible Software with Wine."
-
-    parser = argparse.ArgumentParser(description=desc)
-
-    parser.add_argument(
-        '-v', '--version',
-        action='version',
-        version=(
-            f"{constants.APP_NAME}, "
-            f"{constants.LLI_CURRENT_VERSION} by {constants.LLI_AUTHOR}"
-        ),
-    )
-
-
-    desc = "Installs FaithLife Bible Software with Wine."
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument(
         '-v', '--version', action='version',
@@ -254,6 +240,15 @@ def add_database_parser(subparsers):
         default=5,
         help="number of notes to dump",
     )
+    get_parser = notes_commands.add_parser(
+        "get",
+        help="show a single note",
+    )
+    get_parser.add_argument(
+        "note_id",
+        type=int,
+        help="NoteId to display",
+    )
     return db_parser
 
 
@@ -268,6 +263,9 @@ def parse_database_command(args, ephemeral_config):
         if args.notes_command == "dump":
             ephemeral_config.database_limit = args.limit
             return main.database_notes_dump_operation
+        if args.notes_command == "get":
+            ephemeral_config.note_id = args.note_id
+            return main.database_notes_get_operation
 
     raise RuntimeError(f"Unknown database command: {args.database_command}")
 
