@@ -9,6 +9,7 @@ from . import cli
 from . import database
 from . import constants
 from . import gui_app
+from . import markdown
 from . import msg
 from . import system
 from . import tui_app
@@ -69,9 +70,14 @@ def database_notes_get_operation(ephemeral_config: EphemeralConfiguration):
 
 def database_notes_render_operation(ephemeral_config: EphemeralConfiguration):
     paths = utils.get_logos_paths(ephemeral_config)
-    with database.NotesDatabase(paths.appdata, paths.user_id) as db:
-        note = db.get_note(ephemeral_config.note_id)
-    print(note.to_markdown())
+    with (
+        database.NotesDatabase(paths.appdata, paths.user_id) as notes_db,
+        database.LibraryCatalogDatabase(paths.appdata, paths.user_id) as catalog_db
+    ):
+        note = notes_db.get_note(ephemeral_config.note_id)
+        resolver = database.NoteResourceResolver(notes_db, catalog_db)
+        exporter = markdown.MarkdownNoteExporter(resolver)
+        print(exporter.export_note(note))
 # End Program Actions
 
 def parse_database_command(args):
