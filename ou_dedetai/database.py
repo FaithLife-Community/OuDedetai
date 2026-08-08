@@ -35,9 +35,33 @@ class LogosPaths:
         )
 
 
+class ResourceMetadata:
+    resource_id: str
+    logosres_id: str | None
+    resource_url: str | None
+    title: str | None
+    abbreviated_title: str | None
+    authors: str | None
+    publisher: str | None
+    publication_date: str | None
+    resource_type: str | None
+    traits: list[str]
+    reference_systems: list[str]
+
+
+@dataclass(frozen=True)
+class NoteResource:
+    resource_id: str
+    metadata: ResourceMetadata
+
+    @property
+    def url(self) -> str | None:
+        return self.metadata.resource_url
+
+
 class SQLiteDatabase(contextlib.AbstractContextManager):
     """Class for interacting with internal Faithlife databases.
-    
+
     Use with python's context manager"""
 
     logos_app_dir: Path
@@ -59,6 +83,16 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
         if parameters is None:
             parameters = ()
         return self.database.execute(sql_statement, parameters)
+
+    def execute_many(
+        self,
+        sql_statement: str,
+        parameters: Sequence[Sequence[Any]],
+    ) -> sqlite3.Cursor:
+        return self.database.executemany(
+            sql_statement,
+            parameters,
+        )
 
     def query(
         self,
@@ -137,12 +171,39 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
         """)
         return [row["name"] for row in rows]
 
+    def pragma(
+        self,
+        name: str,
+    ) -> list[sqlite3.Row]:
+        return self.query(f"PRAGMA {name}")
+
+    def index_info(
+        self,
+        index: str,
+    ) -> list[sqlite3.Row]:
+        return self.query(
+            f"PRAGMA index_info([{index}])"
+        )
+
+    def index_schema(
+        self,
+        index: str,
+    ) -> str | None:
+        return self.scalar(
+            """
+            SELECT sql
+            FROM sqlite_master
+            WHERE type = 'index'
+              AND name = ?
+            """,
+            [index],
+        )
+
     def has_table(
         self,
         table: str,
     ) -> bool:
         return table in self.table_names()
-
     def columns(
         self,
         table: str,
@@ -161,6 +222,20 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
             FROM sqlite_master
             ORDER BY type, name
         """)
+
+    def view_schema(
+        self,
+        view: str,
+    ) -> str | None:
+        return self.scalar(
+            """
+            SELECT sql
+            FROM sqlite_master
+            WHERE type = 'view'
+              AND name = ?
+            """,
+            [view],
+        )
 
     def table_schema(
         self,
@@ -185,8 +260,8 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
         return self.scalar(f"SELECT COUNT(*) FROM {table}") or 0
 
     def table_indexes(
-            self,
-            table: str,
+        self,
+        table: str,
     ) -> list[str]:
         if not self.has_table(table):
             raise ValueError(f"Unknown table: {table}")
@@ -218,6 +293,10 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
                 for row in self.columns(table)
             ],
             "indexes": self.table_indexes(table),
+            "foreign_keys": [
+                dict(row)
+                for row in self.foreign_keys(table)
+            ],
             "count": self.count(table),
             "schema": self.table_schema(table),
         }
@@ -259,6 +338,20 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
         """)
         return [row["name"] for row in rows]
 
+    def trigger_schema(
+        self,
+        trigger: str,
+    ) -> str | None:
+        return self.scalar(
+            """
+            SELECT sql
+            FROM sqlite_master
+            WHERE type = 'trigger'
+              AND name = ?
+            """,
+            [trigger],
+        )
+
     def database_info(self) -> dict[str, Any]:
         return {
             "path": str(self._database_path()),
@@ -296,6 +389,7 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
             self._db.close()
             self._db = None
 
+    # Need to override __enter__ to return the proper type.
     def __enter__(self):
         return self
 
@@ -316,24 +410,185 @@ class FaithlifeDatabase(SQLiteDatabase):
         pass
 
 
+class LibraryCatalogDatabase(FaithlifeDatabase):
+    def _database_path(self) -> Path:
+        return (
+            self.logos_app_dir
+            / "Data"
+            / self.logos_user_id
+            / "LibraryCatalog"
+            / "catalog.db"
+        )
+
+    def get_resource(
+        self,
+        resource_id: str,
+    ) -> Optional[sqlite3.Row]:
+        resource_id = resource_id.lower()
+        row = self.query_one(
+            """
+            SELECT *
+            FROM Records
+            WHERE lower(ResourceId) = ?
+            LIMIT 1
+            """,
+            (resource_id,),
+        )
+        if row is not None:
+            return row
+        return self.query_one(
+            """
+            SELECT Records.*
+            FROM Records
+            JOIN AlternateResourceIds
+                ON Records.RecordId = AlternateResourceIds.RecordId
+            WHERE lower(AlternateResourceIds.AlternateResourceId) = ?
+            LIMIT 1
+            """,
+            (resource_id,),
+        )
+
+    def get_resource_title(
+        self,
+        resource_id: str,
+    ) -> Optional[str]:
+        row = self.get_resource(resource_id)
+        if row is None:
+            return None
+        return row["Title"]
+
+    def get_alternate_resource_ids(
+        self,
+        resource_id: str,
+    ) -> list[str]:
+        row = self.get_resource(resource_id)
+        if row is None:
+            return []
+        rows = self.query(
+            """
+            SELECT AlternateResourceId
+            FROM AlternateResourceIds
+            WHERE RecordId = ?
+            ORDER BY AlternateResourceId
+            """,
+            (row["RecordId"],),
+        )
+        return [
+            row["AlternateResourceId"]
+            for row in rows
+        ]
+
+    def get_resource_ids(
+        self,
+        resource_id: str,
+    ) -> list[str]:
+        row = self.get_resource(resource_id)
+        if row is None:
+            return []
+        return [
+            row["ResourceId"],
+            *self.get_alternate_resource_ids(resource_id),
+        ]
+
+    def get_logosres_id(
+        self,
+        resource_id: str,
+    ) -> str | None:
+        row = self.get_resource(resource_id)
+        if row is None:
+            return None
+        alternate_ids = self.get_alternate_resource_ids(resource_id)
+        for alternate_id in alternate_ids:
+            if not alternate_id.lower().startswith("lls:"):
+                return alternate_id
+        return None
+
+    def get_logosres_url(
+            self,
+            resource_id: str,
+    ) -> str | None:
+        logosres_id = self.get_logosres_id(resource_id)
+        if logosres_id is None:
+            return None
+        return f"https://ref.ly/logosres/{logosres_id}"
+
+    def get_resource_traits(
+            self,
+            resource_id: str,
+    ) -> list[str]:
+        row = self.get_resource(resource_id)
+        if row is None:
+            return []
+        rows = self.query(
+            """
+            SELECT t.Value
+            FROM RecordTraits rt
+            JOIN Traits t
+                ON t.TraitId = rt.TraitId
+            WHERE rt.RecordId = ?
+            ORDER BY t.Value
+            """,
+            (row["RecordId"],),
+        )
+        return [row["Value"] for row in rows]
+
+    def get_reference_systems(
+            self,
+            resource_id: str,
+    ) -> list[str]:
+        return [
+            trait.removeprefix("supports-")
+            for trait in self.get_resource_traits(resource_id)
+            if trait.startswith("supports-")
+        ]
+
+    def get_resource_metadata(
+        self,
+        resource_id: str,
+    ) -> ResourceMetadata | None:
+        row = self.get_resource(resource_id)
+
+        if row is None:
+            return None
+
+        logosres_id = self.get_logosres_id(resource_id)
+
+        return ResourceMetadata(
+            resource_id=row["ResourceId"],
+            logosres_id=logosres_id,
+            resource_url=self.get_logosres_url(resource_id),
+            title=row["Title"],
+            abbreviated_title=row["AbbreviatedTitle"],
+            authors=row["Authors"],
+            publisher=row["Publishers"],
+            publication_date=row["PublicationDate"],
+            resource_type=row["Type"],
+            traits=self.get_resource_traits(resource_id),
+            reference_systems=self.get_reference_systems(resource_id),
+        )
+
+    def __enter__(self):
+        super().__enter__()
+        return self
+
+
 class LocalUserPreferencesManager(FaithlifeDatabase):
     def _database_path(self):
         return self.logos_app_dir / "Documents" / self.logos_user_id / "LocalUserPreferences" / "PreferencesManager.db"
-    
+
     @property
     def app_local_preferences(self) -> Optional[str]:
         return self.fetch_one(
-            "SELECT Data FROM Preferences WHERE `Type`='AppLocalPreferences' LIMIT 1" 
+            "SELECT Data FROM Preferences WHERE `Type`='AppLocalPreferences' LIMIT 1"
         )
-    
+
     @app_local_preferences.setter
     def app_local_preferences(self, value: str):
         self.query(
-            "UPDATE Preferences SET Data= ? WHERE `Type`='AppLocalPreferences'", 
+            "UPDATE Preferences SET Data= ? WHERE `Type`='AppLocalPreferences'",
             [value]
         )
-    
-    # Need to override __enter__ to return the proper type.
+
     def __enter__(self):
         super().__enter__()
         return self
@@ -379,7 +634,6 @@ class NotesDatabase(FaithlifeDatabase):
         )
         if row is None:
             raise RuntimeError(f"Note not found: {note_id}")
-        note = LogosNote.from_row(row)
         return self.hydrate_note(LogosNote.from_row(row))
 
     def __enter__(self):
@@ -463,12 +717,62 @@ class NotesDatabase(FaithlifeDatabase):
         )
         return [LogosTag.from_row(row) for row in rows]
 
+    def get_resource_ids_for_note(
+        self,
+        note_id: int,
+    ) -> list[str]:
+        rows = self.query(
+            """
+            SELECT DISTINCT ResourceIds.ResourceId
+            FROM NoteAnchorTextRanges
+            JOIN ResourceIds
+                ON ResourceIds.ResourceIdId =
+                   NoteAnchorTextRanges.ResourceIdId
+            WHERE NoteAnchorTextRanges.NoteId = ?
+            ORDER BY ResourceIds.ResourceId
+            """,
+            (note_id,),
+        )
+
+        return [
+            row["ResourceId"]
+            for row in rows
+        ]
+
+    def get_anchor_text_ranges(
+        self,
+        note_id: int,
+    ) -> list[sqlite3.Row]:
+        return self.query(
+            """
+            SELECT *
+            FROM NoteAnchorTextRanges
+            WHERE NoteId = ?
+            ORDER BY ResourceIdId, Offset
+            """,
+            (note_id,),
+        )
+
+    def get_anchor_references(
+        self,
+        note_id: int,
+    ) -> list[sqlite3.Row]:
+        return self.query(
+            """
+            SELECT *
+            FROM NoteAnchorReferences
+            WHERE NoteId = ?
+            ORDER BY DataTypeId
+            """,
+            (note_id,),
+        )
+
 
 # FIXME: refactor into FaithlifeDatabase class
 def watch_db(path: str, sql_statements: list[str]):
     """Runs SQL statements against a sqlite db once to start with, then again every time
     The sqlite db is written to.
-    
+
     Handles -wal/-shm as well
 
     This function may run infinitely, spawn it on it's own thread
@@ -517,6 +821,41 @@ def watch_db(path: str, sql_statements: list[str]):
                     continue
                 execute_sql(cur)
                 swallow_one = True
-        # Shouldn't be possible to get here, but on the off-chance it happens, 
+        # Shouldn't be possible to get here, but on the off-chance it happens,
         # we'd like to know and cleanup
         logging.debug(f"Stopped watching {path}")
+
+
+class NoteResourceResolver:
+    def __init__(
+        self,
+        notes_db: NotesDatabase,
+        catalog_db: LibraryCatalogDatabase,
+    ):
+        self.notes_db = notes_db
+        self.catalog_db = catalog_db
+
+    def get_resources_for_note(
+        self,
+        note_id: int,
+    ) -> list[NoteResource]:
+        resources = []
+
+        for resource_id in self.notes_db.get_resource_ids_for_note(
+            note_id
+        ):
+            metadata = self.catalog_db.get_resource_metadata(
+                resource_id
+            )
+
+            if metadata is None:
+                continue
+
+            resources.append(
+                NoteResource(
+                    resource_id=resource_id,
+                    metadata=metadata,
+                )
+            )
+
+        return resources
