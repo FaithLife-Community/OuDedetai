@@ -248,6 +248,20 @@ def add_database_parser(subparsers):
         type=int,
         help="NoteId to render",
     )
+    search_parser = notes_commands.add_parser(
+        "search",
+        help="search Logos notes",
+    )
+    search_parser.add_argument(
+        "query",
+        help="text to search for",
+    )
+    search_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="maximum number of results",
+    )
     return db_parser
 
 

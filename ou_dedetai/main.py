@@ -78,6 +78,37 @@ def database_notes_render_operation(ephemeral_config: EphemeralConfiguration):
         resolver = database.NoteResourceResolver(notes_db, catalog_db)
         exporter = markdown.MarkdownNoteExporter(resolver)
         print(exporter.export_note(note))
+
+def database_notes_search_operation(
+    ephemeral_config: EphemeralConfiguration,
+    query: str,
+    limit: int
+):
+    paths = utils.get_logos_paths(ephemeral_config)
+    with database.NotesDatabase(paths.appdata, paths.user_id) as db:
+        notes = db.search_notes(
+            query,
+            limit,
+        )
+        if not notes:
+            print("No notes found.")
+            return
+        for note in notes:
+            notebook = (
+                note.Notebook.Title
+                if note.Notebook is not None
+                else ""
+            )
+
+            content = (
+                    note.FoldedContent
+                    or note.ContentRichText
+                    or ""
+            ).strip()
+            if notebook:
+                print(f"{note.NoteId}: [{notebook}] {content}")
+            else:
+                print(f"{note.NoteId}: {content}")
 # End Program Actions
 
 def parse_database_command(args):
@@ -91,6 +122,10 @@ def parse_database_command(args):
 
             database_notes_dump_action.__name__ = "database_notes_dump_operation"
             return database_notes_dump_action
+    if args.notes_command == "search":
+        def database_notes_search_action(config):
+            return database_notes_search_operation(config, args.query, args.limit)
+        return database_notes_search_operation
 
     raise RuntimeError(
         f"Unknown database command: {args.database_command}"
