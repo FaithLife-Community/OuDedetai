@@ -2,7 +2,7 @@ from pathlib import Path
 
 from ou_dedetai.config import EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path, get_wine_user, \
     get_logos_appdata_dir, get_logos_user_id
-from ou_dedetai.database import NotesDatabase, DatabaseInspector
+from ou_dedetai.database import NotesDatabase, DatabaseInspector, LibraryCatalogDatabase, NoteResourceResolver
 from ou_dedetai.paths import LogosPaths
 
 
