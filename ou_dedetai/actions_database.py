@@ -3,6 +3,7 @@ from pathlib import Path
 from ou_dedetai.config import EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path, get_wine_user, \
     get_logos_appdata_dir, get_logos_user_id
 from ou_dedetai.database import NotesDatabase, DatabaseInspector, LibraryCatalogDatabase, NoteResourceResolver
+from ou_dedetai.markdown import MarkdownNoteExporter
 from ou_dedetai.paths import LogosPaths
 
 
@@ -113,6 +114,11 @@ def database_notes_get_operation(ephemeral_config: EphemeralConfiguration):
 
 def database_notes_render_operation(ephemeral_config: EphemeralConfiguration):
     paths = get_logos_paths(ephemeral_config)
-    with NotesDatabase(paths.appdata, paths.user_id) as db:
-        note = db.get_note(ephemeral_config.note_id)
-    print(note.to_markdown())
+    with (
+        NotesDatabase(paths.appdata, paths.user_id) as notes_db,
+        LibraryCatalogDatabase(paths.appdata, paths.user_id) as catalog_db
+    ):
+        note = notes_db.get_note(ephemeral_config.note_id)
+        resolver = NoteResourceResolver(notes_db, catalog_db)
+        exporter = MarkdownNoteExporter(resolver)
+        print(exporter.export_note(note))
