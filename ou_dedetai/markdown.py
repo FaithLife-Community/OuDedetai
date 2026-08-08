@@ -8,6 +8,8 @@ from ou_dedetai.notes import LogosNote
 
 
 class MarkdownNoteExporter:
+    NO_CONTENT = "<!-- No Content -->"
+
     def __init__(
         self,
         resolver: NoteResourceResolver,
@@ -53,7 +55,7 @@ class MarkdownNoteExporter:
         )
 
         if resources:
-            front_matter["resources"] = [
+            front_matter["anchors"] = [
                 self.resource_metadata(resource)
                 for resource in resources
             ]
@@ -65,40 +67,16 @@ class MarkdownNoteExporter:
         resource,
     ) -> dict:
         metadata = resource.metadata
-
-        result = {
-            "resource_id": resource.resource_id,
-        }
-
+        result = {}
+        result = {"resource_id": resource.resource_id}
         if metadata.logosres_id:
             result["logosres_id"] = metadata.logosres_id
-
-        if metadata.title:
-            result["title"] = metadata.title
-
-        if metadata.abbreviated_title:
-            result["abbreviated_title"] = metadata.abbreviated_title
-
         if metadata.authors:
             result["authors"] = metadata.authors
-
-        if metadata.publisher:
-            result["publisher"] = metadata.publisher
-
-        if metadata.publication_date:
-            result["publication_date"] = metadata.publication_date
-
-        if metadata.resource_type:
-            result["type"] = metadata.resource_type
-
-        if metadata.reference_systems:
-            result["reference_systems"] = metadata.reference_systems
-
         if metadata.logosres_id:
             result["url"] = (
                 f"https://ref.ly/logosres/{metadata.logosres_id}"
             )
-
         return result
 
     def build_content(
@@ -106,20 +84,21 @@ class MarkdownNoteExporter:
         note: LogosNote,
     ) -> str:
         content = note.to_markdown().strip()
-
         resources = self.resolver.get_resources_for_note(
             note.NoteId
         )
+        sections = []
+        if content:
+            sections.append(content)
+        else:
+            sections.append(self.NO_CONTENT)
 
         if resources:
-            resource_section = self.render_resources(resources)
+            sections.append(
+                self.render_resources(resources)
+            )
 
-            if content:
-                content += "\n\n"
-
-            content += resource_section
-
-        return content
+        return "\n\n".join(sections)
 
     def render_resources(
         self,

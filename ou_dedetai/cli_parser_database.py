@@ -85,6 +85,20 @@ def add_database_parser(subparsers):
         type=int,
         help="NoteId to render",
     )
+    search_parser = notes_commands.add_parser(
+        "search",
+        help="search Logos notes",
+    )
+    search_parser.add_argument(
+        "query",
+        help="text to search for",
+    )
+    search_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="maximum number of results",
+    )
     return db_parser
 
 
@@ -106,18 +120,22 @@ def parse_database_command(args, ephemeral_config):
         ephemeral_config.notes_command = args.notes_command
         if args.notes_command == "count":
             return actions_database.database_notes_count_operation
-        if args.notes_command == "info":
-            return actions_database.database_notes_info_operation
-        if args.notes_command == "tables":
-            return actions_database.database_notes_tables_operation
-        if args.notes_command == "schema":
-            ephemeral_config.database_table = args.table
-            return actions_database.database_notes_schema_operation
         if args.notes_command == "get":
             ephemeral_config.note_id = args.note_id
             return actions_database.database_notes_get_operation
+        if args.notes_command == "info":
+            return actions_database.database_notes_info_operation
         if args.notes_command == "render":
             ephemeral_config.note_id = args.note_id
             return actions_database.database_notes_render_operation
+        if args.notes_command == "schema":
+            ephemeral_config.database_table = args.table
+            return actions_database.database_notes_schema_operation
+        if args.notes_command == "search":
+            ephemeral_config.notes_search_query = args.query
+            ephemeral_config.notes_search_limit = args.limit
+            return actions_database.database_notes_search_operation
+        if args.notes_command == "tables":
+            return actions_database.database_notes_tables_operation
 
     raise RuntimeError(f"Unknown database command: {args.database_command}")

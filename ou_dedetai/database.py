@@ -745,6 +745,28 @@ class NotesDatabase(FaithlifeDatabase):
             (note_id,),
         )
 
+    def search_notes(
+            self,
+            query: str,
+            limit: int = 20,
+    ) -> list[LogosNote]:
+        rows = self.query(
+            """
+            SELECT *
+            FROM Notes
+            WHERE IsDeleted = 0
+              AND IsTrashed = 0
+              AND FoldedContent LIKE ?
+            ORDER BY ModifiedDate DESC
+            LIMIT ?
+            """,
+            (f"%{query.lower()}%", limit),
+        )
+        return [
+            LogosNote.from_row(row)
+            for row in rows
+        ]
+
 
 # FIXME: refactor into FaithlifeDatabase class
 def watch_db(path: str, sql_statements: list[str]):

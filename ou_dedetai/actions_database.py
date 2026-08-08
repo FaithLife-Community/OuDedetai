@@ -1,3 +1,4 @@
+import unicodedata
 from pathlib import Path
 
 from ou_dedetai.config import EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path, get_wine_user, \
@@ -5,6 +6,7 @@ from ou_dedetai.config import EphemeralConfiguration, PersistentConfiguration, g
 from ou_dedetai.database import NotesDatabase, DatabaseInspector, LibraryCatalogDatabase, NoteResourceResolver
 from ou_dedetai.markdown import MarkdownNoteExporter
 from ou_dedetai.paths import LogosPaths
+from ou_dedetai.richtext import LogosRichTextRenderer, LogosRichTextParser, RichTextBlock
 
 
 def get_logos_paths(
@@ -122,3 +124,33 @@ def database_notes_render_operation(ephemeral_config: EphemeralConfiguration):
         resolver = NoteResourceResolver(notes_db, catalog_db)
         exporter = MarkdownNoteExporter(resolver)
         print(exporter.export_note(note))
+
+
+def database_notes_search_operation(
+    ephemeral_config: EphemeralConfiguration,
+):
+    paths = get_logos_paths(ephemeral_config)
+    with NotesDatabase(paths.appdata, paths.user_id) as db:
+        notes = db.search_notes(
+            ephemeral_config.notes_search_query,
+            ephemeral_config.notes_search_limit,
+        )
+        if not notes:
+            print("No notes found.")
+            return
+        for note in notes:
+            notebook = (
+                note.Notebook.Title
+                if note.Notebook is not None
+                else ""
+            )
+
+            content = (
+                    note.FoldedContent
+                    or note.ContentRichText
+                    or ""
+            ).strip()
+            if notebook:
+                print(f"{note.NoteId}: [{notebook}] {content}")
+            else:
+                print(f"{note.NoteId}: {content}")
