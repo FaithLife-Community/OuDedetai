@@ -510,6 +510,7 @@ def get_logos_user_id(
     else:
         return None
 
+
 class Config:
     """Set of configuration values. 
     
@@ -833,6 +834,16 @@ class Config:
             # Reset cache that depends on install_dir
             self._wine_appimage_files = None
             self._write()
+
+    @property
+    def export_dir_default(self) -> str:
+        return str(Path(self.install_dir) / "export")
+
+    @property
+    def export_dir(self) -> str:
+        if self._overrides.export_dir:
+            return self._overrides.export_dir
+        return self.export_dir_default
 
     @property
     # This used to be called APPDIR_BINDIR

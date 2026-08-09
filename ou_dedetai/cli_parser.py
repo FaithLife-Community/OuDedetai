@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+from pathlib import Path
 from typing import Tuple, Callable
 
 from . import constants, msg, cli, utils
@@ -261,6 +262,16 @@ def add_database_parser(subparsers):
         type=int,
         default=20,
         help="maximum number of results",
+    )
+    export_parser = notes_commands.add_parser(
+        "export",
+        help="export Logos notes as Markdown",
+    )
+    export_parser.add_argument(
+        "output_directory",
+        nargs="?",
+        type=Path,
+        help="directory for exported notes; defaults to <install_dir>/export",
     )
     return db_parser
 

@@ -3,6 +3,8 @@ import logging
 import logging.handlers
 import os
 import sys
+import threading
+from pathlib import Path
 from typing import Callable, Tuple
 
 from . import cli
@@ -60,21 +62,21 @@ def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration, limi
             print(dict(note))
             print()
 
-def database_notes_get_operation(ephemeral_config: EphemeralConfiguration):
+def database_notes_get_operation(ephemeral_config: EphemeralConfiguration, note_id):
     paths = utils.get_logos_paths(ephemeral_config)
 
     with database.NotesDatabase(paths.appdata, paths.user_id) as db:
-        note = db.get_note(ephemeral_config.note_id)
+        note = db.get_note(note_id)
 
     print(note)
 
-def database_notes_render_operation(ephemeral_config: EphemeralConfiguration):
+def database_notes_render_operation(ephemeral_config: EphemeralConfiguration, note_id):
     paths = utils.get_logos_paths(ephemeral_config)
     with (
         database.NotesDatabase(paths.appdata, paths.user_id) as notes_db,
         database.LibraryCatalogDatabase(paths.appdata, paths.user_id) as catalog_db
     ):
-        note = notes_db.get_note(ephemeral_config.note_id)
+        note = notes_db.get_note(note_id)
         resolver = database.NoteResourceResolver(notes_db, catalog_db)
         exporter = markdown.MarkdownNoteExporter(resolver)
         print(exporter.export_note(note))
@@ -109,6 +111,96 @@ def database_notes_search_operation(
                 print(f"{note.NoteId}: [{notebook}] {content}")
             else:
                 print(f"{note.NoteId}: {content}")
+
+
+def _print_calculating() -> Callable[[], None]:
+    stop_event = threading.Event()
+    def update() -> None:
+        dots = 0
+        print("\033[?25l", end="", flush=True)
+        try:
+            while not stop_event.is_set():
+                dots = (dots % 5) + 1
+                message = f"\rCalculating{"." * dots}"
+                print(f"\r{message:<20}", end="", flush=True)
+                stop_event.wait(0.4)
+        finally:
+            print("\r\033[K\033[?25h", end="", flush=True)
+
+    thread = threading.Thread(
+        target=update,
+        daemon=True
+    )
+    thread.start()
+    def stop() -> None:
+        if stop_event.is_set():
+            return
+        stop_event.set()
+        thread.join()
+        print("\033[?25h", end="", flush=True)
+    return stop
+
+
+def _print_export_progress(current: int, total: int) -> None:
+    width = 40
+    completed = int(width * current / total) if total else width
+    remaining = width - completed
+    bar = "#" * completed + "-" * remaining
+    percent = current / total * 100 if total else 100
+    print(
+        f"\rExporting notes: [{bar}] {current}/{total} "
+        f"({percent:5.1f}%)",
+        end="",
+        flush=True,
+    )
+
+    if current >= total:
+        print()
+
+
+def database_notes_export_operation(
+    ephemeral_config: EphemeralConfiguration,
+    export_dir
+):
+    persistent_config = PersistentConfiguration.load_from_path(
+        ephemeral_config.config_path
+    )
+    if export_dir is not None:
+        output_directory = Path(ephemeral_config.export_dir)
+    else:
+        if persistent_config.install_dir is None:
+            raise RuntimeError("No Logos installation found")
+        output_directory = Path(persistent_config.install_dir) / "export"
+    output_directory = output_directory.absolute()
+    paths = utils.get_logos_paths(ephemeral_config)
+    with (
+        database.NotesDatabase(paths.appdata, paths.user_id) as notes_db,
+        database.LibraryCatalogDatabase(
+            paths.appdata,
+            paths.user_id,
+        ) as catalog_db,
+    ):
+        notes = notes_db.notes()
+        resolver = database.NoteResourceResolver(
+            notes_db,
+            catalog_db,
+        )
+        exporter = markdown.MarkdownNoteExporter(resolver)
+        calculating_stop = _print_calculating()
+        def export_status(status: str) -> None:
+            if status == "ready":
+                calculating_stop()
+        try:
+            exported_paths = exporter.export_all(
+                notes,
+                output_directory,
+                progress_callback=_print_export_progress,
+                status_callback=export_status
+            )
+        finally:
+            calculating_stop()
+    print(f"Exported {len(exported_paths)} files to:")
+    print(output_directory)
 # End Program Actions
 
 def parse_database_command(args):
@@ -119,13 +211,22 @@ def parse_database_command(args):
         if args.notes_command == "dump":
             def database_notes_dump_action(config):
                 return database_notes_dump_operation(config, args.limit)
-
             database_notes_dump_action.__name__ = "database_notes_dump_operation"
             return database_notes_dump_action
+        if args.notes_command == "get":
+            def database_notes_get_action(config):
+                return database_notes_get_operation(config, args.note_id)
+            database_notes_get_action.__name__ = "database_notes_get_operation"
+            return database_notes_get_action
+        if args.notes_command == "export":
+            def database_notes_export_action(config):
+                return database_notes_export_operation(config, args.export_dir)
+            database_notes_export_action.__name__ = "database_notes_export_operation"
+            return database_notes_export_action
     if args.notes_command == "search":
         def database_notes_search_action(config):
             return database_notes_search_operation(config, args.query, args.limit)
-        return database_notes_search_operation
+        return database_notes_search_action
 
     raise RuntimeError(
         f"Unknown database command: {args.database_command}"
