@@ -98,7 +98,7 @@ def add_database_parser(subparsers):
     search_parser.add_argument(
         "--limit",
         type=int,
-        default=20,
+        default=5,
         help="maximum number of results",
     )
     export_parser = notes_commands.add_parser(

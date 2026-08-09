@@ -243,6 +243,12 @@ class EphemeralConfiguration:
     note_id: int = 0
     """Used to generate notes from the CLI"""
 
+    notes_search_query: str = ""
+    """Used to search notes from the CLI"""
+
+    notes_search_limit: int = 5
+    """Used to limit search results"""
+
     assume_yes: bool = False
     """Whether to assume yes to all prompts or ask the user
     

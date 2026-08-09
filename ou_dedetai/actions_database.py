@@ -1,14 +1,14 @@
 import threading
-import unicodedata
 from pathlib import Path
 from typing import Callable
 
 from ou_dedetai.config import EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path, get_wine_user, \
     get_logos_appdata_dir, get_logos_user_id
-from ou_dedetai.database import NotesDatabase, DatabaseInspector, LibraryCatalogDatabase, NoteResourceResolver
+from ou_dedetai.database_faithlife import DatabaseInspector
+from ou_dedetai.database_faithlife_notes import NotesDatabase, NoteResourceResolver
+from ou_dedetai.database_faithlife_catalog import LibraryCatalogDatabase
 from ou_dedetai.markdown import MarkdownNoteExporter
 from ou_dedetai.paths import LogosPaths
-from ou_dedetai.richtext import LogosRichTextRenderer, LogosRichTextParser, RichTextBlock
 
 
 def get_logos_paths(
@@ -45,7 +45,8 @@ def get_logos_databases(ephemeral_config: EphemeralConfiguration) -> list[Path]:
 
 
 def database_operation(ephemeral_config: EphemeralConfiguration):
-    from .database import SQLiteDatabase, DatabaseInspector
+    from .database import SQLiteDatabase
+    from .database_faithlife import DatabaseInspector
     if ephemeral_config.database_path:
         databases = [Path(ephemeral_config.database_path)]
     else:
@@ -126,6 +127,16 @@ def database_notes_render_operation(ephemeral_config: EphemeralConfiguration):
         resolver = NoteResourceResolver(notes_db, catalog_db)
         exporter = MarkdownNoteExporter(resolver)
         print(exporter.export_note(note))
+
+
+def database_notes_search_operation(
+    ephemeral_config: EphemeralConfiguration,
+):
+    paths = get_logos_paths(ephemeral_config)
+    with NotesDatabase(paths.appdata, paths.user_id) as db:
+        results = db.search_notes(ephemeral_config.notes_search_query, ephemeral_config.notes_search_limit)
+        for note in results:
+            print(note)
 
 
 def _print_calculating() -> Callable[[], None]:
