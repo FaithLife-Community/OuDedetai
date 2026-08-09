@@ -5,16 +5,13 @@ from typing import Iterable, Callable
 
 import yaml
 
-from ou_dedetai.database import NoteResourceResolver, NoteResource
+from ou_dedetai.database_faithlife_notes import NoteResource, NoteResourceResolver
 from ou_dedetai.notes import LogosNote, LogosNotebook
 
 
 class MarkdownNoteExporter:
     NO_CONTENT = "<!-- No Content -->"
-    def __init__(
-        self,
-        resolver: NoteResourceResolver
-    ):
+    def __init__(self, resolver: NoteResourceResolver):
         self.resolver = resolver
     def export_note(
         self,
@@ -29,10 +26,7 @@ class MarkdownNoteExporter:
             f"{content.rstrip()}\n"
         )
 
-    def build_front_matter(
-        self,
-        note: LogosNote,
-    ) -> dict:
+    def build_front_matter(self, note: LogosNote) -> dict:
         front_matter = {
             "note_id": note.NoteId,
             "external_id": note.ExternalId,
@@ -56,10 +50,7 @@ class MarkdownNoteExporter:
             ]
         return front_matter
 
-    def resource_metadata(
-        self,
-        resource,
-    ) -> dict:
+    def resource_metadata(self, resource) -> dict:
         metadata = resource.metadata
         result = {}
         result = {"resource_id": resource.resource_id}
@@ -73,10 +64,7 @@ class MarkdownNoteExporter:
             )
         return result
 
-    def build_content(
-        self,
-        note: LogosNote,
-    ) -> str:
+    def build_content(self, note: LogosNote) -> str:
         content = note.to_markdown().strip()
         resources = self.resolver.get_resources_for_note(note.NoteId)
         sections = []
@@ -90,10 +78,7 @@ class MarkdownNoteExporter:
             )
         return "\n\n".join(sections)
 
-    def render_resources(
-        self,
-        resources,
-    ) -> str:
+    def render_resources(self, resources) -> str:
         lines = [
             "## Resources",
             "",
@@ -115,10 +100,7 @@ class MarkdownNoteExporter:
                 lines.append(f"- {title}")
         return "\n".join(lines)
 
-    def sanitize_filename(
-        self,
-        value: str,
-    ) -> str:
+    def sanitize_filename(self, value: str) -> str:
         value = unicodedata.normalize("NFC", value)
         value = re.sub(r"""[<>:;"'/\\|?*\x00-\x1f]""", "-", value)
         value = re.sub(r"""['"‘’“”().]""", "", value)
@@ -132,10 +114,7 @@ class MarkdownNoteExporter:
         value = re.sub(r"-+", "-", value)
         return value
 
-    def resource_filename(
-        self,
-        resource,
-    ) -> str:
+    def resource_filename(self, resource) -> str:
         title = self.resource_title(resource)
         authors = self.resource_authors(resource)
         parts = ["Outline_of"]
@@ -152,32 +131,19 @@ class MarkdownNoteExporter:
         )
         return f"{filename}.md"
 
-    def notebook_filename(
-        self,
-        notebook: LogosNotebook,
-    ) -> str:
+    def notebook_filename( self, notebook: LogosNotebook) -> str:
         return (
             f"Notebook_"
             f"{self.sanitize_filename(notebook.Title)}.md"
         )
 
-    def export_notebook_outline(
-        self,
-        notebook: LogosNotebook,
-        notes: Iterable[LogosNote],
-        note_id_width: int
-    ) -> str:
+    def export_notebook_outline(self, notebook: LogosNotebook, notes: Iterable[LogosNote], note_id_width: int) -> str:
         lines = [f"# {notebook.Title}", ""]
         for note in notes:
             lines.append(f"- [[{str(note.NoteId).zfill(note_id_width)}]]")
         return "\n".join(lines) + "\n"
 
-    def export_resource_outline(
-        self,
-        resource,
-        notes: Iterable[LogosNote],
-        note_id_width: int
-    ) -> str:
+    def export_resource_outline(self, resource, notes: Iterable[LogosNote], note_id_width: int) -> str:
         metadata = resource.metadata
         title = (
                 metadata.title
@@ -189,21 +155,13 @@ class MarkdownNoteExporter:
             lines.append(f"- [[{str(note.NoteId).zfill(note_id_width)}]]")
         return "\n".join(lines) + "\n"
 
-    def write_notebook_outline(
-        self,
-        notebook: LogosNotebook,
-        notes: Iterable[LogosNote],
-        output_directory: Path,
-        note_id_width: int
-    ) -> Path:
+    def write_notebook_outline(self, notebook: LogosNotebook, notes: Iterable[LogosNote], output_directory: Path,
+                               note_id_width: int) -> Path:
         path = output_directory / self.notebook_filename(notebook)
         path.write_text(self.export_notebook_outline(notebook, notes, note_id_width), encoding="utf-8")
         return path
 
-    def resource_title(
-        self,
-        resource,
-    ) -> str:
+    def resource_title(self, resource) -> str:
         metadata = resource.metadata
         return (
             metadata.title
@@ -211,10 +169,7 @@ class MarkdownNoteExporter:
             or resource.resource_id
         )
 
-    def resource_authors(
-        self,
-        resource,
-    ) -> list[str]:
+    def resource_authors(self, resource) -> list[str]:
         metadata = resource.metadata
         if not metadata.authors:
             return []
@@ -234,30 +189,16 @@ class MarkdownNoteExporter:
             authors.append(author)
         return authors
 
-    def write_resource_outline(
-        self,
-        resource,
-        notes: Iterable[LogosNote],
-        output_directory: Path,
-        note_id_width: int
-    ) -> Path:
+    def write_resource_outline(self, resource, notes: Iterable[LogosNote], output_directory: Path,
+                               note_id_width: int) -> Path:
         path = output_directory / self.resource_filename(resource)
         path.write_text(self.export_resource_outline(resource, notes, note_id_width), encoding="utf-8")
         return path
 
-    def filename(
-        self,
-        note: LogosNote,
-        note_id_width: int
-    ) -> str:
+    def filename(self, note: LogosNote, note_id_width: int) -> str:
         return f"Logos_{note.NoteId:0{note_id_width}d}.md"
 
-    def write_note(
-        self,
-        note: LogosNote,
-        output_directory: Path,
-        note_id_width: int
-    ) -> Path:
+    def write_note(self, note: LogosNote, output_directory: Path, note_id_width: int) -> Path:
         output_directory.mkdir(
             parents=True,
             exist_ok=True,
@@ -267,20 +208,14 @@ class MarkdownNoteExporter:
         path.write_text(self.export_note(note), encoding="utf-8")
         return path
 
-    def group_by_notebook(
-        self,
-        notes: Iterable[LogosNote],
-    ) -> dict[int | None, list[LogosNote]]:
+    def group_by_notebook(self, notes: Iterable[LogosNote]) -> dict[int | None, list[LogosNote]]:
         grouped: dict[int | None, list[LogosNote]] = {}
         for note in notes:
             notebook_id = (note.Notebook.NotebookId if note.Notebook is not None else None)
             grouped.setdefault(notebook_id, []).append(note)
         return grouped
 
-    def group_by_resource(
-        self,
-        notes: Iterable[LogosNote],
-    ) -> dict[str, tuple[NoteResource, list[LogosNote]]]:
+    def group_by_resource(self, notes: Iterable[LogosNote]) -> dict[str, tuple[NoteResource, list[LogosNote]]]:
         grouped: dict[str, tuple[NoteResource, list[LogosNote]]] = {}
         for note in notes:
             resources = self.resolver.get_resources_for_note(note.NoteId)
@@ -290,13 +225,9 @@ class MarkdownNoteExporter:
                 grouped[resource.resource_id][1].append(note)
         return grouped
 
-    def export_all(
-        self,
-        notes: Iterable[LogosNote],
-        output_directory: Path,
-        progress_callback: Callable[[int, int], None] | None = None,
-        status_callback: Callable[[str], None] | None = None,
-    ) -> list[Path]:
+    def export_all(self, notes: Iterable[LogosNote], output_directory: Path,
+                   progress_callback: Callable[[int, int], None] | None = None,
+                   status_callback: Callable[[str], None] | None = None) -> list[Path]:
         notes = list(notes)
         paths: list[Path] = []
         if status_callback is not None:

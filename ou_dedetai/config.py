@@ -7,9 +7,9 @@ import json
 import logging
 from pathlib import Path
 
-from ou_dedetai import network, utils, constants, wine, system
+from . import network, utils, constants, wine, system
+from .constants import PROMPT_OPTION_DIRECTORY
 
-from ou_dedetai.constants import PROMPT_OPTION_DIRECTORY
 
 @dataclass
 class LegacyConfiguration:
