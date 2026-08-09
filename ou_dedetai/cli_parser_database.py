@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from . import actions_database
 
 
@@ -99,6 +101,16 @@ def add_database_parser(subparsers):
         default=20,
         help="maximum number of results",
     )
+    export_parser = notes_commands.add_parser(
+        "export",
+        help="export Logos notes as Markdown",
+    )
+    export_parser.add_argument(
+        "output_directory",
+        nargs="?",
+        type=Path,
+        help="directory for exported notes; defaults to <install_dir>/export",
+    )
     return db_parser
 
 
@@ -120,6 +132,9 @@ def parse_database_command(args, ephemeral_config):
         ephemeral_config.notes_command = args.notes_command
         if args.notes_command == "count":
             return actions_database.database_notes_count_operation
+        if args.notes_command == "export":
+            ephemeral_config.export_dir = args.output_directory
+            return actions_database.database_notes_export_operation
         if args.notes_command == "get":
             ephemeral_config.note_id = args.note_id
             return actions_database.database_notes_get_operation

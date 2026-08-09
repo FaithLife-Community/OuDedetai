@@ -1,5 +1,7 @@
+import threading
 import unicodedata
 from pathlib import Path
+from typing import Callable
 
 from ou_dedetai.config import EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path, get_wine_user, \
     get_logos_appdata_dir, get_logos_user_id
@@ -126,31 +128,90 @@ def database_notes_render_operation(ephemeral_config: EphemeralConfiguration):
         print(exporter.export_note(note))
 
 
-def database_notes_search_operation(
+def _print_calculating() -> Callable[[], None]:
+    stop_event = threading.Event()
+    def update() -> None:
+        dots = 0
+        print("\033[?25l", end="", flush=True)
+        try:
+            while not stop_event.is_set():
+                dots = (dots % 5) + 1
+                message = f"\rCalculating{"." * dots}"
+                print(f"\r{message:<20}", end="", flush=True)
+                stop_event.wait(0.4)
+        finally:
+            print("\r\033[K\033[?25h", end="", flush=True)
+
+    thread = threading.Thread(
+        target=update,
+        daemon=True
+    )
+    thread.start()
+    def stop() -> None:
+        if stop_event.is_set():
+            return
+        stop_event.set()
+        thread.join()
+        print("\033[?25h", end="", flush=True)
+    return stop
+
+
+def _print_export_progress(current: int, total: int) -> None:
+    width = 40
+    completed = int(width * current / total) if total else width
+    remaining = width - completed
+    bar = "#" * completed + "-" * remaining
+    percent = current / total * 100 if total else 100
+    print(
+        f"\rExporting notes: [{bar}] {current}/{total} "
+        f"({percent:5.1f}%)",
+        end="",
+        flush=True,
+    )
+
+    if current >= total:
+        print()
+
+
+def database_notes_export_operation(
     ephemeral_config: EphemeralConfiguration,
 ):
+    persistent_config = PersistentConfiguration.load_from_path(
+        ephemeral_config.config_path
+    )
+    if ephemeral_config.export_dir is not None:
+        output_directory = Path(ephemeral_config.export_dir)
+    else:
+        if persistent_config.install_dir is None:
+            raise RuntimeError("No Logos installation found")
+        output_directory = Path(persistent_config.install_dir) / "export"
+    output_directory = output_directory.absolute()
     paths = get_logos_paths(ephemeral_config)
-    with NotesDatabase(paths.appdata, paths.user_id) as db:
-        notes = db.search_notes(
-            ephemeral_config.notes_search_query,
-            ephemeral_config.notes_search_limit,
+    with (
+        NotesDatabase(paths.appdata, paths.user_id) as notes_db,
+        LibraryCatalogDatabase(
+            paths.appdata,
+            paths.user_id,
+        ) as catalog_db,
+    ):
+        notes = notes_db.notes()
+        resolver = NoteResourceResolver(
+            notes_db,
+            catalog_db,
         )
-        if not notes:
-            print("No notes found.")
-            return
-        for note in notes:
-            notebook = (
-                note.Notebook.Title
-                if note.Notebook is not None
-                else ""
+        exporter = MarkdownNoteExporter(resolver)
+        calculating_stop = _print_calculating()
+        def export_status(status: str) -> None:
+            if status == "ready":
+                calculating_stop()
+        try:
+            exported_paths = exporter.export_all(
+                notes,
+                output_directory,
+                progress_callback=_print_export_progress,
+                status_callback=export_status
             )
-
-            content = (
-                    note.FoldedContent
-                    or note.ContentRichText
-                    or ""
-            ).strip()
-            if notebook:
-                print(f"{note.NoteId}: [{notebook}] {content}")
-            else:
-                print(f"{note.NoteId}: {content}")
+        finally:
+            calculating_stop()
+    print(f"Exported {len(exported_paths)} files to:")
+    print(output_directory)

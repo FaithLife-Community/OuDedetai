@@ -576,7 +576,7 @@ class NotesDatabase(FaithlifeDatabase):
     def _database_path(self):
         return self.logos_app_dir / "Documents" / self.logos_user_id / "NotesToolManager" / "notestool.db"
 
-    def notes(self) -> list[sqlite3.Row]:
+    def notes(self) -> list[LogosNote]:
         rows = self.query("""
             SELECT *
             FROM Notes
