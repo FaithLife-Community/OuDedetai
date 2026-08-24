@@ -206,7 +206,6 @@ def ensure_appimage_download(app: App):
         return
     app.status("Ensuring wine AppImage is downloaded…")
 
-    downloaded_file = None
     appimage_path = app.conf.wine_appimage_recommended_file_name 
     download_url = app.conf.wine_appimage_recommended_url
 
@@ -240,18 +239,15 @@ def ensure_appimage_download(app: App):
         return
 
     filename = Path(appimage_path).name
-    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, filename)
-    if not downloaded_file:
-        downloaded_file = f"{app.conf.download_dir}/{filename}"
-    network.logos_reuse_download(
+    downloaded_file = network.logos_reuse_download(
         download_url,
         filename,
-        app.conf.download_dir,
+        app.conf.installer_binary_dir,
         app=app,
     )
     logging.debug(f"> File exists?: {downloaded_file}: {Path(downloaded_file).is_file()}")
     
-    app.conf.wine_binary = downloaded_file
+    app.conf.wine_binary = str(downloaded_file)
 
 
 def ensure_wine_executables(app: App):
@@ -287,19 +283,13 @@ def ensure_product_installer_download(app: App):
     app.installer_step += 1
     app.status(f"Ensuring {app.conf.faithlife_product} installer is downloaded…")
 
-    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, app.conf.faithlife_installer_name) 
-    if not downloaded_file:
-        downloaded_file = Path(app.conf.download_dir) / app.conf.faithlife_installer_name 
-    network.logos_reuse_download(
+    installer = Path(f"{app.conf.install_dir}/data/{app.conf.faithlife_installer_name}")
+    downloaded_file = network.logos_reuse_download(
         app.conf.faithlife_installer_download_url,
         app.conf.faithlife_installer_name,
-        app.conf.download_dir,
+        str(installer.parent),
         app=app,
     )
-    # Copy file into install dir.
-    installer = Path(f"{app.conf.install_dir}/data/{app.conf.faithlife_installer_name}")
-    if not installer.is_file():
-        shutil.copy(downloaded_file, installer.parent)
 
     logging.debug(f"> '{downloaded_file}' exists?: {Path(downloaded_file).is_file()}")
 
@@ -480,11 +470,10 @@ def create_wine_appimage_symlinks(app: App):
         appimage_filename = app.conf.wine_appimage_recommended_file_name
     appimage_file = appdir_bindir / appimage_filename
     # Ensure appimage is copied to appdir_bindir.
-    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, appimage_filename) 
-    if downloaded_file is None:
-        logging.critical("Failed to get a valid wine appimage")
-        return
-    if not appimage_file.exists():
+    downloaded_file = app.conf.wine_appimage_path
+    if downloaded_file is None or not downloaded_file.is_file():
+        app.exit("Failed to get a valid wine AppImage.")
+    if not appimage_file.exists() and downloaded_file != appimage_file:
         app.status(f"Copying: {downloaded_file} into: {appdir_bindir}")
         shutil.copy(downloaded_file, appdir_bindir)
     os.chmod(appimage_file, 0o755)
