@@ -1000,13 +1000,14 @@ def ensure_winetricks(
         app.status(f"Installing winetricks v{version}…")
     base_url = "https://codeload.github.com/Winetricks/winetricks/zip/refs/tags"
     zip_name = f"{version}.zip"
-    wtzip = network.logos_reuse_download(
+    network.logos_reuse_download(
         f"{base_url}/{version}",
         zip_name,
         app.conf.download_dir,
         app=app,
         status_messages=status_messages
     )
+    wtzip = f"{app.conf.download_dir}/{zip_name}"
     logging.debug(f"Extracting winetricks script to {winetricks_path}…")
     with zipfile.ZipFile(wtzip) as z:
         for zi in z.infolist():
@@ -1031,3 +1032,4 @@ def check_incompatibilities(app: App):
         )
         app.approve_or_exit(question_text, secondary)
         remove_appimagelauncher(app)
+

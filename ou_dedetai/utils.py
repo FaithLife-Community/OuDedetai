@@ -515,10 +515,7 @@ def set_appimage_symlink(app: App):
     if appimage_file_path.name == app.conf.wine_appimage_recommended_file_name:
         # Default case.
         # This saves in the install binary dir
-        destination_file_path = network.download_recommended_appimage(app)
-        destination_file_path.chmod(
-            destination_file_path.stat().st_mode | stat.S_IXUSR
-        )
+        network.download_recommended_appimage(app)
     else:
         # Verify user-selected AppImage.
         if not check_appimage(appimage_file_path):
@@ -657,3 +654,4 @@ def get_timestamp():
 
 def parse_bool(string: str) -> bool:
     return string.lower() in ['true', '1', 'y', 'yes']
+

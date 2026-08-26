@@ -677,7 +677,7 @@ def enforce_icu_data_files(app: App):
     icu_filename = os.path.basename(icu_url).removesuffix(".tar.gz")
     # Append the version to the file name so it doesn't collide with previous versions
     icu_filename = f"{icu_filename}-{icu_latest_version}.tar.gz"
-    icu_archive = network.logos_reuse_download(
+    network.logos_reuse_download(
         icu_url,
         icu_filename,
         app.conf.download_dir,
@@ -687,7 +687,7 @@ def enforce_icu_data_files(app: App):
     app.status("Copying ICU files…")
 
     drive_c = f"{app.conf.wine_prefix}/drive_c"
-    utils.untar_file(icu_archive, drive_c)
+    utils.untar_file(f"{app.conf.download_dir}/{icu_filename}", drive_c)
 
     # Ensure the target directory exists
     icu_win_dir = f"{drive_c}/icu-win/windows"
