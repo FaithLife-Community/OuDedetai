@@ -330,7 +330,7 @@ def run_control_panel(ephemeral_config: EphemeralConfiguration):
         gui_app.start_gui_app(ephemeral_config)
     else:
         try:
-            curses.wrapper(tui_app.control_panel_app, ephemeral_config)
+            tui_app.control_panel_app(ephemeral_config)
         except KeyboardInterrupt:
             raise
         except SystemExit:
