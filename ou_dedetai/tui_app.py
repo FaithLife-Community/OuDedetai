@@ -405,7 +405,6 @@ class TUI(App):
     def end(self, signal, frame):
         logging.debug("Exiting…")
         self.is_running = False
-        curses.endwin()
 
     def update_main_window_contents(self):
         self.main_screen.set_options(self.set_tui_menu_options())
