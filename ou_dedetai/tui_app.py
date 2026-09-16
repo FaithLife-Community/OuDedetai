@@ -118,7 +118,6 @@ class TextualUI(TextualApp[None]):
             foreground="#F0F0F0",
             dark=True,
         ),
-        #TODO: Needs tweaking
         "system-dark": Theme(
             name="system-dark",
             primary="#5FA8D3",
@@ -133,7 +132,6 @@ class TextualUI(TextualApp[None]):
             panel="#252525",
             dark=True,
         ),
-        #TODO: Needs tweaking
         "system-light": Theme(
             name="system-light",
             primary="#005A9C",
@@ -149,10 +147,8 @@ class TextualUI(TextualApp[None]):
             dark=False,
         )
     }
-    #TODO: Needs tweaking
     CSS = """
     Screen {
-        layout: vertical;
         background: $background;
         color: $text;
     }
@@ -162,24 +158,15 @@ class TextualUI(TextualApp[None]):
         height: auto;
         background: $surface;
         border-bottom: solid $primary;
-        padding: 0 1;
     }
 
     #title { text-style: bold; }
-    #subtitle { color: $text-muted; }
-
-    #console-area {
-        height: 9;
-        border: solid $primary;
-        background: $surface;
-        padding: 0 1;
-    }
 
     #main-area { height: 1fr; }
 
     #menu-title {
         text-style: bold;
-        padding: 1 2;
+        padding: 0 1;
         background: $primary;
         color: $text;
     }
@@ -190,9 +177,6 @@ class TextualUI(TextualApp[None]):
     }
 
     #dialog {
-        width: 70;
-        max-width: 90%;
-        height: auto;
         border: thick $primary;
         background: $surface;
         padding: 1 2;
@@ -200,20 +184,16 @@ class TextualUI(TextualApp[None]):
 
     #dialog-title {
         text-style: bold;
-        margin-bottom: 1;
     }
-
-    #dialog-body { margin-bottom: 1; }
 
     #dialog-buttons {
-        height: auto;
         align: center middle;
-        margin-top: 1;
     }
 
-    #dialog-buttons Button {
-        margin: 0 1;
-        min-width: 12;
+    #console-area {
+        border: solid $primary;
+        background: $surface;
+        padding: 0 1;
     }
 
     #status-bar {
