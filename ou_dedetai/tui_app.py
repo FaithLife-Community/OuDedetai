@@ -248,12 +248,12 @@ class TextualUI(TextualApp[None]):
         with Vertical(id="header-area"):
             yield Static(id="title")
             yield Static(id="subtitle")
-        yield Log(id="console-area", max_lines=300, highlight=True)
         with Vertical(id="main-area"):
             yield Static("Main Menu", id="menu-title")
             yield OptionList(id="main-menu")
+        yield Log(id="console-area", max_lines=300, highlight=True)
         yield Footer()
-        yield Static("", id="status-bar")
+        yield Static("FaithLife Community", id="status-bar")
 
     def on_mount(self) -> None:
         self.title = constants.APP_NAME
@@ -313,7 +313,6 @@ class TextualUI(TextualApp[None]):
     def write_status(self, message: str) -> None:
         try:
             self.query_one("#console-area", Log).write_line(message)
-            self.query_one("#status-bar", Static).update(message)
         except Exception:
             pass
 
