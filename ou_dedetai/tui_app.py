@@ -28,9 +28,6 @@ from . import utils
 from . import wine
 
 
-WINDOWS_VERSIONS = ["vista", "win7", "win8", "win10", "win11", "Return to Main Menu"]
-
-
 class MenuModal(ModalScreen[str]):
     BINDINGS = [Binding("escape", "cancel", "Cancel", show=True)]
 
@@ -554,10 +551,10 @@ class TUI(DomainApp):
                 MenuModal("Choose Renderer", ["gdi", "gl", "dxvk", "vulkan", "Return to Main Menu"]),
                 callback=self.renderer_select)
         elif choice == "Set Windows Version for Logos":
-            self.ui.push_screen(MenuModal("Windows Version for Logos", WINDOWS_VERSIONS),
+            self.ui.push_screen(MenuModal("Windows Version for Logos", constants.WINDOWS_VERSIONS),
                                 callback=self.win_ver_logos_select)
         elif choice == "Set Windows Version for Indexer":
-            self.ui.push_screen(MenuModal("Windows Version for Indexer", WINDOWS_VERSIONS),
+            self.ui.push_screen(MenuModal("Windows Version for Indexer", constants.WINDOWS_VERSIONS),
                                 callback=self.win_ver_index_select)
 
     def utilities_menu_select(self, choice: str | None) -> None:
