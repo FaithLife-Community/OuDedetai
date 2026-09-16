@@ -16,7 +16,7 @@ from textual.theme import Theme
 from textual.widgets import (Button, Footer, Input, Label, Log, OptionList, Static)
 from textual.widgets.option_list import Option
 
-from ou_dedetai.app import App as DomainApp, UserExitedFromAsk
+from ou_dedetai.app import App, UserExitedFromAsk
 from ou_dedetai.config import EphemeralConfiguration
 
 from . import control
@@ -339,7 +339,7 @@ class TextualUI(TextualApp[None]):
         return self.theme
 
 
-class TUI(DomainApp):
+class TUI(App):
     def __init__(self, ephemeral_config: EphemeralConfiguration) -> None:
         super().__init__(ephemeral_config)
         self.is_running = True
