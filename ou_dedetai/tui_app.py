@@ -231,7 +231,6 @@ class TextualUI(TextualApp[None]):
     BINDINGS = [
         Binding("q", "quit", "Quit", show=True),
         Binding("ctrl+c", "quit", "Quit", show=False),
-        Binding("r", "refresh", "Refresh", show=True),
     ]
 
     title_text: reactive[str] = reactive("")
