@@ -14,6 +14,7 @@ from ou_dedetai.app import App
 from . import network
 from . import system
 from . import utils
+from . import xshape_shim
 
 def check_wineserver(app: App) -> bool:
     # FIXME: if the wine version changes, we may need to restart the wineserver
@@ -755,7 +756,11 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     if additional_wine_dll_overrides is not None:
         wine_env["WINEDLLOVERRIDES"] += ";" + additional_wine_dll_overrides
 
+    # Black frames around popups on Hyprland/Sway and friends; see xshape_shim.py
+    xshape_shim.apply(wine_env, app)
+
     updated_env = {k: wine_env.get(k) for k in wine_env_defaults.keys()}
+    updated_env["LD_PRELOAD"] = wine_env.get("LD_PRELOAD")
     logging.debug(f"Wine env: {updated_env}")
     # Extra safe calling this here, it should be called run run_command anyways
     return system.fix_ld_library_path(wine_env)
