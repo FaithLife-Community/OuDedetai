@@ -267,6 +267,21 @@ def enough_disk_space(dest_dir, bytes_required: int) -> bool:
     return free_bytes > bytes_required
 
 
+def format_bytes(num_bytes: int) -> str:
+    """Format a byte count as a human-readable string (e.g. '4.2 GiB').
+
+    Args:
+        num_bytes: Byte count as a non-negative integer.
+    """
+    value = float(num_bytes)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if abs(value) < 1024.0 or unit == "TiB":
+            return f"{int(value)} B" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024.0
+    # Unreachable, but keeps type checkers happy
+    return f"{value:.1f} TiB"
+
+
 def get_path_size(file_path: Path|str) -> int:
     file_path = Path(file_path)
     if not file_path.exists():
