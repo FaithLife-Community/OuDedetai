@@ -118,7 +118,7 @@ def parse_database_command(args, ephemeral_config):
     ephemeral_config.database_command = args.database_command
     if args.database_command == "inspect":
         ephemeral_config.database_path = args.path
-        return actions_database.database_operation
+        return actions_database.database_inspector
 
     if args.database_command == "list":
         return actions_database.database_list_operation
