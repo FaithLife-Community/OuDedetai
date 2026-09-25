@@ -310,9 +310,10 @@ class VersionComparison(enum.Enum):
 
 
 def compare_logos_linux_installer_version(app: App) -> Optional[VersionComparison]:
+    if constants.LLI_CURRENT_VERSION is None:
+        raise TypeError("LLI_CURRENT_VERSION is not set")
     current = Version(constants.LLI_CURRENT_VERSION)
     latest = Version(app.conf.app_latest_version)
-
     if current < latest:
         # Current release is older than recommended.
         output = VersionComparison.OUT_OF_DATE

@@ -857,7 +857,7 @@ class TUI(App):
             self.password_e.set()
 
     def renderer_select(self, choice):
-        if choice in ["gdi", "gl", "vulkan"]:
+        if choice in ["gdi", "gl", "dxvk", "vulkan"]:
             self.reset_screen()
             self.status(f"Changing renderer to {choice}.", 0)
             wine.set_renderer(self, self.conf.wine64_binary, choice)
