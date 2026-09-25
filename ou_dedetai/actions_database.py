@@ -40,17 +40,13 @@ def get_logos_paths(
     )
 
 
-def get_logos_databases(ephemeral_config: EphemeralConfiguration) -> list[Path]:
-    return get_logos_paths(ephemeral_config).databases
-
-
 def database_inspector(ephemeral_config: EphemeralConfiguration):
     from .database import SQLiteDatabase
     from .database_faithlife import DatabaseInspector
     if ephemeral_config.database_path:
         databases = [Path(ephemeral_config.database_path)]
     else:
-        databases = get_logos_databases(ephemeral_config)
+        databases = get_logos_paths(ephemeral_config).databases
 
     for database_path in databases:
         print(f"\n=== {database_path.name} ===")
@@ -60,7 +56,7 @@ def database_inspector(ephemeral_config: EphemeralConfiguration):
 
 
 def database_list_operation(ephemeral_config: EphemeralConfiguration):
-    for database in get_logos_databases(ephemeral_config):
+    for database in get_logos_paths(ephemeral_config).databases:
         print(database)
 
 
