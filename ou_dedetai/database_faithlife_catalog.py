@@ -23,18 +23,9 @@ class ResourceMetadata:
 
 class LibraryCatalogDatabase(FaithlifeDatabase):
     def _database_path(self) -> Path:
-        return (
-            self.logos_app_dir
-            / "Data"
-            / self.logos_user_id
-            / "LibraryCatalog"
-            / "catalog.db"
-        )
+        return self.logos_app_dir / "Data" / self.logos_user_id / "LibraryCatalog" / "catalog.db"
 
-    def get_resource(
-        self,
-        resource_id: str,
-    ) -> Optional[sqlite3.Row]:
+    def get_resource(self, resource_id: str) -> Optional[sqlite3.Row]:
         resource_id = resource_id.lower()
         row = self.query_one(
             """
@@ -59,19 +50,13 @@ class LibraryCatalogDatabase(FaithlifeDatabase):
             (resource_id,),
         )
 
-    def get_resource_title(
-        self,
-        resource_id: str,
-    ) -> Optional[str]:
+    def get_resource_title(self, resource_id: str) -> Optional[str]:
         row = self.get_resource(resource_id)
         if row is None:
             return None
         return row["Title"]
 
-    def get_alternate_resource_ids(
-        self,
-        resource_id: str,
-    ) -> list[str]:
+    def get_alternate_resource_ids(self, resource_id: str) -> list[str]:
         row = self.get_resource(resource_id)
         if row is None:
             return []
@@ -89,10 +74,7 @@ class LibraryCatalogDatabase(FaithlifeDatabase):
             for row in rows
         ]
 
-    def get_resource_ids(
-        self,
-        resource_id: str,
-    ) -> list[str]:
+    def get_resource_ids(self, resource_id: str) -> list[str]:
         row = self.get_resource(resource_id)
         if row is None:
             return []
@@ -101,10 +83,7 @@ class LibraryCatalogDatabase(FaithlifeDatabase):
             *self.get_alternate_resource_ids(resource_id),
         ]
 
-    def get_logosres_id(
-        self,
-        resource_id: str,
-    ) -> str | None:
+    def get_logosres_id(self, resource_id: str) -> str | None:
         row = self.get_resource(resource_id)
         if row is None:
             return None
@@ -114,19 +93,13 @@ class LibraryCatalogDatabase(FaithlifeDatabase):
                 return alternate_id
         return None
 
-    def get_logosres_url(
-            self,
-            resource_id: str,
-    ) -> str | None:
+    def get_logosres_url(self, resource_id: str) -> str | None:
         logosres_id = self.get_logosres_id(resource_id)
         if logosres_id is None:
             return None
         return f"https://ref.ly/logosres/{logosres_id}"
 
-    def get_resource_traits(
-            self,
-            resource_id: str,
-    ) -> list[str]:
+    def get_resource_traits(self, resource_id: str) -> list[str]:
         row = self.get_resource(resource_id)
         if row is None:
             return []
@@ -143,25 +116,17 @@ class LibraryCatalogDatabase(FaithlifeDatabase):
         )
         return [row["Value"] for row in rows]
 
-    def get_reference_systems(
-            self,
-            resource_id: str,
-    ) -> list[str]:
+    def get_reference_systems(self, resource_id: str) -> list[str]:
         return [
             trait.removeprefix("supports-")
             for trait in self.get_resource_traits(resource_id)
             if trait.startswith("supports-")
         ]
 
-    def get_resource_metadata(
-        self,
-        resource_id: str,
-    ) -> ResourceMetadata | None:
+    def get_resource_metadata(self, resource_id: str) -> ResourceMetadata | None:
         row = self.get_resource(resource_id)
-
         if row is None:
             return None
-
         logosres_id = self.get_logosres_id(resource_id)
 
         return ResourceMetadata(

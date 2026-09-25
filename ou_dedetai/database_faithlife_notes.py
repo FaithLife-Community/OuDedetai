@@ -41,19 +41,13 @@ class NotesDatabase(FaithlifeDatabase):
               AND IsTrashed = 0
         """) or 0
 
-    def hydrate_note(
-        self,
-        note: LogosNote,
-    ) -> LogosNote:
+    def hydrate_note(self, note: LogosNote) -> LogosNote:
         note.Notebook = self.get_notebook_for_note(note)
         note.Tags = self.get_tags_for_note(note)
         return note
 
     def get_note(self, note_id: int) -> LogosNote:
-        row = self.fetch_one(
-            "SELECT * FROM Notes WHERE NoteId = ?",
-            (note_id,)
-        )
+        row = self.fetch_one("SELECT * FROM Notes WHERE NoteId = ?", (note_id,))
         if row is None:
             raise RuntimeError(f"Note not found: {note_id}")
         return self.hydrate_note(LogosNote.from_row(row))
@@ -73,10 +67,7 @@ class NotesDatabase(FaithlifeDatabase):
         return [LogosNotebook.from_row(row) for row in rows]
 
     def get_notebook(self, notebook_id: int) -> LogosNotebook:
-        row = self.query_one(
-            "SELECT * FROM Notebooks WHERE NotebookId = ?",
-            (notebook_id,),
-        )
+        row = self.query_one("SELECT * FROM Notebooks WHERE NotebookId = ?", (notebook_id,))
         if row is None:
             raise RuntimeError(f"Notebook not found: {notebook_id}")
         return LogosNotebook.from_row(row)
@@ -89,10 +80,7 @@ class NotesDatabase(FaithlifeDatabase):
         """)
         return [LogosTag.from_row(row) for row in rows]
 
-    def get_notebook_by_external_id(
-        self,
-        external_id: str,
-    ) -> LogosNotebook:
+    def get_notebook_by_external_id(self, external_id: str) -> LogosNotebook:
         row = self.query_one(
             "SELECT * FROM Notebooks WHERE ExternalId = ?",
             (external_id,),
@@ -103,29 +91,18 @@ class NotesDatabase(FaithlifeDatabase):
             )
         return LogosNotebook.from_row(row)
 
-    def get_notebook_for_note(
-        self,
-        note: LogosNote,
-    ) -> LogosNotebook | None:
+    def get_notebook_for_note(self, note: LogosNote) -> LogosNotebook | None:
         if not note.NotebookExternalId:
             return None
         return self.get_notebook_by_external_id(note.NotebookExternalId)
 
     def get_tag(self, tag_id: int) -> LogosTag:
-        row = self.fetch_one(
-            "SELECT * FROM Tags WHERE TagId = ?",
-            (tag_id,),
-        )
+        row = self.fetch_one("SELECT * FROM Tags WHERE TagId = ?", (tag_id,))
         if row is None:
-            raise RuntimeError(
-                f"Tag not found: {tag_id}"
-            )
+            raise RuntimeError(f"Tag not found: {tag_id}")
         return LogosTag.from_row(row)
 
-    def get_tags_for_note(
-        self,
-        note: LogosNote,
-    ) -> list[LogosTag]:
+    def get_tags_for_note(self, note: LogosNote) -> list[LogosTag]:
         rows = self.query(
             """
             SELECT Tags.*
@@ -139,10 +116,7 @@ class NotesDatabase(FaithlifeDatabase):
         )
         return [LogosTag.from_row(row) for row in rows]
 
-    def get_resource_ids_for_note(
-        self,
-        note_id: int,
-    ) -> list[str]:
+    def get_resource_ids_for_note(self, note_id: int) -> list[str]:
         rows = self.query(
             """
             SELECT DISTINCT ResourceIds.ResourceId
@@ -156,15 +130,9 @@ class NotesDatabase(FaithlifeDatabase):
             (note_id,),
         )
 
-        return [
-            row["ResourceId"]
-            for row in rows
-        ]
+        return [row["ResourceId"] for row in rows]
 
-    def get_anchor_text_ranges(
-        self,
-        note_id: int,
-    ) -> list[sqlite3.Row]:
+    def get_anchor_text_ranges(self, note_id: int) -> list[sqlite3.Row]:
         return self.query(
             """
             SELECT *
@@ -175,10 +143,7 @@ class NotesDatabase(FaithlifeDatabase):
             (note_id,),
         )
 
-    def get_anchor_references(
-        self,
-        note_id: int,
-    ) -> list[sqlite3.Row]:
+    def get_anchor_references(self, note_id: int) -> list[sqlite3.Row]:
         return self.query(
             """
             SELECT *
@@ -189,11 +154,7 @@ class NotesDatabase(FaithlifeDatabase):
             (note_id,),
         )
 
-    def search_notes(
-            self,
-            query: str,
-            limit: int = 5
-    ) -> list[LogosNote]:
+    def search_notes(self, query: str, limit: int = 5) -> list[LogosNote]:
         rows = self.query(
             """
             SELECT *
@@ -206,42 +167,21 @@ class NotesDatabase(FaithlifeDatabase):
             """,
             (f"%{query.lower()}%", limit),
         )
-        return [
-            LogosNote.from_row(row)
-            for row in rows
-        ]
+        return [LogosNote.from_row(row) for row in rows]
 
 
 class NoteResourceResolver:
-    def __init__(
-        self,
-        notes_db: NotesDatabase,
-        catalog_db: LibraryCatalogDatabase,
-    ):
+    def __init__(self, notes_db: NotesDatabase, catalog_db: LibraryCatalogDatabase):
         self.notes_db = notes_db
         self.catalog_db = catalog_db
 
-    def get_resources_for_note(
-        self,
-        note_id: int,
-    ) -> list[NoteResource]:
+    def get_resources_for_note(self, note_id: int) -> list[NoteResource]:
         resources = []
 
-        for resource_id in self.notes_db.get_resource_ids_for_note(
-            note_id
-        ):
-            metadata = self.catalog_db.get_resource_metadata(
-                resource_id
-            )
-
+        for resource_id in self.notes_db.get_resource_ids_for_note(note_id):
+            metadata = self.catalog_db.get_resource_metadata(resource_id)
             if metadata is None:
                 continue
-
-            resources.append(
-                NoteResource(
-                    resource_id=resource_id,
-                    metadata=metadata,
-                )
-            )
+            resources.append(NoteResource(resource_id=resource_id, metadata=metadata))
 
         return resources

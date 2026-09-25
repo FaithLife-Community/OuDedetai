@@ -39,10 +39,7 @@ class LocalUserPreferencesManager(FaithlifeDatabase):
 
 
 class DatabaseInspector:
-    def __init__(
-        self,
-        database: SQLiteDatabase,
-    ):
+    def __init__(self, database: SQLiteDatabase):
         self.database = database
 
     def tables(self) -> list[str]:
@@ -56,9 +53,7 @@ class DatabaseInspector:
         return [row["name"] for row in rows]
 
     def schema(self, table: str):
-        return self.database.query(
-            f"PRAGMA table_info('{table}')"
-        )
+        return self.database.query(f"PRAGMA table_info('{table}')")
 
     def summary(self) -> dict[str, Any]:
         return self.database.database_info()
@@ -89,10 +84,7 @@ class DatabaseInspector:
         for index in info["indexes"]:
             print(f"  {index}")
 
-    def describe_table(
-        self,
-        table: str,
-    ) -> None:
+    def describe_table(self, table: str) -> None:
         info = self.database.describe(table)
         print(f"Schema:")
         print(f"  {info['schema'] or 'none'}")
@@ -131,12 +123,7 @@ class DatabaseInspector:
         else:
             print("  none")
 
-    def sample_table(
-        self,
-        table: str,
-        limit: int = 5,
-    ) -> None:
-
+    def sample_table(self, table: str, limit: int = 5) -> None:
         print(f"Sample rows from {table}:")
         print()
 

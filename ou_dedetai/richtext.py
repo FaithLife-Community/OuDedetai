@@ -16,10 +16,7 @@ class RichTextDocument:
 
 
 class LogosRichTextParser:
-    def parse(
-        self,
-        xml_text: str | None,
-    ) -> RichTextDocument:
+    def parse(self, xml_text: str | None) -> RichTextDocument:
         if not xml_text:
             return RichTextDocument()
         root = ET.fromstring( f"<Root>{xml_text}</Root>" )
@@ -35,10 +32,7 @@ class LogosRichTextParser:
             ]
         )
 
-    def parse_element(
-        self,
-        element: ET.Element,
-    ) -> RichTextBlock:
+    def parse_element(self, element: ET.Element) -> RichTextBlock:
         match element.tag:
             case "Paragraph":
                 return RichTextBlock(
@@ -74,10 +68,7 @@ class LogosRichTextParser:
                     content=self.extract_text(element),
                 )
 
-    def run_format(
-        self,
-        run: ET.Element,
-    ) -> list[str]:
+    def run_format(self, run: ET.Element) -> list[str]:
         formats = []
         if run.attrib.get("FontBold", "").lower() == "true":
             formats.append("bold")
@@ -87,10 +78,7 @@ class LogosRichTextParser:
             formats.append("underline")
         return formats
 
-    def parse_runs(
-        self,
-        element: ET.Element,
-    ) -> list[RichTextBlock]:
+    def parse_runs(self, element: ET.Element) -> list[RichTextBlock]:
         blocks = []
         for run in element:
             if run.tag != "Run":
@@ -108,10 +96,7 @@ class LogosRichTextParser:
 
         return blocks
 
-    def extract_text(
-        self,
-        element: ET.Element,
-    ) -> str:
+    def extract_text(self, element: ET.Element) -> str:
         parts = []
         for child in element.iter():
             text = child.attrib.get("Text")
@@ -119,10 +104,7 @@ class LogosRichTextParser:
                 parts.append(text)
         return "".join(parts)
 
-    def is_meaningful_element(
-        self,
-        element: ET.Element,
-    ) -> bool:
+    def is_meaningful_element(self, element: ET.Element) -> bool:
         if element.tag == "Paragraph":
             return bool(self.extract_text(element).strip())
         if element.tag == "Run":
@@ -131,10 +113,7 @@ class LogosRichTextParser:
 
 
 class LogosRichTextRenderer:
-    def to_markdown(
-        self,
-        document: RichTextDocument,
-    ) -> str:
+    def to_markdown(self, document: RichTextDocument) -> str:
         blocks = []
         for block in document.blocks:
             markdown = self.block_to_markdown(block)
@@ -142,11 +121,7 @@ class LogosRichTextRenderer:
                 blocks.append(markdown)
         return "\n\n".join(blocks)
 
-    def block_to_markdown(
-        self,
-        block: RichTextBlock,
-        depth: int = 0,
-    ) -> str:
+    def block_to_markdown(self, block: RichTextBlock, depth: int = 0) -> str:
         match block.type:
             case "paragraph":
                 return "".join(
