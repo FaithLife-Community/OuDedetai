@@ -222,6 +222,33 @@ class EphemeralConfiguration:
     config_path: str
     """Path this config was loaded from"""
 
+    export_dir: Optional[str] = None
+    """Directory whither notes are exported"""
+
+    database_command: Optional[str] = None
+    """Database subcommand to execute"""
+
+    database_path: Optional[str] = None
+    """SQLite database path for database commands"""
+
+    database_args: Optional[list[str]] = None
+    """Database CLI args to utilize"""
+
+    database_table: str | None = None
+    """Table used in recent database command"""
+
+    database_limit: int = 10
+    """Limit of how many rows to return"""
+
+    note_id: int = 0
+    """Used to generate notes from the CLI"""
+
+    notes_search_query: str = ""
+    """Used to search notes from the CLI"""
+
+    notes_search_limit: int = 5
+    """Used to limit search results"""
+
     assume_yes: bool = False
     """Whether to assume yes to all prompts or ask the user
     
@@ -511,6 +538,7 @@ def get_logos_user_id(
         return file_children[0].name
     else:
         return None
+
 
 class Config:
     """Set of configuration values. 
@@ -827,6 +855,16 @@ class Config:
             # Reset cache that depends on install_dir
             self._wine_appimage_files = None
             self._write()
+
+    @property
+    def export_dir_default(self) -> str:
+        return str(Path(self.install_dir) / "export")
+
+    @property
+    def export_dir(self) -> str:
+        if self._overrides.export_dir:
+            return self._overrides.export_dir
+        return self.export_dir_default
 
     @property
     # This used to be called APPDIR_BINDIR
