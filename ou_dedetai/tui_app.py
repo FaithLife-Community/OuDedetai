@@ -66,6 +66,8 @@ class TUI(App):
 
         self.terminal_margin = 2
         self.resizing = False
+        # Set by the SIGWINCH handler, serviced by display() on the main loop
+        self.resize_requested = False
         # These two are updated in set_window_dimensions
         self.console_log_lines = 0
         self.options_per_page = 0
@@ -427,6 +429,16 @@ class TUI(App):
         self.resizing = False
 
     def signal_resize(self, signum, frame):
+        # Only record the request. Python runs signal handlers on the main
+        # thread between bytecodes and does not mask the signal while its
+        # handler runs, so redrawing here lets a burst of SIGWINCH (dragging a
+        # window edge, a tiling WM) re-enter this handler on top of itself
+        # until the interpreter hits its recursion limit. It also re-enters
+        # curses and choice_q mid-operation. display() services the request.
+        self.resize_requested = True
+
+    def handle_resize(self):
+        self.resize_requested = False
         self.resize_curses()
         self.choice_q.put("resize")
 
@@ -478,6 +490,9 @@ class TUI(App):
             # process exit happen on the correct thread.
             if self._pending_exit is not None:
                 self.exit(*self._pending_exit)
+            # Serviced here rather than in signal_resize itself; see that method
+            if self.resize_requested:
+                self.handle_resize()
             if self.window_height >= self.window_height_min and self.window_width >= 35:
                 self.terminal_margin = 2
                 if not self.resizing:
