@@ -11,18 +11,13 @@ from ou_dedetai.markdown import MarkdownNoteExporter
 from ou_dedetai.paths import LogosPaths
 
 
-def get_logos_paths(
-    ephemeral_config: EphemeralConfiguration,
-) -> LogosPaths:
+def get_logos_paths(ephemeral_config: EphemeralConfiguration) -> LogosPaths:
     persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
     if persistent_config.install_dir is None:
         raise RuntimeError("No Logos installation found")
     if persistent_config.faithlife_product is None:
         raise RuntimeError("No Logos product found")
-    wine_prefix = (
-        ephemeral_config.wine_prefix
-        or get_wine_prefix_path(persistent_config.install_dir)
-    )
+    wine_prefix = (ephemeral_config.wine_prefix or get_wine_prefix_path(persistent_config.install_dir))
     wine_user = get_wine_user(wine_prefix)
     if wine_user is None:
         raise RuntimeError("Unable to find Wine user")
@@ -63,10 +58,7 @@ def database_list_operation(ephemeral_config: EphemeralConfiguration):
 def database_dump_operation(ephemeral_config: EphemeralConfiguration):
     paths = get_logos_paths(ephemeral_config)
     with NotesDatabase(paths.appdata, paths.user_id) as db:
-        for row in db.sample(
-                ephemeral_config.database_table,
-                ephemeral_config.database_limit,
-        ):
+        for row in db.sample(ephemeral_config.database_table, ephemeral_config.database_limit):
             print(dict(row))
             print()
 
@@ -180,12 +172,8 @@ def _print_export_progress(current: int, total: int) -> None:
         print()
 
 
-def database_notes_export_operation(
-    ephemeral_config: EphemeralConfiguration,
-):
-    persistent_config = PersistentConfiguration.load_from_path(
-        ephemeral_config.config_path
-    )
+def database_notes_export_operation(ephemeral_config: EphemeralConfiguration):
+    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
     if ephemeral_config.export_dir is not None:
         output_directory = Path(ephemeral_config.export_dir)
     else:
@@ -202,10 +190,7 @@ def database_notes_export_operation(
         ) as catalog_db,
     ):
         notes = notes_db.notes()
-        resolver = NoteResourceResolver(
-            notes_db,
-            catalog_db,
-        )
+        resolver = NoteResourceResolver(notes_db, catalog_db)
         exporter = MarkdownNoteExporter(resolver)
         calculating_stop = _print_calculating()
         def export_status(status: str) -> None:

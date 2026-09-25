@@ -221,10 +221,7 @@ def parse_args(logging, args, parser) -> Tuple[EphemeralConfiguration, Callable[
     if args.command == "database":
         return (
             ephemeral_config,
-            cli_parser_database.parse_database_command(
-                args,
-                ephemeral_config,
-            ),
+            cli_parser_database.parse_database_command(args, ephemeral_config)
         )
 
     if args.quiet:

@@ -13,10 +13,8 @@ class MarkdownNoteExporter:
     NO_CONTENT = "<!-- No Content -->"
     def __init__(self, resolver: NoteResourceResolver):
         self.resolver = resolver
-    def export_note(
-        self,
-        note: LogosNote,
-    ) -> str:
+
+    def export_note(self, note: LogosNote) -> str:
         front_matter = self.build_front_matter(note)
         content = self.build_content(note)
         return (
@@ -36,32 +34,21 @@ class MarkdownNoteExporter:
         if note.Notebook is not None:
             front_matter["notebook"] = note.Notebook.Title
         if note.Tags:
-            front_matter["tags"] = [
-                tag.Text
-                for tag in note.Tags
-            ]
-        resources = self.resolver.get_resources_for_note(
-            note.NoteId
-        )
+            front_matter["tags"] = [tag.Text for tag in note.Tags]
+        resources = self.resolver.get_resources_for_note(note.NoteId)
         if resources:
-            front_matter["anchors"] = [
-                self.resource_metadata(resource)
-                for resource in resources
-            ]
+            front_matter["anchors"] = [self.resource_metadata(resource) for resource in resources]
         return front_matter
 
     def resource_metadata(self, resource) -> dict:
         metadata = resource.metadata
-        result = {}
         result = {"resource_id": resource.resource_id}
         if metadata.logosres_id:
             result["logosres_id"] = metadata.logosres_id
         if metadata.authors:
             result["authors"] = metadata.authors
         if metadata.logosres_id:
-            result["url"] = (
-                f"https://ref.ly/logosres/{metadata.logosres_id}"
-            )
+            result["url"] = f"https://ref.ly/logosres/{metadata.logosres_id}"
         return result
 
     def build_content(self, note: LogosNote) -> str:
@@ -73,28 +60,16 @@ class MarkdownNoteExporter:
         else:
             sections.append(self.NO_CONTENT)
         if resources:
-            sections.append(
-                self.render_resources(resources)
-            )
+            sections.append(self.render_resources(resources))
         return "\n\n".join(sections)
 
     def render_resources(self, resources) -> str:
-        lines = [
-            "## Resources",
-            "",
-        ]
+        lines = ["## Resources", ""]
         for resource in resources:
             metadata = resource.metadata
-            title = (
-                metadata.title
-                or metadata.abbreviated_title
-                or resource.resource_id
-            )
+            title = metadata.title or metadata.abbreviated_title or resource.resource_id
             if metadata.logosres_id:
-                url = (
-                    f"https://ref.ly/logosres/"
-                    f"{metadata.logosres_id}"
-                )
+                url = f"https://ref.ly/logosres/{metadata.logosres_id}"
                 lines.append(f"- [{title}]({url})")
             else:
                 lines.append(f"- {title}")
@@ -125,17 +100,11 @@ class MarkdownNoteExporter:
         elif authors:
             parts.append("_".join(authors[:-1]) + "_and_" + authors[-1])
         parts.append(title)
-        filename = "_".join(
-            self.sanitize_filename(part)
-            for part in parts
-        )
+        filename = "_".join(self.sanitize_filename(part) for part in parts)
         return f"{filename}.md"
 
     def notebook_filename( self, notebook: LogosNotebook) -> str:
-        return (
-            f"Notebook_"
-            f"{self.sanitize_filename(notebook.Title)}.md"
-        )
+        return f"Notebook_{self.sanitize_filename(notebook.Title)}.md"
 
     def export_notebook_outline(self, notebook: LogosNotebook, notes: Iterable[LogosNote], note_id_width: int) -> str:
         lines = [f"# {notebook.Title}", ""]
@@ -145,11 +114,7 @@ class MarkdownNoteExporter:
 
     def export_resource_outline(self, resource, notes: Iterable[LogosNote], note_id_width: int) -> str:
         metadata = resource.metadata
-        title = (
-                metadata.title
-                or metadata.abbreviated_title
-                or resource.resource_id
-        )
+        title = metadata.title or metadata.abbreviated_title or resource.resource_id
         lines = [f"# {title}", ""]
         for note in notes:
             lines.append(f"- [[{str(note.NoteId).zfill(note_id_width)}]]")
@@ -163,11 +128,7 @@ class MarkdownNoteExporter:
 
     def resource_title(self, resource) -> str:
         metadata = resource.metadata
-        return (
-            metadata.title
-            or metadata.abbreviated_title
-            or resource.resource_id
-        )
+        return metadata.title or metadata.abbreviated_title or resource.resource_id
 
     def resource_authors(self, resource) -> list[str]:
         metadata = resource.metadata
@@ -199,10 +160,7 @@ class MarkdownNoteExporter:
         return f"Logos_{note.NoteId:0{note_id_width}d}.md"
 
     def write_note(self, note: LogosNote, output_directory: Path, note_id_width: int) -> Path:
-        output_directory.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        output_directory.mkdir(parents=True, exist_ok=True)
         filename = self.filename(note, note_id_width)
         path = output_directory / filename
         path.write_text(self.export_note(note), encoding="utf-8")

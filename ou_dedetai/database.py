@@ -24,56 +24,29 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
     def _database_path(self) -> Path:
         return self.path
 
-    def execute(
-        self,
-        sql_statement: str,
-        parameters: Sequence[Any] = None,
-    ) -> sqlite3.Cursor:
+    def execute(self, sql_statement: str, parameters: Sequence[Any] = None) -> sqlite3.Cursor:
         if parameters is None:
             parameters = ()
         return self.database.execute(sql_statement, parameters)
 
-    def execute_many(
-        self,
-        sql_statement: str,
-        parameters: Sequence[Sequence[Any]],
-    ) -> sqlite3.Cursor:
-        return self.database.executemany(
-            sql_statement,
-            parameters,
-        )
+    def execute_many(self, sql_statement: str, parameters: Sequence[Sequence[Any]]) -> sqlite3.Cursor:
+        return self.database.executemany(sql_statement, parameters)
 
-    def query(
-        self,
-        sql_statement: str,
-        parameters: Sequence[Any] = None,
-    ) -> list[sqlite3.Row]:
+    def query(self, sql_statement: str, parameters: Sequence[Any] = None) -> list[sqlite3.Row]:
         if parameters is None:
             parameters = ()
         return self.execute(sql_statement, parameters).fetchall()
 
-    def query_one(
-        self,
-        sql_statement: str,
-        parameters: Sequence[Any] = None,
-    ) -> Optional[sqlite3.Row]:
+    def query_one(self, sql_statement: str, parameters: Sequence[Any] = None) -> Optional[sqlite3.Row]:
         if parameters is None:
             parameters = ()
         return self.execute(sql_statement, parameters).fetchone()
 
-    def scalar(
-        self,
-        sql_statement: str,
-        parameters: Sequence[Any] = None,
-    ) -> Optional[Any]:
+    def scalar(self, sql_statement: str, parameters: Sequence[Any] = None) -> Optional[Any]:
         row = self.query_one(sql_statement, parameters)
         return None if row is None else row[0]
 
-    def fetch_one(
-        self,
-        sql_statement: str,
-        parameters: Sequence[Any] = None,
-    ) -> Optional[Any]:
+    def fetch_one(self, sql_statement: str, parameters: Sequence[Any] = None) -> Optional[Any]:
         if parameters is None:
             parameters = ()
         return self.execute(sql_statement, parameters).fetchone()
@@ -93,14 +66,8 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
         """)
         return [row["name"] for row in rows]
 
-    def column_names(
-        self,
-        table: str,
-    ) -> list[str]:
-        return [
-            column["name"]
-            for column in self.columns(table)
-        ]
+    def column_names(self, table: str) -> list[str]:
+        return [column["name"] for column in self.columns(table)]
 
     def views(self) -> list[str]:
         rows = self.query("""
@@ -120,24 +87,15 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
         """)
         return [row["name"] for row in rows]
 
-    def pragma(
-        self,
-        name: str,
-    ) -> list[sqlite3.Row]:
+    def pragma(self, name: str) -> list[sqlite3.Row]:
         return self.query(f"PRAGMA {name}")
 
-    def index_info(
-        self,
-        index: str,
-    ) -> list[sqlite3.Row]:
+    def index_info(self, index: str) -> list[sqlite3.Row]:
         return self.query(
             f"PRAGMA index_info([{index}])"
         )
 
-    def index_schema(
-        self,
-        index: str,
-    ) -> str | None:
+    def index_schema(self, index: str) -> str | None:
         return self.scalar(
             """
             SELECT sql
@@ -148,15 +106,9 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
             [index],
         )
 
-    def has_table(
-        self,
-        table: str,
-    ) -> bool:
+    def has_table(self, table: str) -> bool:
         return table in self.table_names()
-    def columns(
-        self,
-        table: str,
-    ) -> list[sqlite3.Row]:
+    def columns(self, table: str) -> list[sqlite3.Row]:
         if not self.has_table(table):
             raise ValueError(f"Unknown table: {table}")
         return self.query(f"PRAGMA table_info([{table}])")
@@ -172,10 +124,7 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
             ORDER BY type, name
         """)
 
-    def view_schema(
-        self,
-        view: str,
-    ) -> str | None:
+    def view_schema(self, view: str) -> str | None:
         return self.scalar(
             """
             SELECT sql
@@ -186,10 +135,7 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
             [view],
         )
 
-    def table_schema(
-        self,
-        table: str,
-    ) -> str | None:
+    def table_schema(self, table: str) -> str | None:
         return self.scalar(
             """
             SELECT sql
@@ -200,18 +146,12 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
             [table],
         )
 
-    def count(
-        self,
-        table: str,
-    ) -> int:
+    def count(self, table: str) -> int:
         if not self.has_table(table):
             raise ValueError(f"Unknown table: {table}")
         return self.scalar(f"SELECT COUNT(*) FROM {table}") or 0
 
-    def table_indexes(
-        self,
-        table: str,
-    ) -> list[str]:
+    def table_indexes(self, table: str) -> list[str]:
         if not self.has_table(table):
             raise ValueError(f"Unknown table: {table}")
 
@@ -228,10 +168,7 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
 
         return [row["name"] for row in rows]
 
-    def describe(
-        self,
-        table: str,
-    ) -> dict[str, Any]:
+    def describe(self, table: str) -> dict[str, Any]:
         if not self.has_table(table):
             raise ValueError(f"Unknown table: {table}")
 
@@ -250,10 +187,7 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
             "schema": self.table_schema(table),
         }
 
-    def foreign_keys(
-        self,
-        table: str,
-    ) -> list[sqlite3.Row]:
+    def foreign_keys(self, table: str) -> list[sqlite3.Row]:
         if not self.has_table(table):
             raise ValueError(f"Unknown table: {table}")
 
@@ -261,11 +195,7 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
             f"PRAGMA foreign_key_list([{table}])"
         )
 
-    def sample(
-        self,
-        table: str,
-        limit: int = 5,
-    ) -> list[sqlite3.Row]:
+    def sample(self, table: str, limit: int = 5) -> list[sqlite3.Row]:
         if not self.has_table(table):
             raise ValueError(f"Unknown table: {table}")
 
@@ -287,10 +217,7 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
         """)
         return [row["name"] for row in rows]
 
-    def trigger_schema(
-        self,
-        trigger: str,
-    ) -> str | None:
+    def trigger_schema(self, trigger: str) -> str | None:
         return self.scalar(
             """
             SELECT sql
@@ -311,11 +238,7 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
             "triggers": self.triggers(),
         }
 
-    def dump(
-        self,
-        table: str,
-        limit: int = 10,
-    ) -> None:
+    def dump(self, table: str, limit: int = 10) -> None:
         for row in self.sample(table, limit):
             print(dict(row))
 
@@ -326,10 +249,7 @@ class SQLiteDatabase(contextlib.AbstractContextManager):
         return self._db
 
     def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(
-            str(self._database_path()),
-            autocommit=True,
-        )
+        db = sqlite3.connect(str(self._database_path()), autocommit=True)
         db.row_factory = sqlite3.Row
         return db
 
@@ -404,5 +324,3 @@ def watch_db(path: str, sql_statements: list[str]):
         # Shouldn't be possible to get here, but on the off-chance it happens,
         # we'd like to know and cleanup
         logging.debug(f"Stopped watching {path}")
-
-
