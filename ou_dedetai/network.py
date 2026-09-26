@@ -1,5 +1,6 @@
 import abc
 from dataclasses import dataclass, field
+import functools
 import hashlib
 import json
 import logging
@@ -22,6 +23,36 @@ from ou_dedetai.app import App
 
 from . import constants
 from . import utils
+
+
+class NetworkOffline(requests.exceptions.ConnectionError):
+    """Raised when a network call fails and the instance is marked offline.
+
+    Subsequent calls are short-circuited for NETWORK_OFFLINE_TTL_SECONDS.
+    Subclasses ConnectionError so existing broad `except` blocks catch it.
+    """
+
+    def __init__(self, message: str = "Network is offline.") -> None:
+        super().__init__(message)
+
+
+def offline_aware(method: Callable) -> Callable:
+    """Decorator for NetworkRequests methods that make network calls.
+
+    Short-circuits if the instance is already offline; on ConnectionError or
+    Timeout, marks the instance offline and raises NetworkOffline.
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        if self.is_offline:
+            raise NetworkOffline()
+        try:
+            return method(self, *args, **kwargs)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            self._offline_until = time.monotonic() + constants.NETWORK_OFFLINE_TTL_SECONDS
+            raise NetworkOffline() from e
+    return wrapper
+
 
 class Props(abc.ABC):
     def __init__(self) -> None:
@@ -249,6 +280,15 @@ class NetworkRequests:
     ) -> None:
         self._cache = CachedRequests.load().ensure_fresh(force=force_clean or False)
         self._cache._update_hook = hook
+        self._offline_until: Optional[float] = None
+
+    @property
+    def is_offline(self) -> bool:
+        if self._offline_until is None:
+            return False
+        if time.monotonic() >= self._offline_until:
+            return False
+        return True
 
     def _faithlife_product_releases(
         self,
@@ -270,6 +310,7 @@ class NetworkRequests:
             return None
         return releases[product][version][channel]
 
+    @offline_aware
     def faithlife_product_releases(
         self,
         product: str,
@@ -292,10 +333,11 @@ class NetworkRequests:
         repo = "FaithLife-Community/wine-appimages"
         return self._repo_version(repo)
 
+    @offline_aware
     def _url_size_and_hash(self, url: str) -> tuple[Optional[int], Optional[str]]:
         """Attempts to get the size and hash from a URL.
         Uses cache if it exists
-        
+
         Returns:
             bytes - from the Content-Length leader
             md5_hash - from the Content-MD5 header or S3's etag
@@ -312,6 +354,7 @@ class NetworkRequests:
     def url_md5(self, url: str) -> Optional[str]:
         return self._url_size_and_hash(url)[1]
 
+    @offline_aware
     def _repo_version(self, repository: str) -> GithubSoftwareReleasesInfo:
         output = GithubSoftwareReleasesInfo(latest=None, pre_release=None)
         if (
@@ -344,6 +387,7 @@ class NetworkRequests:
         return output
             
 
+    @offline_aware
     def _repo_latest_version(self, repository: str) -> SoftwareReleaseInfo:
         if (
             repository not in self._cache.repository_latest_version
@@ -547,15 +591,15 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
                                         f"Downloading {target_props.path.name}…",
                                         percent
                                     )
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.HTTPError as e:
             # If this was an incomplete read try again
             new_size = FileProps(target).size
             if (
                 total_size is not None
                 and new_size is not None
-                and new_size < total_size 
+                and new_size < total_size
                 and (
-                    last_size is None 
+                    last_size is None
                     or new_size > last_size
                 )
             ):

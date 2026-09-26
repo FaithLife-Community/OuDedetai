@@ -1,7 +1,11 @@
 import tempfile
+import time
 import unittest
+import unittest.mock
 from pathlib import Path
-from requests.exceptions import MissingSchema
+from requests.exceptions import ConnectionError as RequestsConnectionError, MissingSchema
+
+import requests
 
 import ou_dedetai.network as network
 
@@ -40,3 +44,40 @@ class TestNetwork(unittest.TestCase):
 
     def test_urlprops_get_md5(self):
         self.assertIsNone(URLOBJ.md5)
+
+
+class TestNetworkOffline(unittest.TestCase):
+    def test_network_offline_is_connection_error(self):
+        self.assertIsInstance(network.NetworkOffline(), RequestsConnectionError)
+
+    def test_is_offline_initially_false(self):
+        nr = network.NetworkRequests(force_clean=True)
+        self.assertFalse(nr.is_offline)
+
+    def test_decorator_short_circuits_when_offline(self):
+        nr = network.NetworkRequests(force_clean=True)
+        nr._offline_until = time.monotonic() + 60
+        with self.assertRaises(network.NetworkOffline):
+            nr.faithlife_product_releases("Logos", "10", "stable")
+
+    def test_decorator_marks_offline_on_connection_error(self):
+        nr = network.NetworkRequests(force_clean=True)
+        with unittest.mock.patch.object(
+            network,
+            "_get_faithlife_product_releases",
+            side_effect=requests.exceptions.ConnectionError("no internet"),
+        ):
+            with self.assertRaises(network.NetworkOffline):
+                nr.faithlife_product_releases("Logos", "10", "stable")
+        self.assertTrue(nr.is_offline)
+
+    def test_decorator_does_not_mark_offline_on_http_error(self):
+        nr = network.NetworkRequests(force_clean=True)
+        with unittest.mock.patch.object(
+            network,
+            "_get_faithlife_product_releases",
+            side_effect=requests.exceptions.HTTPError("404"),
+        ):
+            with self.assertRaises(requests.exceptions.HTTPError):
+                nr.faithlife_product_releases("Logos", "10", "stable")
+        self.assertFalse(nr.is_offline)

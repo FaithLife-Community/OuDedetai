@@ -53,6 +53,9 @@ MATRIX_LINK = "https://matrix.to/#/#logosbible:matrix.org"
 CACHE_LIFETIME_HOURS = 12
 """How long to wait before considering our version cache invalid"""
 
+NETWORK_OFFLINE_TTL_SECONDS = 120
+"""How long subsequent network requests are short-circuited after a failure."""
+
 if RUNMODE == 'snap':
     _snap_user_common = os.getenv('SNAP_USER_COMMON')
     if _snap_user_common is None:
