@@ -5,6 +5,8 @@ import unittest
 from unittest.mock import Mock
 from pathlib import Path
 
+from packaging.version import InvalidVersion
+
 import ou_dedetai.constants as constants
 import ou_dedetai.utils as utils
 from . import REPODIR
@@ -27,7 +29,7 @@ class TestAppUtils(unittest.TestCase):
         constants.LLI_CURRENT_VERSION = None
         self.app.conf.app_latest_version = '4.0.1'
         self.assertRaises(
-            TypeError,
+            InvalidVersion,
             utils.compare_logos_linux_installer_version,
             self.app
         )
