@@ -1,5 +1,8 @@
 # Changelog
 
+- 4.0.0-beta.15
+	- Fix issues with TUI [J. Bellars, T. H. Wright]
+	- Switch TUI to Textual [T. H. Wright]
 - 4.0.0-beta.14
 	- This release adds an update Logos button [N. Shaaban]
 	- OD now detects OpenGL version [T. H. Wright]
