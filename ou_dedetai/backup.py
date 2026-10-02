@@ -30,21 +30,39 @@ class BackupBase(abc.ABC):
             # Reset backup dir.
             # The app will re-prompt next time the backup_dir is accessed
             app.conf._raw.backup_dir = None
-        self.backup_dir = Path(self.app.conf.backup_dir).expanduser().resolve()
-        try:
-            self.backup_dir.mkdir(exist_ok=True, parents=True)
-        except PermissionError:
-            m = f"folder not accessible: {self.backup_dir}"
-            if constants.RUNMODE == 'snap':
-                m += f"{m}\n\nTry connecting removable media:\nsnap connect {constants.BINARY_NAME}:removable-media\n"
-            self.app.exit(m)
+        self.backup_dir = self._ensure_backup_dir()
+
+    def _ensure_backup_dir(self) -> Path:
+        """Resolve and create the backups folder, re-prompting if it's gone.
+
+        Handles the case where the configured location (e.g. an external disk)
+        is no longer available, so the user can choose a new one instead of
+        crashing.
+        """
+        last_failed: Optional[Path] = None
+        while True:
+            backup_dir = Path(self.app.conf.backup_dir).expanduser().resolve()
+            try:
+                backup_dir.mkdir(exist_ok=True, parents=True)
+                return backup_dir
+            except (FileNotFoundError, PermissionError) as e:
+                m = f"Backup location not available: {backup_dir} ({e})"
+                if constants.RUNMODE == 'snap':
+                    m += f"\n\nTry connecting removable media:\nsnap connect {constants.BINARY_NAME}:removable-media\n"
+                # Bail out rather than loop forever when we can't re-prompt or
+                # the same location keeps failing.
+                if self.app.conf._overrides.assume_yes or backup_dir == last_failed:
+                    self.app.exit(m)
+                last_failed = backup_dir
+                self.app.info(m)
+                # Forget the bad location so the app re-prompts on next access.
+                self.app.conf._raw.backup_dir = None
 
     def _copy_dirs(
             self,
             src_dirs: List[str|Path] | Tuple[str|Path],
             dst_dir: Path|str,
         ) -> None:
-        # logging.debug("starting _copy_dirs")
         for src in src_dirs:
             if not isinstance(src, Path):
                 src = Path(src)
@@ -61,16 +79,16 @@ class BackupBase(abc.ABC):
         logging.debug(all_backups)
         return all_backups
 
-    def _get_copy_percentage(self) -> int:
+    def _get_copy_progress(self) -> Tuple[int, int]:
+        """Returns (bytes_copied, percent) based on destination disk usage."""
         disk_used = self._get_dest_disk_used()
         # This should already be set by run, but in case it isn't
         if not self.destination_disk_used_init:
             self.destination_disk_used_init = disk_used
 
-        delta = disk_used - self.destination_disk_used_init
-        percent = int(delta * 100 / self.data_size)
-        # logging.debug(f"{percent=}")
-        return percent
+        bytes_copied = max(disk_used - self.destination_disk_used_init, 0)
+        percent = min(int(bytes_copied * 100 / self.data_size), 100)
+        return bytes_copied, percent
 
     def _get_dest_disk_used(self) -> int:
         return shutil.disk_usage(self.destination_dir).used
@@ -96,31 +114,70 @@ class BackupBase(abc.ABC):
             if dst.is_dir():
                 shutil.rmtree(dst)
 
+    def _ensure_not_running(self) -> None:
+        """Offer to stop Logos/indexing if they're running before copying data."""
+        from ou_dedetai.logos import State
+        self.app.logos.monitor()
+        if self.app.logos.indexing_state != State.STOPPED:
+            self.app.approve_or_exit(
+                f"Indexing is running and must stop before {self.mode}. Stop it now?"
+            )
+            self.app.logos.stop_indexing()
+        if self.app.logos.logos_state != State.STOPPED:
+            self.app.approve_or_exit(
+                f"{self.app.conf.faithlife_product} is running and must close before "
+                f"{self.mode}. Close it now?"
+            )
+            self.app.logos.stop()
+
+    def _confirm(self) -> None:
+        """Show human-readable sizes and confirm before copying/overwriting."""
+        dest_existing = utils.get_folder_group_size(
+            [self.destination_dir / d for d in self.DATA_DIRS]
+        )
+        dest_free = shutil.disk_usage(self.destination_dir).free
+        message = (
+            f"About to {self.mode} {utils.format_bytes(self.data_size)} "
+            f"from {self.source_dir} to {self.destination_dir}.\n"
+            f"Destination currently holds {utils.format_bytes(dest_existing)} "
+            f"of data, with {utils.format_bytes(dest_free)} free.\n"
+            "Continue?"
+        )
+        self.app.approve_or_exit(message)
+
     def _run(self) -> None:
-        self.app.status(f"Running {self.mode} from {self.source_dir} to {self.destination_dir}") 
+        self.app.status(f"Running {self.mode} from {self.source_dir} to {self.destination_dir}")
         if self.source_dir is None:
             self.app.exit("source directory not set")
         elif self.destination_dir is None:
             self.app.exit("destination directory not set")
+        self._ensure_not_running()
         src_dirs = self._get_source_subdirs()
 
         self.data_size = self._get_dir_group_size(src_dirs)
-        self._prepare_dest_dir()
-        self.destination_disk_used_init = self._get_dest_disk_used()
         self._verify_disk_space()
-        # logging.debug("starting data copy thread")
+        self._confirm()
+        self._prepare_dest_dir()
+        # Capture the baseline after clearing the destination so copy progress
+        # is measured against what's actually written during this run.
+        self.destination_disk_used_init = self._get_dest_disk_used()
         t = self.app.start_thread(self._copy_dirs, src_dirs, self.destination_dir)
         try:
             while t.is_alive():
-                self.app.status("copying…", self._get_copy_percentage())
+                bytes_copied, percent = self._get_copy_progress()
+                self.app.status(
+                    f"Copying… {percent}% "
+                    f"({utils.format_bytes(bytes_copied)} / "
+                    f"{utils.format_bytes(self.data_size)})",
+                    percent,
+                )
                 time.sleep(0.5)
             print()
         except KeyboardInterrupt:
             print()
             self.app.exit("user cancelled with Ctrl+C.")
         t.join()
-        # logging.debug("finished data copy thread")
-        m = f"Finished {self.mode}. {self.data_size} bytes copied."
+        m = f"Finished {self.mode}. {utils.format_bytes(self.data_size)} copied."
         self.app.status(m)
 
     def _verify_disk_space(self) -> None:
