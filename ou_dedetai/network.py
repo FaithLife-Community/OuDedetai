@@ -5,12 +5,13 @@ import json
 import logging
 from math import ceil
 import os
+import tempfile
 import time
 from typing import Callable, Optional
 import requests
 import shutil
 import sys
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from pathlib import Path
 from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
@@ -380,56 +381,259 @@ def logos_reuse_download(
     app: App,
     status_messages: bool = True
 ):
-    dirs = [
-        app.conf.user_download_dir,
-        app.conf.download_dir,
-    ]
-    found = 1
-    for i in dirs:
-        if i is not None:
-            logging.debug(f"Checking {i} for {file}.")
-            file_path = Path(i) / file
-            if os.path.isfile(file_path):
-                logging.info(f"{file} exists in {i}. Verifying properties.")
-                if _verify_downloaded_file(
-                    sourceurl,
-                    file_path,
-                    app=app,
-                    status_messages=status_messages
-                ):
-                    logging.info(f"{file} properties match. Using it…")
-                    logging.debug(f"Copying {file} into {targetdir}")
-                    try:
-                        shutil.copy(os.path.join(i, file), targetdir)
-                    except shutil.SameFileError:
-                        pass
-                    found = 0
-                    break
-                else:
-                    logging.info(f"Incomplete file: {file_path}.")
-    if found == 1:
-        file_path = Path(os.path.join(app.conf.download_dir, file))
-        # Start download.
-        _net_get(
-            sourceurl,
-            target=file_path,
-            app=app,
-        )
-        if _verify_downloaded_file(
-            sourceurl,
-            file_path,
-            app=app,
-            status_messages=status_messages
-        ):
-            logging.debug(f"Copying: {file} into: {targetdir}")
+    # These local helpers keep download hardening contained here so callers
+    # retain their established paths and return-value contract.
+    def _metadata_from_headers(headers) -> tuple[Optional[int], Optional[str]]:
+        size = None
+        content_length = headers.get('Content-Length')
+        if content_length is not None:
+            length_text = str(content_length).strip()
+            if length_text.isascii() and length_text.isdigit():
+                size = int(length_text)
+
+        md5 = None
+        content_md5 = headers.get('Content-MD5')
+        if content_md5 is not None:
+            digest_text = str(content_md5).strip().strip('"').strip("'")
             try:
-                shutil.copy(os.path.join(app.conf.download_dir, file), targetdir)
-            except shutil.SameFileError:
+                digest = b64decode(digest_text, validate=True)
+            except (ValueError, TypeError):
                 pass
+            else:
+                if len(digest) == 16:
+                    md5 = b64encode(digest).decode('ascii')
+
+        if md5 is None and str(headers.get('Server', '')).lower() == 'amazons3':
+            etag = str(headers.get('ETag', '')).strip()
+            if len(etag) >= 2 and etag[0] == etag[-1] and etag[0] in {'"', "'"}:
+                etag = etag[1:-1]
+            if len(etag) == 32 and all(character in '0123456789abcdefABCDEF' for character in etag):
+                md5 = b64encode(bytes.fromhex(etag)).decode('ascii')
+        return size, md5
+
+    def _file_matches(path: Path, size: Optional[int], md5: Optional[str]) -> bool:
+        if size is None and md5 is None:
+            return False
+        try:
+            if not path.is_file():
+                return False
+            properties = FileProps(path)
+            if size is not None and properties.size != size:
+                return False
+            if md5 is not None and properties.md5 != md5:
+                return False
+        except OSError:
+            return False
+        return True
+
+    owned_paths: set[Path] = set()
+
+    def _stage_copy(
+        source: Path,
+        destination: Path,
+        size: Optional[int],
+        md5: Optional[str],
+        mode: int,
+    ) -> Path:
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            prefix=f'.{destination.name}.',
+            suffix='.part',
+            dir=destination.parent,
+            delete=False,
+        ) as staged_file:
+            staged_path = Path(staged_file.name)
+            owned_paths.add(staged_path)
+            with source.open('rb') as source_file:
+                shutil.copyfileobj(source_file, staged_file)
+            staged_file.flush()
+            os.fsync(staged_file.fileno())
+        os.chmod(staged_path, mode)
+        if (size is not None or md5 is not None) and not _file_matches(staged_path, size, md5):
+            raise ValueError(f"Staged copy of {file} failed validation")
+        return staged_path
+
+    timeout = (10, 30)
+    request_headers = {'Accept-Encoding': 'identity'}
+    download_path = Path(app.conf.download_dir) / file
+    target_path = Path(targetdir) / file
+    download_rollback: Optional[Path] = None
+    download_published = False
+    download_had_file = False
+
+    try:
+        remote_size = None
+        remote_md5 = None
+        try:
+            with requests.head(
+                sourceurl,
+                allow_redirects=True,
+                headers=request_headers,
+                timeout=timeout,
+            ) as response:
+                if response.status_code == 200:
+                    remote_size, remote_md5 = _metadata_from_headers(response.headers)
+        except Exception as error:
+            logging.debug("Could not obtain validation metadata for %s: %s", file, type(error).__name__)
+
+        candidate_paths = []
+        seen_candidates = set()
+        candidate_directories: list[Optional[str]] = [
+            app.conf.user_download_dir,
+            app.conf.download_dir,
+            targetdir,
+        ]
+        for directory in candidate_directories:
+            if directory is None:
+                continue
+            candidate = Path(directory) / file
+            candidate_key = os.path.abspath(candidate)
+            if candidate_key not in seen_candidates:
+                seen_candidates.add(candidate_key)
+                candidate_paths.append(candidate)
+
+        if remote_size is not None or remote_md5 is not None:
+            for candidate in candidate_paths:
+                logging.debug("Checking %s for %s.", candidate.parent, file)
+                if status_messages and candidate.is_file():
+                    app.status(f"Verifying {candidate}…", 0)
+                if not _file_matches(candidate, remote_size, remote_md5):
+                    continue
+                logging.info("%s matches available download metadata. Using it…", file)
+                if os.path.abspath(candidate) != os.path.abspath(target_path):
+                    target_mode = (
+                        target_path.stat().st_mode & 0o7777
+                        if target_path.is_file()
+                        else candidate.stat().st_mode & 0o7777
+                    )
+                    candidate_target_stage = _stage_copy(
+                        candidate,
+                        target_path,
+                        remote_size,
+                        remote_md5,
+                        target_mode,
+                    )
+                    os.replace(candidate_target_stage, target_path)
+                    owned_paths.discard(candidate_target_stage)
+                return
+
+        app.status(f"Downloading {file}…", 0)
+        with requests.get(
+            sourceurl,
+            stream=True,
+            allow_redirects=True,
+            headers=request_headers,
+            timeout=timeout,
+        ) as response:
+            if response.status_code != 200:
+                raise RuntimeError(f"Unexpected HTTP status {response.status_code}")
+            get_size, get_md5 = _metadata_from_headers(response.headers)
+            with tempfile.NamedTemporaryFile(
+                mode='wb',
+                prefix=f'.{download_path.name}.',
+                suffix='.part',
+                dir=download_path.parent,
+                delete=False,
+            ) as staged_file:
+                download_stage = Path(staged_file.name)
+                owned_paths.add(download_stage)
+                bytes_written = 0
+                for chunk in response.iter_content(chunk_size=100 * 1024):
+                    if not chunk:
+                        continue
+                    staged_file.write(chunk)
+                    bytes_written += len(chunk)
+                    if get_size:
+                        app.status(f"Downloading {file}…", bytes_written / get_size)
+                staged_file.flush()
+                os.fsync(staged_file.fileno())
+
+        if (get_size is not None or get_md5 is not None) and not _file_matches(download_stage, get_size, get_md5):
+            raise ValueError(f"Downloaded {file} failed validation")
+
+        if download_path.is_file():
+            download_mode = download_path.stat().st_mode & 0o7777
         else:
-            # In case we ever get here, give us an opportunity to recover by trying the download again from the start
-            os.remove(file_path)
-            app.exit(f"Bad file size or checksum: {file_path}")
+            mode_handle, mode_name = tempfile.mkstemp(
+                prefix=f'.{download_path.name}.',
+                suffix='.mode',
+                dir=download_path.parent,
+            )
+            mode_path = Path(mode_name)
+            owned_paths.add(mode_path)
+            os.close(mode_handle)
+            mode_path.unlink()
+            mode_handle = os.open(mode_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+            os.close(mode_handle)
+            download_mode = mode_path.stat().st_mode & 0o7777
+            mode_path.unlink()
+            owned_paths.discard(mode_path)
+        os.chmod(download_stage, download_mode)
+
+        paths_are_distinct = os.path.abspath(download_path) != os.path.abspath(target_path)
+        target_stage: Optional[Path] = None
+        if paths_are_distinct:
+            target_mode = (
+                target_path.stat().st_mode & 0o7777
+                if target_path.is_file()
+                else download_mode
+            )
+            target_stage = _stage_copy(download_stage, target_path, get_size, get_md5, target_mode)
+
+        if not paths_are_distinct:
+            os.replace(download_stage, download_path)
+            owned_paths.discard(download_stage)
+            return
+
+        download_had_file = download_path.is_file()
+        if download_had_file:
+            rollback_handle, rollback_name = tempfile.mkstemp(
+                prefix=f'.{download_path.name}.',
+                suffix='.rollback',
+                dir=download_path.parent,
+            )
+            rollback_candidate = Path(rollback_name)
+            owned_paths.add(rollback_candidate)
+            os.close(rollback_handle)
+            shutil.copy2(download_path, rollback_candidate)
+            with rollback_candidate.open('rb') as rollback_file:
+                os.fsync(rollback_file.fileno())
+            download_rollback = rollback_candidate
+        os.replace(download_stage, download_path)
+        owned_paths.discard(download_stage)
+        download_published = True
+
+        if target_stage is None:
+            raise RuntimeError(f"No staged target available for {file}")
+        os.replace(target_stage, target_path)
+        owned_paths.discard(target_stage)
+
+        if download_rollback is not None:
+            try:
+                download_rollback.unlink(missing_ok=True)
+            except OSError as error:
+                logging.warning("Could not remove download rollback file for %s: %s", file, type(error).__name__)
+            owned_paths.discard(download_rollback)
+    except Exception as error:
+        if download_published and download_rollback is not None and download_rollback.exists():
+            try:
+                os.replace(download_rollback, download_path)
+                owned_paths.discard(download_rollback)
+            except OSError:
+                # Keep the rollback copy if the destination cannot be restored.
+                owned_paths.discard(download_rollback)
+        elif download_published and not download_had_file:
+            try:
+                download_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        for owned_path in owned_paths:
+            try:
+                owned_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        logging.error("Failed to download %s: %s", file, type(error).__name__)
+        app.exit(f"Failed to download {file}.")
 
 
 # FIXME: refactor to raise rather than return None
@@ -652,17 +856,15 @@ def _get_release_data(repository) -> GithubSoftwareReleasesInfo:
     return GithubSoftwareReleasesInfo(latest=latest_release, pre_release=pre_release)
 
 def download_recommended_appimage(app: App):
-    wine64_appimage_full_filename = Path(app.conf.wine_appimage_recommended_file_name)
-    dest_path = Path(app.conf.installer_binary_dir) / wine64_appimage_full_filename
-    if dest_path.is_file():
-        return
-    else:
-        logos_reuse_download(
-            app.conf.wine_appimage_recommended_url,
-            app.conf.wine_appimage_recommended_file_name,
-            app.conf.installer_binary_dir,
-            app=app
-        )
+    # Existing recommended AppImages must still pass through
+    # logos_reuse_download so a partial or corrupt destination is
+    # validated or replaced before use.
+    logos_reuse_download(
+        app.conf.wine_appimage_recommended_url,
+        app.conf.wine_appimage_recommended_file_name,
+        app.conf.installer_binary_dir,
+        app=app
+    )
 
 def _get_faithlife_product_releases(
     faithlife_product: str,
@@ -716,21 +918,27 @@ def update_lli_binary(app: App):
     logging.debug(
         f"Updating {constants.APP_NAME} to latest version by overwriting: {lli_file_path}")
 
-    # Remove existing downloaded file if different version.
-    if lli_download_path.is_file():
-        logging.info("Checking if existing LLI binary is latest version.")
-        lli_download_ver = utils.get_lli_release_version(lli_download_path)
-        if not lli_download_ver or lli_download_ver != app.conf.app_latest_version:
-            logging.info(f"Removing \"{lli_download_path}\", version: {lli_download_ver}")
-            # Remove incompatible file.
-            lli_download_path.unlink()
-
+    # Do not execute a cached updater to inspect its version until
+    # logos_reuse_download has validated or replaced it.
     logos_reuse_download(
         app.conf.app_latest_version_url,
         constants.BINARY_NAME,
         app.conf.download_dir,
         app=app,
     )
+    logging.info("Checking if downloaded LLI binary is the latest version.")
+    try:
+        lli_download_ver = utils.get_lli_release_version(lli_download_path)
+    except Exception as error:
+        logging.error("Failed to inspect downloaded updater %s: %s", lli_download_path.name, type(error).__name__)
+        lli_download_ver = None
+    if not lli_download_ver or lli_download_ver != app.conf.app_latest_version:
+        logging.info(f"Removing \"{lli_download_path}\", version: {lli_download_ver}")
+        try:
+            lli_download_path.unlink()
+        except OSError as error:
+            logging.error("Failed to remove mismatched updater %s: %s", lli_download_path.name, type(error).__name__)
+        app.exit(f"Downloaded updater {lli_download_path.name} has an unexpected version.")
     shutil.copy(lli_download_path, temp_path)
     try:
         shutil.move(temp_path, lli_file_path)
