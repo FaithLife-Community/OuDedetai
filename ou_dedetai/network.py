@@ -5,10 +5,12 @@ import json
 import logging
 from math import ceil
 import os
+import platform
 import time
 from typing import Callable, Optional
 import requests
 import shutil
+import subprocess
 import sys
 from base64 import b64encode
 from pathlib import Path
@@ -344,12 +346,12 @@ class NetworkRequests:
         return output
             
 
-    def _repo_latest_version(self, repository: str) -> SoftwareReleaseInfo:
+    def _repo_latest_version(self, repository: str, name: Optional[str] = None) -> SoftwareReleaseInfo:
         if (
             repository not in self._cache.repository_latest_version
             or repository not in self._cache.repository_latest_url
         ):
-            result = _get_release_data(repository)
+            result = _get_release_data(repository, name)
             if result.latest:
                 self._cache.repository_latest_version[repository] = result.latest.version
                 self._cache.repository_latest_url[repository] = result.latest.download_url
@@ -367,7 +369,8 @@ class NetworkRequests:
             repo = "FaithLife-Community/OuDedetai"
         else:
             repo = "FaithLife-Community/test-builds"
-        return self._repo_latest_version(repo)
+        arch = "arm" if platform.machine() in ("aarch64", "arm64") else "x86_64"
+        return self._repo_latest_version(repo, f"{constants.BINARY_NAME}-{arch}")
     
     def icu_latest_version(self) -> SoftwareReleaseInfo:
         return self._repo_latest_version("FaithLife-Community/icu")
@@ -584,12 +587,15 @@ def _verify_downloaded_file(url: str, file_path: Path | str, app: App, status_me
     return True
 
 
-def _get_first_asset_url(json_data: dict) -> str:
-    """Parses the github api response to find the first asset's download url
+def _get_asset_url(json_data: dict, name: Optional[str] = None) -> str:
+    """Parses the github api response for the download url of the asset
+    named `name`, else the first asset.
     """
     assets = json_data.get('assets') or []
+    if name is not None:
+        assets = [a for a in assets if a.get('name') == name]
     if len(assets) == 0:
-        raise Exception("Failed to find the first asset in the repository data: "
+        raise Exception("Failed to find the asset in the repository data: "
                         f"{json_data}")
     first_asset = assets[0]
     download_url: Optional[str] = first_asset.get('browser_download_url')
@@ -610,7 +616,7 @@ def _get_version_name(json_data: dict) -> str:
     return tag_name
 
 
-def _get_release_data(repository) -> GithubSoftwareReleasesInfo:
+def _get_release_data(repository, name: Optional[str] = None) -> GithubSoftwareReleasesInfo:
     """Gets latest release information
     
     Raises:
@@ -638,7 +644,7 @@ def _get_release_data(repository) -> GithubSoftwareReleasesInfo:
     if json_data and json_data[0]["prerelease"]:
         pre_release = SoftwareReleaseInfo(
             version=_get_version_name(json_data[0]),
-            download_url=_get_first_asset_url(json_data[0])
+            download_url=_get_asset_url(json_data[0], name)
         )
 
     json_data = list(filter(lambda release: release["prerelease"] is False, json_data))
@@ -646,7 +652,7 @@ def _get_release_data(repository) -> GithubSoftwareReleasesInfo:
     if json_data:
         latest_release = SoftwareReleaseInfo(
             version=_get_version_name(json_data[0]),
-            download_url=_get_first_asset_url(json_data[0])
+            download_url=_get_asset_url(json_data[0], name)
         )
 
     return GithubSoftwareReleasesInfo(latest=latest_release, pre_release=pre_release)
@@ -719,7 +725,12 @@ def update_lli_binary(app: App):
     # Remove existing downloaded file if different version.
     if lli_download_path.is_file():
         logging.info("Checking if existing LLI binary is latest version.")
-        lli_download_ver = utils.get_lli_release_version(lli_download_path)
+        try:
+            lli_download_ver = utils.get_lli_release_version(lli_download_path)
+        except (OSError, subprocess.CalledProcessError) as e:
+            # e.g. a binary for another architecture
+            logging.warning(f"Failed to run \"{lli_download_path}\": {e}")
+            lli_download_ver = None
         if not lli_download_ver or lli_download_ver != app.conf.app_latest_version:
             logging.info(f"Removing \"{lli_download_path}\", version: {lli_download_ver}")
             # Remove incompatible file.
