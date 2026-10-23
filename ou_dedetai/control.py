@@ -60,15 +60,46 @@ def remove_library_catalog(app: App):
             logging.error(f"Error removing {file_to_remove}: {e}")
 
 
+def _is_home_or_above(path: Path) -> bool:
+    home = Path.home().resolve()
+    path = path.resolve()
+    return path == home or path in home.parents
+
+
+def _is_our_install_dir(install_dir: Path) -> bool:
+    """Guards the rm -rf: install_dir comes from the config and could be any folder"""
+    # Only what the installer creates under data/. A loose oudedetai binary isn't
+    # enough, people keep that in ~/Downloads.
+    markers = ["data/wine64_bottle", constants.RELATIVE_BINARY_DIR]
+    return (
+        not _is_home_or_above(install_dir)
+        and any((install_dir / marker).exists() for marker in markers)
+    )
+
+
+def _is_our_data_dir(path: Path) -> bool:
+    """Our cache/state dirs are named FaithLife-Community, anything else isn't ours"""
+    return not _is_home_or_above(path) and path.name == "FaithLife-Community"
+
+
 def uninstall(app: App):
     """Completely uninstalls both this app and the installed product"""
     app.status("Uninstalling…")
     delete_paths = [
         app.conf.config_file_path,
     ]
+    kept_paths: list[str] = []
     # Only add install_dir if we know what it is
     if app.conf._raw.install_dir is not None:
-        delete_paths += [app.conf._raw.install_dir]
+        install_dir = Path(app.conf._raw.install_dir).expanduser()
+        if _is_our_install_dir(install_dir):
+            delete_paths += [str(install_dir)]
+            if install_dir.is_symlink():
+                # Also remove what it points to, not just the link
+                delete_paths += [str(install_dir.resolve())]
+        else:
+            logging.warning(f"Not removing {install_dir}: it doesn't look like an install folder")
+            kept_paths += [str(install_dir)]
 
     question = "Are you sure you want to uninstall?"
     context = (
@@ -84,10 +115,20 @@ def uninstall(app: App):
         "If you're debugging make sure you've already hit the \"Get Support\" button; "
         "we wouldn't want to lose those logs."
     ):
-        delete_paths += [constants.CACHE_DIR, constants.STATE_DIR]
+        for data_dir in [constants.CACHE_DIR, constants.STATE_DIR]:
+            data_path = Path(data_dir).expanduser()
+            if _is_our_data_dir(data_path):
+                delete_paths += [str(data_path)]
+            else:
+                logging.warning(f"Not removing {data_path}: it isn't our folder")
+                kept_paths += [str(data_path)]
 
     for del_path in delete_paths:
         path = Path(del_path)
+        if path.is_symlink():
+            # rmtree refuses symlinks
+            os.remove(path)
+            continue
         if not path.exists():
             continue
         if path.is_file():
@@ -95,7 +136,10 @@ def uninstall(app: App):
         elif path.is_dir():
             shutil.rmtree(path)
 
-    app.status("Uninstalled")
+    if kept_paths:
+        app.status(f"Uninstalled. Left in place, as they don't look like ours: {', '.join(kept_paths)}")
+    else:
+        app.status("Uninstalled")
 
     app.conf.reload()
 
