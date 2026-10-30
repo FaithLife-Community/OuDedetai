@@ -499,8 +499,26 @@ class TUI(App):
             if self._installer_thread and self._installer_thread.is_alive():
                 self.status("A previous install is still running")
                 return
+
+            advanced = choice == "Advanced Install"
+            original_wine_binary = self.conf._raw.wine_binary
+
             if choice == "Install":
                 self.conf._overrides.assume_yes = True
+
+            def _install() -> None:
+                if advanced:
+                    self.conf._raw.wine_binary = None
+                try:
+                    installer.install(app=self)
+                except UserExitedFromAsk:
+                    pass
+                finally:
+                    if advanced and self.conf._raw.wine_binary is None:
+                        self.conf._raw.wine_binary = original_wine_binary
+                    self.conf._overrides.assume_yes = original_assume_yes
+                    self.go_to_main_menu()
+
             self._installer_thread = threading.Thread(target=_install, daemon=True)
             self._installer_thread.start()
             self.status("Starting installation…")
