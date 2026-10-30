@@ -554,6 +554,8 @@ class TUI(App):
                 self.conf.toggle_faithlife_product_release_channel()
             elif choice == f"Change {constants.APP_NAME} Release Channel":
                 self.conf.toggle_installer_release_channel()
+            elif choice == "Change Wine Release Channel":
+                self.conf.toggle_wine_release_channel()
             elif choice == "Install Dependencies":
                 utils.install_dependencies(self)
             elif choice == "Install ICU":
