@@ -227,6 +227,7 @@ def setup_wine(app: App):
         if not wine_path.is_file():
             raise RuntimeError("Downloaded tarball didn't contain the needed Wine binary")
         app.conf.wine_binary = str(wine_path.absolute())
+        app.conf.wine_appimage_path = None
 
     create_wine_symlinks(app)
 
@@ -515,19 +516,15 @@ def create_wine_symlinks(app: App):
             "wine64": wine_bin_dir / "wine",
             "wineserver": wine_bin_dir / "wineserver",
         }
-        for target in symlinks.values():
+        for name, target in symlinks.items():
             if not target.is_file():
                 logging.critical("Missing Wine executable: %s", target)
                 return
-
-        winetricks_link = appdir_bindir / "winetricks"
-        if winetricks_link.is_symlink():
-            winetricks_link.unlink()
-
         for name, target in symlinks.items():
-            p = appdir_bindir / name
-            p.unlink(missing_ok=True)
-            p.symlink_to(target)
+            link = appdir_bindir / name
+            link.unlink(missing_ok=True)
+            link.symlink_to(target)
+        (appdir_bindir / "winetricks").unlink(missing_ok=True)
         return
 
     logging.debug("No need to make symlinks as the wine installation is from a binary")
