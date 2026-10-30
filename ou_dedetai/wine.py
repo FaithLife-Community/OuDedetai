@@ -760,6 +760,12 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     # Needed for the wrapper script
     if app.conf.is_wine_binary_in_distribution:
         wine_distribution = Path(app.conf.wine_binary).parent.parent
+        # TL;DR: AppImage runtime hooks handle bundled paths and isolate the host environment.
+        # https://appimage-builder.readthedocs.io/en/stable/intro/overview.html?utm_source=chatgpt.com
+        # >Finally the AppRun and libapprun_hooks.so files are added. The first one loads the .env file
+        # >and executes the application. The other makes sure that the environment configuration that
+        # >is required to execute your AppImage doesn’t propagate to other applications executed.
+        # cf. https://discourse.appimage.org/t/is-it-possible-with-s-deploy-to-include-libraries-loaded-at-runtime/1779/18?utm_source=chatgpt.com
         wine_env["LD_PRELOAD"] = f"libapprun_hooks.so:{wine_env.get('LD_PRELOAD', '')}"
         wine_env["PATH"] = f"{wine_distribution / 'bin'}:{wine_env.get('PATH', '')}"
         wine_env["LD_LIBRARY_PATH"] = f"{wine_distribution / 'lib'}:{wine_env.get('LD_LIBRARY_PATH', '')}"
