@@ -990,7 +990,7 @@ def ensure_winetricks(
         return
     elif app.conf.is_wine_binary_in_distribution:
         bundled_winetricks = (
-                Path(app.conf.wine_path_in_distribution).parent / "winetricks"
+            Path(app.conf.wine_path_in_distribution).parent / "winetricks"
         )
         if bundled_winetricks.is_file():
             if winetricks_path.is_symlink() or winetricks_path.is_file():
