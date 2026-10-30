@@ -6,6 +6,7 @@ import threading
 from pathlib import Path
 from typing import Optional
 
+from rich.text import Text
 from textual import on
 from textual.app import App as TextualApp, ComposeResult
 from textual.binding import Binding
@@ -18,6 +19,7 @@ from textual.widgets.option_list import Option
 
 from ou_dedetai.app import App, UserExitedFromAsk
 from ou_dedetai.config import EphemeralConfiguration
+from ou_dedetai.tui_file_picker import FilePicker
 
 from . import control
 from . import constants
@@ -33,21 +35,27 @@ class StatusLog(Log):
 
 
 class MenuModal(ModalScreen[str]):
+    # Keep the Cancel button visible when the list is long.
+    DEFAULT_CSS = """
+    MenuModal #menu-list { height: 1fr; min-height: 1; }
+    """
     BINDINGS = [
         Binding("escape", "cancel", "Cancel", show=True),
         Binding("ctrl+c", "exit", show=False, priority=True)
     ]
 
-    def __init__(self, title: str, options: list[str]) -> None:
+    def __init__(self, title: str, options: list[str], *, current: str | None = None) -> None:
         super().__init__()
         self._title = title
         self._options = options
+        self.current = current
 
     def compose(self) -> ComposeResult:
         with Container(id="dialog"):
             yield Label(self._title, id="dialog-title")
             yield OptionList(
-                *[Option(opt, id=f"opt-{i}") for i, opt in enumerate(self._options)],
+                *[Option(Text(opt, style="bold" if opt == self.current else ""), id=f"opt-{i}")
+                  for i, opt in enumerate(self._options)],
                 id="menu-list",
             )
             with Horizontal(id="dialog-buttons"):
@@ -354,25 +362,39 @@ class TUI(App):
         self.config_updated_hooks.append(self._config_update_hook)
 
     def _ask(self, question: str, options: list[str] | str) -> Optional[str]:
-        result: list[Optional[str]] = [None]
-        event = threading.Event()
-
-        def _done(choice: str | None) -> None:
-            result[0] = choice
-            event.set()
-
+        if options == constants.PROMPT_OPTION_FILE:
+            return self._ask_modal(FilePicker(question, Path.home()))
         if isinstance(options, str):
-            self.ui.call_from_thread(self.ui.push_screen, InputModal(question, default=str(Path.home())), _done)
-        else:
-            self.ui.call_from_thread(self.ui.push_screen, MenuModal(question, list(options)
-                                                                    + ["Return to Main Menu"]), _done)
-
-        event.wait()
-
-        answer = result[0]
+            return self._ask_modal(InputModal(question, default=str(Path.home())))
+        answer = self._ask_modal(MenuModal(question, list(options) + ["Return to Main Menu"]))
         if answer == "Return to Main Menu":
             self.ui.call_from_thread(self.ui.go_to_main_menu)
             return None
+        return answer
+
+    def _ask_modal(self, screen) -> Optional[str]:
+        result: list[Optional[str]] = [None]
+        event = threading.Event()
+
+        def done(choice: str | None) -> None:
+            result[0] = choice
+            event.set()
+
+        self.ui.call_from_thread(self.ui.push_screen, screen, done)
+        event.wait()
+        return result[0]
+
+    def choose_runtime(self, question: str, options: list[str], current: str | None) -> str:
+        # Cancel (button or Escape) leaves Wine unchanged.
+        answer = self._ask_modal(MenuModal(question, options, current=current))
+        if answer is None or answer == 'Return to Main Menu':
+            raise UserExitedFromAsk
+        return answer
+
+    def choose_file(self, question: str, *, initial_dir: Path, appimages: bool = False) -> str:
+        answer = self._ask_modal(FilePicker(question, initial_dir, appimages))
+        if answer is None:
+            raise UserExitedFromAsk
         return answer
 
     def _info(self, message: str) -> None:
@@ -467,6 +489,7 @@ class TUI(App):
         else:
             labels.extend(["Install", "Advanced Install"])
 
+        labels.append("Select Wine runtime…")
         labels.extend(["Utilities →", "Wine Config →", "Change Color Scheme", "Get Support", "Exit"])
         return labels
 
@@ -527,6 +550,15 @@ class TUI(App):
 
         elif choice == "Remove Library Catalog":
             control.remove_library_catalog(self)
+
+        elif choice == "Select Wine runtime…":
+            from ou_dedetai.runtime import select_runtime
+            def select():
+                try:
+                    select_runtime(self)
+                finally:
+                    self._ui_call(self.ui.go_to_main_menu)
+            self.start_thread(select)
 
         elif choice.startswith("Wine Config"):
             self.ui.push_screen(

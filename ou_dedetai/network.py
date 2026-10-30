@@ -300,6 +300,13 @@ class NetworkRequests:
     
     def wine_appimage_versions(self) -> GithubSoftwareReleasesInfo:
         repo = "FaithLife-Community/wine-appimages"
+        # Older versions cached the first asset, which may now be a Wine tarball.
+        urls = (self._cache.repository_latest_url, self._cache.repository_latest_pre_release_url)
+        if any(repo in cache and not urlparse(cache[repo]).path.lower().endswith('.appimage') for cache in urls):
+            for cache in (self._cache.repository_latest_version, self._cache.repository_latest_url,
+                          self._cache.repository_latest_pre_release_version,
+                          self._cache.repository_latest_pre_release_url):
+                cache.pop(repo, None)
         return self._repo_version(repo)
 
     def _url_size_and_hash(self, url: str) -> tuple[Optional[int], Optional[str]]:
@@ -651,6 +658,17 @@ def _get_release_data(repository) -> GithubSoftwareReleasesInfo:
     except json.JSONDecodeError as e:
         logging.error(f"Error decoding Github's JSON response: {e}")
         raise
+
+    if repository == "FaithLife-Community/wine-appimages":
+        # This repository also publishes Wine archives. Only AppImages can be
+        # used by the installer and runtime picker; leave other repositories alone.
+        appimage_releases = []
+        for release in json_data:
+            assets = [asset for asset in release.get('assets', [])
+                      if urlparse(asset.get('browser_download_url', '')).path.lower().endswith('.appimage')]
+            if assets:
+                appimage_releases.append({**release, 'assets': assets})
+        json_data = appimage_releases
 
     json_data = sorted(json_data, key=lambda release: datetime.fromisoformat(release["updated_at"]), reverse=True)
 

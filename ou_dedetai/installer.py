@@ -75,14 +75,21 @@ def ensure_sys_deps(app: App):
         logging.debug("> Skipped.")
 
 
-def check_for_known_bugs(app: App):
-    """Checks for any known bug conditions and recommends user action.
-    This is a best-effort check
-    """
+def default_wine_channel() -> str:
+    """The Wine AppImage channel the installer uses by default; shared with the picker.
+
+    Always the latest stable release. wine-appimages publishes new builds as
+    pre-releases until a maintainer promotes them, so a pre-release is never a
+    default; users can still choose it explicitly."""
+    return constants.WINE_RECOMMENDED_SIGIL
+
+
+def browser_affected_by_435() -> bool:
+    """Whether the default browser may not open from Logos's Sign In button (#435)."""
     # Begin workaround #435
     # FIXME: #435 Remove this check when the issue is fixed upstream in wine    
     # Check to see if our default browser is chromium, google-chrome, brave, or vivaldi 
-    # in that case prompt the user to switch to the wine beta channel
+    # in that case warn that the Sign In button may not open it
     #
     # This check is best-effort and may fail if the .desktop entry for chromium uses a naming convention
     # other than the one used on the debian package.
@@ -144,21 +151,27 @@ def check_for_known_bugs(app: App):
             f"Error was as follows: {e}"
         )
 
-    if chromium_detected or snap_or_flatpak_detected:
-        if chromium_detected:
-            logging.warning("Detected chromium based browser")
-        elif snap_or_flatpak_detected:
-            logging.warning("Detected snap or flatpak browser")
-        if app.conf.wine_binary == constants.WINE_RECOMMENDED_SIGIL:
-            logging.info("Switching user to the beta wine branch due to issue #435")
-            app.conf.wine_binary = constants.WINE_BETA_SIGIL
-        elif app.conf.wine_binary == constants.WINE_BETA_SIGIL:
-            # No need to do anything
-            pass
-        else:
-            logging.warning("Sign In button may not launch the browser due to issue #435")
+    if chromium_detected:
+        logging.warning("Detected chromium based browser")
+    elif snap_or_flatpak_detected:
+        logging.warning("Detected snap or flatpak browser")
+    return chromium_detected or snap_or_flatpak_detected
 
-    # End workaround #435
+
+def appimage_for_channel(app: App, channel: str) -> tuple[str, str]:
+    """Resolve the installer's AppImage filename and URL, including beta fallback."""
+    if channel == constants.WINE_BETA_SIGIL:
+        name = app.conf.wine_appimage_beta_file_name
+        url = app.conf.wine_appimage_beta_url
+        if name is not None and url is not None:
+            return name, url
+    return app.conf.wine_appimage_recommended_file_name, app.conf.wine_appimage_recommended_url
+
+
+def check_for_known_bugs(app: App):
+    """Warn about known bug conditions; never changes the chosen Wine."""
+    if browser_affected_by_435() and app.conf.wine_binary != constants.WINE_BETA_SIGIL:
+        logging.warning("Sign In button may not launch the browser due to issue #435")
 
 def check_opengl(app: App):
     app.status("Checking available OpenGL version…")
@@ -198,6 +211,17 @@ def ensure_appimage_download(app: App):
     check_system_compatibility(app=app)
     app.installer_step += 1
 
+    if app.conf._raw.wine_server:
+        # A Wine build chosen in the runtime picker with its own wineserver.
+        # Do not replace it with a default download or discard its wineserver.
+        binary = Path(app.conf.wine_binary)
+        server = Path(app.conf.wineserver_binary)
+        if not binary.is_file() or not os.access(binary, os.X_OK):
+            raise ValueError(f'Selected Wine runtime is missing or not executable: {binary}')
+        if not server.is_file() or not os.access(server, os.X_OK):
+            raise ValueError(f'Selected wineserver is missing or not executable: {server}')
+        return
+
     if (
         app.conf.faithlife_product_version != '9'
         and not str(app.conf.wine_binary).lower().endswith('appimage')
@@ -206,43 +230,37 @@ def ensure_appimage_download(app: App):
         return
     app.status("Ensuring wine AppImage is downloaded…")
 
-    downloaded_file = None
-    appimage_path = app.conf.wine_appimage_recommended_file_name 
-    download_url = app.conf.wine_appimage_recommended_url
-
+    selected = app.conf.wine_binary
     if (
-        app.conf.wine_binary == constants.WINE_BETA_SIGIL
+        selected == constants.WINE_BETA_SIGIL
         or (
-            app.conf.wine_appimage_beta_file_name is not None 
-            # It was set to this manually.
-            and app.conf.wine_binary == f"{constants.RELATIVE_BINARY_DIR}/{app.conf.wine_appimage_beta_file_name}"
-        )
-    ):
-        if (
             app.conf.wine_appimage_beta_file_name is not None
-            and app.conf.wine_appimage_beta_url is not None
-        ):
-            appimage_path = app.conf.wine_appimage_beta_file_name
-            download_url = app.conf.wine_appimage_beta_url
-    elif (
-        app.conf.wine_binary == constants.WINE_RECOMMENDED_SIGIL
-        or (
-            app.conf.wine_appimage_recommended_file_name is not None 
-            # It was set to this manually.
-            and app.conf.wine_binary ==
-              f"{constants.RELATIVE_BINARY_DIR}/{app.conf.wine_appimage_recommended_file_name}"
+            and selected == f"{constants.RELATIVE_BINARY_DIR}/{app.conf.wine_appimage_beta_file_name}"
         )
     ):
-        appimage_path = app.conf.wine_appimage_recommended_file_name
-        download_url = app.conf.wine_appimage_recommended_url
+        channel = constants.WINE_BETA_SIGIL
+    elif (
+        selected == constants.WINE_RECOMMENDED_SIGIL
+        or selected == f"{constants.RELATIVE_BINARY_DIR}/{app.conf.wine_appimage_recommended_file_name}"
+    ):
+        channel = constants.WINE_RECOMMENDED_SIGIL
     else:
-        logging.warning("Could not find which appimage to download, returning early.")
+        # An AppImage the user chose; don't silently swap in a download if it's gone.
+        if not Path(selected).is_file():
+            raise ValueError(f'Selected Wine AppImage is missing: {selected}')
+        logging.info("Using the selected Wine AppImage; nothing to download.")
         return
 
-    filename = Path(appimage_path).name
-    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, filename)
-    if not downloaded_file:
-        downloaded_file = f"{app.conf.download_dir}/{filename}"
+    appimage_path, download_url = appimage_for_channel(app, channel)
+    app.conf.wine_binary = str(download_appimage(app, appimage_path, download_url))
+
+
+def download_appimage(app: App, name: str, download_url: str) -> Path:
+    """Use the installer's existing download/cache/verification flow without selecting Wine."""
+    filename = Path(name).name
+    # Activate the copy verified by logos_reuse_download, not a same-named file
+    # found elsewhere (for example, an older copy in the home directory).
+    downloaded_file = Path(app.conf.download_dir) / filename
     network.logos_reuse_download(
         download_url,
         filename,
@@ -251,7 +269,7 @@ def ensure_appimage_download(app: App):
     )
     logging.debug(f"> File exists?: {downloaded_file}: {Path(downloaded_file).is_file()}")
     
-    app.conf.wine_binary = downloaded_file
+    return downloaded_file
 
 
 def ensure_wine_executables(app: App):
@@ -260,7 +278,8 @@ def ensure_wine_executables(app: App):
     app.installer_step += 1
     app.status("Ensuring wine executables are available…")
 
-    create_wine_appimage_symlinks(app=app)
+    if not app.conf._raw.wine_server:
+        create_wine_appimage_symlinks(app=app)
 
     # PATH is modified if wine appimage isn't found, but it's not modified
     # during a restarted installation, so shutil.which doesn't find the
@@ -440,6 +459,18 @@ def ensure_launcher_shortcuts(app: App):
 
 
 def install(app: App):
+    from ou_dedetai.runtime import selection_lock
+    lock = selection_lock(app)
+    if not lock.acquire(blocking=False):
+        app.info('Finish choosing the Wine runtime before starting the install.')
+        return
+    try:
+        _install(app)
+    finally:
+        lock.release()
+
+
+def _install(app: App):
     """Entrypoint for installing"""
     app.status('Installing…')
     try:
@@ -476,11 +507,13 @@ def create_wine_appimage_symlinks(app: App):
     # where the install dir has been cleared.
     if app.conf.wine_appimage_path.exists():
         appimage_filename = app.conf.wine_appimage_path.name
+        # Use the AppImage the user chose, wherever it lives (e.g. ~/Downloads).
+        downloaded_file: Optional[str] = str(app.conf.wine_appimage_path)
     else:
         appimage_filename = app.conf.wine_appimage_recommended_file_name
+        downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, appimage_filename)
     appimage_file = appdir_bindir / appimage_filename
     # Ensure appimage is copied to appdir_bindir.
-    downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, appimage_filename) 
     if downloaded_file is None:
         logging.critical("Failed to get a valid wine appimage")
         return

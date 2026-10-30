@@ -95,8 +95,12 @@ LOGOS_GRAY = '#E7E7E7'
 LOGOS_WHITE = '#FCFCFC'
 PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 
-WINE_RECOMMENDED_SIGIL = "Recommended"
-WINE_BETA_SIGIL = "Experimental (AKA Beta)"
+# Wine choices offered by the installer, stored in the config until the
+# installer resolves them to a downloaded AppImage.
+WINE_RECOMMENDED_SIGIL = "Latest release (recommended)"
+WINE_BETA_SIGIL = "Pre-release"
+# Earlier names for the same choices, still accepted from existing configs.
+LEGACY_WINE_SIGILS = {"Recommended": WINE_RECOMMENDED_SIGIL, "Experimental (AKA Beta)": WINE_BETA_SIGIL}
 
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
 FAITHLIFE_PRODUCT_VERSIONS = ["10"] # This used to include 9
