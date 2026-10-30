@@ -509,7 +509,7 @@ def create_wine_symlinks(app: App):
             if not target.is_file():
                 logging.critical("Missing Wine executable: %s", target)
                 return
-        
+
         winetricks_link = appdir_bindir / "winetricks"
         if winetricks_link.is_symlink():
             winetricks_link.unlink()

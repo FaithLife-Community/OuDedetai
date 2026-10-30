@@ -39,7 +39,10 @@ class TestAppExit(unittest.TestCase):
 
         def worker():
             # raises SystemExit internally; the thread swallows it
-            app.exit("mem cap", intended=False)
+            try:
+                app.exit("mem cap", intended=False)
+            except SystemExit:
+                pass
 
         t = threading.Thread(target=worker)
         t.start()
