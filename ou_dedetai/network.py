@@ -306,13 +306,19 @@ class NetworkRequests:
         repo = "mmtrt/WINE_AppImage"
         return self._repo_version(repo, version).download_url
 
-    def wine_tarball_recommended_url(self) -> str:
-        """Returns the latest tarball prerelease for development testing."""
+    def wine_tarball_recommended_url(self, channel: str) -> str:
+        """Returns the latest stable or prerelease tarball for the app release channel."""
         repo = "FaithLife-Community/wine-appimages"
         releases = self._repo_version(repo, asset_suffix=".tar.xz")
-        if releases.pre_release is None:
-            raise RuntimeError(f"No tarball prerelease found in {repo}")
-        return releases.pre_release.download_url
+        if channel == "dev":
+            release = releases.pre_release
+            release_type = "prerelease"
+        else:
+            release = releases.latest
+            release_type = "stable"
+        if release is None:
+            raise RuntimeError(f"No {release_type} tarball found in {repo}")
+        return release.download_url
 
     def wine_appimage_recommended_url(self) -> str:
         repo = "FaithLife-Community/wine-appimages"

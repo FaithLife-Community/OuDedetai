@@ -1096,7 +1096,7 @@ class Config:
         elif self.wine_binary == constants.UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL:
             return self._network.wine_appimage_upstream_url("continuous-devel")
         elif self.wine_binary == constants.RECOMMENDED_WINE_TARBALL_SIGIL:
-            return self._network.wine_tarball_recommended_url()
+            return self._network.wine_tarball_recommended_url(self.app_release_channel)
         else:
             # self.wine_binary == constants.RECOMMENDED_WINE_APPIMAGE_SIGIL
             return self._network.wine_appimage_recommended_url()
