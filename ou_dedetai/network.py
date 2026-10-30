@@ -677,24 +677,6 @@ def _get_release_data(repository: str, name: Optional[str] = None) -> GithubSoft
         pre_release=find_release(True)
     )
 
-    def find_release(prerelease: bool) -> Optional[SoftwareReleaseInfo]:
-        for release in json_data:
-            if release.get("prerelease", False) != prerelease:
-                continue
-            try:
-                return SoftwareReleaseInfo(
-                    version=_get_version_name(release),
-                    download_url=_get_asset_url(release, name)
-                )
-            except ValueError as e:
-                logging.warning(f"Skipping release {release.get('tag_name')}: {e}")
-        return None
-
-    return GithubSoftwareReleasesInfo(
-        latest=find_release(False),
-        pre_release=find_release(True)
-    )
-
 def download_recommended_appimage(app: App):
     wine64_appimage_full_filename = Path(app.conf.wine_appimage_recommended_file_name)
     dest_path = Path(app.conf.installer_binary_dir) / wine64_appimage_full_filename
