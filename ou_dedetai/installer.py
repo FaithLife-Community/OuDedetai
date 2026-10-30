@@ -186,20 +186,19 @@ def check_system_compatibility(app: App):
     except Exception:
         logging.exception("Failed to check for known bugs - assuming everything is fine and continuing install.")
     if (
-            app.conf.faithlife_product_version != '9'
-            and not str(app.conf.wine_binary).lower().endswith('appimage')
-            and app.conf.wine_binary not in [
-                constants.WINE_BETA_SIGIL,
-                constants.WINE_RECOMMENDED_SIGIL,
-                constants.WINE_RECOMMENDED_TARBALL_SIGIL,
-            ]
+        app.conf.faithlife_product_version != '9'
+        and not str(app.conf.wine_binary).lower().endswith('appimage')
+        and app.conf.wine_binary not in [
+            constants.WINE_BETA_SIGIL,
+            constants.WINE_RECOMMENDED_SIGIL,
+            constants.WINE_RECOMMENDED_TARBALL_SIGIL,
+        ]
     ):
         return
 
     check_opengl(app=app)
 
 
-# FIXME: consider where to put this long term - can also be called in the update case
 def setup_wine(app: App):
     """Prepare the Wine executables for installation or update."""
     downloaded_file = download_wine(app)
