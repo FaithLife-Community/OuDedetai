@@ -444,9 +444,6 @@ def get_package_manager() -> PackageManager | None:
     packages: str
     incompatible_packages: str
 
-    # FIXME: consider what to do with appimage dependencies long term - should they be removed?
-    # Moved to a feature flag or something?
-
     if shutil.which('apt') is not None:  # debian, ubuntu, & derivatives
         install_command = ["apt", "install", "-y"]
         download_command = ["apt", "install", "--download-only", "-y"]

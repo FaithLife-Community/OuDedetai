@@ -13,8 +13,6 @@ CONTAINER_NAME=${CONTAINER_NAME:-oudedetai_${DISTRO}_test}
 podman rm -f ${CONTAINER_NAME}
 distrobox create -Y -i ${DISTRO}:${DISTRO_TAG} -n ${CONTAINER_NAME} --home `pwd`/distrobox/${DISTRO}
 
-# XXX: consider coping the cache for some of the tests
-
 podman cp ./dist/oudedetai ${CONTAINER_NAME}:/bin/
 
 # First install dependencies as root - as the container may not have sudo setup

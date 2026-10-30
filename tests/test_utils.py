@@ -80,7 +80,7 @@ class TestAppUtils(unittest.TestCase):
         self.app.conf.installer_binary_dir = '/home/user/installdir'
         self.app.conf.wine_appimage_recommended_file_name = 'wine-stable_99.0.AppImage'
         options = [
-            constants.RECOMMENDED_WINE_TARBALL_SIGIL,
+            constants.WINE_RECOMMENDED_TARBALL_SIGIL,
             *self.app.conf.wine_app_image_files,
             *self.app.conf.wine_binary_files,
         ]
