@@ -330,8 +330,6 @@ class PersistentConfiguration:
     install_dir: Optional[str] = None
     wine_binary: Optional[str] = None
     wine_release_channel: str = "stable"
-    # This is where to search for wine
-    # wine_binary_code: Optional[str] = None
     backup_dir: Optional[str] = None
 
     # Color to use in curses. Either "System", "Logos", "Light", or "Dark"
@@ -401,7 +399,6 @@ class PersistentConfiguration:
             install_dir=install_dir,
             app_release_channel=legacy.lli_release_channel or 'stable',
             wine_binary=legacy.WINE_EXE,
-            # wine_binary_code=legacy.WINEBIN_CODE,
             faithlife_product_logging=faithlife_product_logging,
             _legacy=legacy
         )
@@ -973,17 +970,17 @@ class Config:
     @wine_binary.setter
     def wine_binary(self, value: str):
         """Takes in a path to the wine binary and stores it as relative for storage"""
+        #FIXME: We handle this case in the installer.
+        # Don't like how this value (which should only be a path to a wine binary)
+        # can sometimes be a download option - i.e. one that doesn't exist yet.
+        # But that's a problem for another day.
         if value in [
-            constants.RECOMMENDED_WINE_APPIMAGE_SIGIL,
-            constants.RECOMMENDED_WINE_TARBALL_SIGIL,
-            constants.UNTESTED_WINE_STABLE_APPIMAGE_SIGIL,
-            constants.UNTESTED_WINE_STAGING_APPIMAGE_SIGIL,
-            constants.UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL,
+            constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,
+            constants.WINE_RECOMMENDED_TARBALL_SIGIL,
+            constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL,
         ]:
-            # We handle this case in the installer.
-            # Don't like how this value (which should only be a path to a wine binary)
-            # can sometimes be a download option - i.e. one that doesn't exist yet.
-            # But that's a problem for another day.
             pass
 
         # Make the path absolute for comparison
@@ -995,7 +992,7 @@ class Config:
         #     raise ValueError("Wine Binary path must be a valid file")
 
         if value == constants.WINE_RECOMMENDED_SIGIL:
-            value = constants.RECOMMENDED_WINE_TARBALL_SIGIL
+            value = constants.WINE_RECOMMENDED_TARBALL_SIGIL
         elif value == constants.WINE_BETA_SIGIL:
             if self.wine_appimage_beta_file_name:
                 value = self.wine_appimage_beta_file_name
@@ -1114,13 +1111,13 @@ class Config:
         """URL to download the specified wine binary
         
         Talks to the network if required"""
-        if self.wine_binary == constants.UNTESTED_WINE_STABLE_APPIMAGE_SIGIL:
+        if self.wine_binary == constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL:
             return self._network.wine_appimage_upstream_url("continuous-stable")
-        elif self.wine_binary == constants.UNTESTED_WINE_STAGING_APPIMAGE_SIGIL:
+        elif self.wine_binary == constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL:
             return self._network.wine_appimage_upstream_url("continuous-staging")
-        elif self.wine_binary == constants.UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL:
+        elif self.wine_binary == constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL:
             return self._network.wine_appimage_upstream_url("continuous-devel")
-        elif self.wine_binary == constants.RECOMMENDED_WINE_TARBALL_SIGIL:
+        elif self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL:
             return self._wine_tarball_release.download_url
         else:
             # self.wine_binary == constants.RECOMMENDED_WINE_APPIMAGE_SIGIL
@@ -1134,7 +1131,7 @@ class Config:
 
     @property
     def wine_recommended_version(self) -> str:
-        if self.wine_binary == constants.RECOMMENDED_WINE_TARBALL_SIGIL:
+        if self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL:
             return self._wine_tarball_release.version
         filename = self.wine_download_file_name
         # AppImage format: wine-[branch]_[version]-[arch]

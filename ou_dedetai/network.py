@@ -358,10 +358,10 @@ class NetworkRequests:
         return self._url_size_and_hash(url)[1]
 
     def _repo_version(
-            self,
-            repository: str,
-            tag: str | None = None,
-            asset_suffix: str | None = None,
+        self,
+        repository: str,
+        tag: str | None = None,
+        asset_suffix: str | None = None,
     ) -> GithubSoftwareReleasesInfo | SoftwareReleaseInfo:
         if tag is not None:
             return _get_release_data(
@@ -373,12 +373,12 @@ class NetworkRequests:
         cache_key = f"{repository}|{asset_suffix}"
 
         has_latest = (
-                cache_key in self._cache.repository_latest_version
-                and cache_key in self._cache.repository_latest_url
+            cache_key in self._cache.repository_latest_version
+            and cache_key in self._cache.repository_latest_url
         )
         has_pre_release = (
-                cache_key in self._cache.repository_latest_pre_release_version
-                and cache_key in self._cache.repository_latest_pre_release_url
+            cache_key in self._cache.repository_latest_pre_release_version
+            and cache_key in self._cache.repository_latest_pre_release_url
         )
 
         if not has_latest or not has_pre_release:
@@ -398,23 +398,21 @@ class NetworkRequests:
             self._cache._write()
 
         return GithubSoftwareReleasesInfo(
-            latest=(
-                SoftwareReleaseInfo(
-                    version=self._cache.repository_latest_version[cache_key],
-                    download_url=self._cache.repository_latest_url[cache_key],
-                )
-                if has_latest or cache_key in self._cache.repository_latest_version
-                else None
-            ),
-            pre_release=(
-                SoftwareReleaseInfo(
-                    version=self._cache.repository_latest_pre_release_version[cache_key],
-                    download_url=self._cache.repository_latest_pre_release_url[cache_key],
-                )
-                if has_pre_release or cache_key in self._cache.repository_latest_pre_release_version
-                else None
-            ),
-        )
+            latest=(SoftwareReleaseInfo(
+                version=self._cache.repository_latest_version[cache_key],
+                download_url=self._cache.repository_latest_url[cache_key],
+            )
+            if has_latest or cache_key in self._cache.repository_latest_version
+            else None
+        ),
+            pre_release=(SoftwareReleaseInfo(
+                version=self._cache.repository_latest_pre_release_version[cache_key],
+                download_url=self._cache.repository_latest_pre_release_url[cache_key],
+            )
+            if has_pre_release or cache_key in self._cache.repository_latest_pre_release_version
+            else None
+        ),
+    )
 
     def _repo_latest_version(
         self,
