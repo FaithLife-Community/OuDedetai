@@ -81,6 +81,10 @@ class TestAppUtils(unittest.TestCase):
         self.app.conf.wine_appimage_recommended_file_name = 'wine-stable_99.0.AppImage'
         options = [
             constants.WINE_RECOMMENDED_TARBALL_SIGIL,
+            constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL,
             *self.app.conf.wine_app_image_files,
             *self.app.conf.wine_binary_files,
         ]
