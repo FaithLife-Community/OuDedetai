@@ -571,6 +571,21 @@ def update_to_latest_recommended_appimage(app: App):
         logging.debug("The AppImage version is newer than the latest recommended.")
 
 
+def check_for_updates(app: App, force: bool = False) -> VersionComparison:
+    if force:
+        app.conf._network.refresh_app_latest_version(app.conf.app_release_channel)
+
+    result = compare_logos_linux_installer_version(app)
+    if result == VersionComparison.OUT_OF_DATE:
+        app.status(f"A newer version of {constants.APP_NAME} is available: {app.conf.app_latest_version}")
+    elif result == VersionComparison.UP_TO_DATE:
+        app.status(f"{constants.APP_NAME} is up to date.")
+    elif result == VersionComparison.DEVELOPMENT:
+        app.status(f"Running a development version of {constants.APP_NAME}.")
+
+    return result
+
+
 def get_downloaded_file_path(download_dir: str, filename: str):
     dirs = [
         Path(download_dir),
@@ -654,4 +669,3 @@ def get_timestamp():
 
 def parse_bool(string: str) -> bool:
     return string.lower() in ['true', '1', 'y', 'yes']
-
