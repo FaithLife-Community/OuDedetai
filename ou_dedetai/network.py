@@ -360,7 +360,7 @@ class NetworkRequests:
                 asset_suffix=asset_suffix,
             )
 
-        cache_key = f"{repository}|{asset_suffix or '*'}"
+        cache_key = f"{repository}|{asset_suffix}"
 
         has_latest = (
                 cache_key in self._cache.repository_latest_version
