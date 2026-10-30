@@ -207,25 +207,15 @@ def setup_wine(app: App):
     if downloaded_file is not None and downloaded_file.name.lower().endswith(".appimage"):
         # Retain compatibility with existing AppImage-based installations.
         app.conf.wine_binary = str(downloaded_file.absolute())
-    elif downloaded_file is not None and downloaded_file.name.lower().endswith((".tar.gz", ".tgz")):
+    elif downloaded_file is not None and downloaded_file.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz")):
         wine_rootfs = Path(app.conf.wine_rootfs)
-        with tarfile.open(downloaded_file, "r:gz") as tarball:
-            if wine_rootfs.exists():
-                shutil.rmtree(wine_rootfs)
-            wine_rootfs.mkdir(parents=True)
+        if wine_rootfs.exists():
+            shutil.rmtree(wine_rootfs)
+        wine_rootfs.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(downloaded_file, "r:*") as tarball:
             tarball.extractall(wine_rootfs, filter="data")
-
-        if not Path(app.conf.wine_path_in_rootfs).exists():
+        if not Path(app.conf.wine_path_in_rootfs).is_file():
             raise RuntimeError("Downloaded tarball didn't contain the needed Wine binary")
-
-        wrapper_path = wine_rootfs / "wrapper"
-        with wrapper_path.open("r") as original:
-            data = original.read()
-        with wrapper_path.open("w") as modified:
-            modified.write(
-                '#!/bin/bash\nAPPDIR="$(dirname -- "${BASH_SOURCE[0]}")"\n' + data
-            )
-        wrapper_path.chmod(wrapper_path.stat().st_mode | 0o111)
         app.conf.wine_binary = app.conf.wine_path_in_rootfs
 
     create_wine_symlinks(app)
@@ -476,29 +466,20 @@ def get_progress_pct(current, total):
 
 def create_wine_symlinks(app: App):
     app.status("Creating wine symlinks…")
-
-    symlink_paths = ["wine", "wine64", "wineserver", "winetricks"]
-
     appdir_bindir = Path(app.conf.installer_binary_dir)
-    # FIXME: This would only run once during install. Are we sure that's what we want?
-    os.environ["PATH"] = f"{app.conf.installer_binary_dir}:{os.getenv('PATH')}"
-
-    symlink_to: str
+    appdir_bindir.mkdir(parents=True, exist_ok=True)
+    os.environ["PATH"] = f"{appdir_bindir}:{os.getenv('PATH', '')}"
 
     if app.conf.wine_appimage_path is not None:
-        # Ensure AppImage symlink.
         appimage_link = appdir_bindir / app.conf.wine_appimage_link_file_name
-
-        # Only use the appimage_path if it exists
-        # It may not exist if it was an old install's .appimage
-        # where the install dir has been cleared.
         if app.conf.wine_appimage_path.exists():
             appimage_filename = app.conf.wine_appimage_path.name
         else:
             appimage_filename = app.conf.wine_download_file_name
         appimage_file = appdir_bindir / appimage_filename
-        # Ensure appimage is copied to appdir_bindir.
-        downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, appimage_filename)
+        downloaded_file = utils.get_downloaded_file_path(
+            app.conf.download_dir, appimage_filename
+        )
         if downloaded_file is None:
             logging.critical("Failed to get a valid wine appimage")
             return
@@ -508,36 +489,38 @@ def create_wine_symlinks(app: App):
         os.chmod(appimage_file, 0o755)
         app.conf.wine_appimage_path = appimage_file
         app.conf.wine_binary = str(appimage_file)
-
-        appimage_link.unlink(missing_ok=True)  # remove & replace
+        appimage_link.unlink(missing_ok=True)
         appimage_link.symlink_to(f"./{appimage_filename}")
-
         symlink_to = f"./{app.conf.wine_appimage_link_file_name}"
-    elif (
-            app.conf.wine_binary.startswith(app.conf.wine_rootfs)
-            or app.conf.wine_binary.startswith(app.conf.wine_rootfs_relative)
-    ):
-        # FIXME: figure out what this script does and simplify
-        symlink_to = str(Path(app.conf.wine_rootfs) / "wrapper")
-
-        # Make symlinks in the rootfs in order for us to be able to detect where we are later.
-        # FIXME: Consider switching this discovery to traversing symlinks instead
-        for name in symlink_paths:
-            p = Path(app.conf.wine_rootfs) / name
+        for name in ("wine", "wine64", "wineserver", "winetricks"):
+            p = appdir_bindir / name
             p.unlink(missing_ok=True)
             p.symlink_to(symlink_to)
-
-        # Direct all wine commands here - it initializes the environment we need
-        app.conf.wine_binary = str(Path(app.conf.wine_rootfs) / "wine")
-    else:
-        logging.debug("No need to make symlinks as the wine installation is from a binary")
         return
 
-    # Ensure wine executables symlinks.
-    for name in symlink_paths:
-        p = appdir_bindir / name
-        p.unlink(missing_ok=True)
-        p.symlink_to(symlink_to)
+    if app.conf.is_wine_binary_in_wine_rootfs:
+        wine_bin_dir = Path(app.conf.wine_path_in_rootfs).parent
+        symlinks = {
+            "wine": wine_bin_dir / "wine",
+            "wine64": wine_bin_dir / "wine",
+            "wineserver": wine_bin_dir / "wineserver",
+        }
+        for target in symlinks.values():
+            if not target.is_file():
+                logging.critical("Missing Wine executable: %s", target)
+                return
+        
+        winetricks_link = appdir_bindir / "winetricks"
+        if winetricks_link.is_symlink():
+            winetricks_link.unlink()
+
+        for name, target in symlinks.items():
+            p = appdir_bindir / name
+            p.unlink(missing_ok=True)
+            p.symlink_to(target)
+        return
+
+    logging.debug("No need to make symlinks as the wine installation is from a binary")
 
 
 def create_desktop_file(

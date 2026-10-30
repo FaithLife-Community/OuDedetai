@@ -904,9 +904,7 @@ class Config:
 
     @property
     def wine_path_in_rootfs(self) -> str:
-        wine_opt = Path(self.wine_rootfs) / "opt"
-        # Glob on the next folder as it might be wine-staging, or wine-stable, ect.
-        return str(next(wine_opt.glob("wine*")) / "bin" / "wine") #noqa: E501
+        return str(next(Path(self.wine_rootfs).glob("*/bin/wine")))
 
     @property
     def is_wine_binary_in_wine_rootfs(self) -> bool:
@@ -972,7 +970,7 @@ class Config:
         #     raise ValueError("Wine Binary path must be a valid file")
 
         if value == constants.WINE_RECOMMENDED_SIGIL:
-            value = self.wine_appimage_recommended_file_name
+            value = constants.RECOMMENDED_WINE_TARBALL_SIGIL
         elif value == constants.WINE_BETA_SIGIL:
             if self.wine_appimage_beta_file_name:
                 value = self.wine_appimage_beta_file_name
@@ -1111,9 +1109,11 @@ class Config:
 
     @property
     def wine_recommended_version(self) -> str:
-        # Getting version and branch rely on the filename having this format:
-        #   wine-[branch]_[version]-[arch]
-        return self.wine_download_file_name.split('-')[1].split('_')[1]
+        filename = self.wine_download_file_name
+        if filename.endswith(".tar.xz"):
+            return filename.split("-")[1]
+        # AppImage format: wine-[branch]_[version]-[arch]
+        return filename.split("-")[1].split("_")[1]
 
     @property
     def wine_dll_overrides(self) -> str:
