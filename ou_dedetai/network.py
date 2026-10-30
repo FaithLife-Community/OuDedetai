@@ -23,6 +23,16 @@ from ou_dedetai.app import App
 from . import constants
 from . import utils
 
+
+def _request_headers(url: str) -> dict[str, str]:
+    headers = {"Accept-Encoding": "identity"}
+    if urlparse(url).netloc.lower() == "api.github.com":
+        token = os.environ.get("GITHUB_TOKEN")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 class Props(abc.ABC):
     def __init__(self) -> None:
         self._md5: Optional[str] = None
@@ -97,8 +107,8 @@ class UrlProps(Props):
     def _get_headers(self) -> requests.structures.CaseInsensitiveDict:
         logging.debug(f"Getting headers from {self.path}.")
         try:
-            h = {'Accept-Encoding': 'identity'}  # force non-compressed txfr
-            r = requests.head(self.path, allow_redirects=True, headers=h)
+            headers = _request_headers(self.path)
+            r = requests.head(self.path, allow_redirects=True, headers=headers)
         except requests.exceptions.ConnectionError:
             logging.critical("Failed to connect to the server.")
             return requests.structures.CaseInsensitiveDict()
@@ -464,7 +474,7 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
     while try_again:
         try_again = False
         # Force non-compressed file transfer for accurate progress tracking.
-        headers = {'Accept-Encoding': 'identity'}
+        headers = _request_headers(url)
         file_mode = 'wb'
 
         target_props = FileProps(target)  # sets path and size attribs
@@ -479,7 +489,7 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
                 else:
                     headers['Range'] = f'bytes={local_size}-'
 
-        logging.debug(f"{chunk_size=}; {file_mode=}; {headers=}")
+        logging.debug(f"{chunk_size=}; {file_mode=}; headers={ {k: v for k, v in headers.items() if k != 'Authorization'} }")
 
         # Log download type.
         if 'Range' in headers.keys():
