@@ -337,10 +337,9 @@ class TextualUI(TextualApp[None]):
         return "system-light" if background >= 7 else "system-dark"
 
     def toggle_color_scheme(self) -> str:
-        if self.theme == "logos":
-            self.theme = self._system_theme()
-        else:
-            self.theme = "logos"
+        themes = ("logos", "system-dark", "system-light")
+        current = themes.index(self.theme) if self.theme in themes else 0
+        self.theme = themes[(current + 1) % len(themes)]
         return self.theme
 
 
@@ -539,10 +538,15 @@ class TUI(App):
                 MenuModal("Utilities Menu", self.set_utilities_menu_options()),
                 callback=self.utilities_menu_select)
 
+
         elif choice == "Change Color Scheme":
             theme = self.ui.toggle_color_scheme()
-            scheme = "Logos Colors" if theme == "logos" else "System Colors"
-            self.status(f"Color scheme: {scheme}")
+            names = {
+                "logos": "Logos Colors",
+                "system-dark": "System Dark",
+                "system-light": "System Light",
+            }
+            self.status(f"Color scheme: {names[theme]}")
 
         elif choice == "Get Support":
             self.start_thread(self._get_support)
