@@ -266,14 +266,15 @@ class TextualUI(TextualApp[None]):
         menu = self.query_one("#main-menu", OptionList)
         options = [str(label) for label in self.domain.set_tui_menu_options()]
         current_options = [str(option.prompt) for option in menu.options]
-        if options == current_options:
-            return
         current = menu.highlighted
-        menu.clear_options()
-        for i, label in enumerate(options):
-            menu.add_option(Option(label, id=f"main-{i}"))
-        if current is not None and options:
-            menu.highlighted = min(current, len(options) - 1)
+
+        if options != current_options:
+            menu.clear_options()
+            for i, label in enumerate(options):
+                menu.add_option(Option(label, id=f"main-{i}"))
+
+        if options:
+            menu.highlighted = min(current if current is not None else 0, len(options) - 1)
 
     @on(OptionList.OptionSelected, "#main-menu")
     def on_main_menu(self, event: OptionList.OptionSelected) -> None:
