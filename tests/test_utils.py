@@ -49,7 +49,7 @@ class TestAppUtils(unittest.TestCase):
     @unittest.skip("Needs functional wine binary.")
     def test_compare_recommended_appimage_version(self):
         self.app.conf.wine_appimage_recommended_version = '11'
-        status, msg = utils.compare_recommended_appimage_version(self.app)
+        status, msg = utils.compare_recommended_wine_version(self.app)
         self.assertEqual(status, 0)
 
     def test_die_if_running_nofile(self):
@@ -75,44 +75,20 @@ class TestAppUtils(unittest.TestCase):
         pass
 
     def test_get_wine_options(self):
-        # TODO: Make more tests to fully test function.
         self.app.conf.wine_app_image_files = ['/home/user/wine-stable_10.0.AppImage']
         self.app.conf.wine_binary_files = ['/usr/bin/wine64']
         self.app.conf.installer_binary_dir = '/home/user/installdir'
         self.app.conf.wine_appimage_recommended_file_name = 'wine-stable_99.0.AppImage'
         options = [
-            constants.WINE_RECOMMENDED_SIGIL,
-            constants.WINE_BETA_SIGIL,
+            constants.WINE_RECOMMENDED_TARBALL_SIGIL,
+            constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL,
             *self.app.conf.wine_app_image_files,
             *self.app.conf.wine_binary_files,
         ]
         self.assertEqual(utils.get_wine_options(self.app), options)
-
-    def test_get_winebincode_appimage(self):
-        # TODO: Make more tests to fully test function.
-        binary = 'test.AppImage'
-        code, _ = utils.get_winebin_code_and_desc(self.app, binary=binary)
-        self.assertEqual('AppImage', code)
-
-    def test_get_winebincode_pol(self):
-        binary = 'test/PlayOnLinux/wine64.exe'
-        code, _ = utils.get_winebin_code_and_desc(self.app, binary=binary)
-        self.assertEqual('PlayOnLinux', code)
-
-    def test_get_winebincode_proton(self):
-        binary = 'test/Proton/wine64.exe'
-        code, _ = utils.get_winebin_code_and_desc(self.app, binary=binary)
-        self.assertEqual('Proton', code)
-
-    def test_get_winebincode_recommended(self):
-        binary = './wine-stable_10.0-x86_64.AppImage'
-        code, _ = utils.get_winebin_code_and_desc(self.app, binary=binary)
-        self.assertEqual('AppImage', code)
-
-    def test_get_winebincode_system(self):
-        binary = '/usr/bin/wine64.exe'
-        code, _ = utils.get_winebin_code_and_desc(self.app, binary=binary)
-        self.assertEqual('System', code)
 
     @unittest.skip("Test not feasible.")
     def test_set_appimage_symlink(self):
@@ -216,7 +192,8 @@ class TestGeneralUtils(unittest.TestCase):
 
     def test_get_downloaded_file_path_found(self):
         p = Path(utils.get_downloaded_file_path(REPODIR, 'README.md'))
-        self.assertEqual(p.parent.name, constants.REPO_NAME)
+        self.assertEqual(p.name, 'README.md')
+        self.assertTrue(p.is_file())
 
     def test_get_downloaded_file_path_notfound(self):
         self.assertIsNone(utils.get_downloaded_file_path(REPODIR, 'NothingToFind.exe'))
