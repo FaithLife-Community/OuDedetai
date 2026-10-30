@@ -1,3 +1,4 @@
+import tarfile
 from dataclasses import dataclass
 import logging
 import os
@@ -14,6 +15,7 @@ from ou_dedetai.app import App
 from . import network
 from . import system
 from . import utils
+
 
 def check_wineserver(app: App) -> bool:
     # FIXME: if the wine version changes, we may need to restart the wineserver
@@ -773,3 +775,35 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     logging.debug(f"Wine env: {updated_env}")
     # Extra safe calling this here, it should be called run run_command anyways
     return system.fix_ld_library_path(wine_env)
+
+
+def setup_wine(app: App):
+    from .installer import download_wine, create_wine_symlinks
+    downloaded_file = download_wine(app)
+
+    if downloaded_file is not None and downloaded_file.name.lower().endswith(".appimage"):
+        # Retain compatibility with existing AppImage-based installations.
+        app.conf.wine_binary = str(downloaded_file.absolute())
+    elif downloaded_file is not None and downloaded_file.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz")):
+        distribution_root = Path(app.conf.wine_distribution_dir)
+        distribution_root.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(downloaded_file, "r:*") as tarball:
+            members = tarball.getmembers()
+            top_level_dirs = {
+                member.name.split("/", 1)[0]
+                for member in members
+                if "/" in member.name
+            }
+            if len(top_level_dirs) != 1:
+                raise RuntimeError("Wine tarball must contain exactly one top-level directory")
+            distribution_dir = distribution_root / next(iter(top_level_dirs))
+            if distribution_dir.exists():
+                shutil.rmtree(distribution_dir)
+            tarball.extractall(distribution_root, filter="data")
+        wine_path = Path(app.conf.wine_path_in_distribution)
+        if not wine_path.is_file():
+            raise RuntimeError("Downloaded tarball didn't contain the needed Wine binary")
+        app.conf.wine_binary = str(wine_path.absolute())
+        app.conf.wine_appimage_path = None
+
+    create_wine_symlinks(app)
