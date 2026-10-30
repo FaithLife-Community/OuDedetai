@@ -32,8 +32,6 @@ class LegacyConfiguration:
     LAST_UPDATED: Optional[str] = None # Unused in new code
     RECOMMENDED_WINE64_APPIMAGE_URL: Optional[str] = None # Unused in new code
     LLI_LATEST_VERSION: Optional[str] = None # Unused in new code
-    logos_release_channel: Optional[str] = None
-    lli_release_channel: Optional[str] = None
 
     # Legacy Extended Configuration
     APPIMAGE_LINK_SELECTION_NAME: Optional[str] = None
@@ -378,9 +376,13 @@ class PersistentConfiguration:
             logging.info("Not reading new values from non-existent config")
 
         # Now override with values from ENV
-        config_env = PersistentConfiguration.from_legacy(LegacyConfiguration.load_from_env()) 
+        legacy_env = LegacyConfiguration.load_from_env()
+        config_env = PersistentConfiguration.from_legacy(legacy_env)
         for k, v in config_env.__dict__.items():
-            if v is not None:
+            if v is not None and k not in (
+                    "faithlife_product_release_channel",
+                    "app_release_channel",
+            ):
                 config_dict[k] = v
 
         return PersistentConfiguration(**config_dict)
@@ -398,10 +400,8 @@ class PersistentConfiguration:
             backup_dir=legacy.BACKUPDIR,
             curses_color_scheme=legacy.curses_colors,
             faithlife_product_release=legacy.TARGET_RELEASE_VERSION,
-            faithlife_product_release_channel=legacy.logos_release_channel or 'stable',
             faithlife_product_version=legacy.TARGETVERSION,
             install_dir=install_dir,
-            app_release_channel=legacy.lli_release_channel or 'stable',
             wine_binary=legacy.WINE_EXE,
             wine_binary_code=legacy.WINEBIN_CODE,
             faithlife_product_logging=faithlife_product_logging,
@@ -790,6 +790,14 @@ class Config:
     def app_release_channel(self) -> str:
         return self._raw.app_release_channel
 
+    @app_release_channel.setter
+    def app_release_channel(self, value: str):
+        if value not in ("stable", "dev"):
+            raise ValueError(f"Invalid app release channel: {value}")
+        if self._raw.app_release_channel != value:
+            self._raw.app_release_channel = value
+            self._write()
+
     @property
     def winetricks_binary(self) -> str:
         """Download winetricks if it doesn't exist"""
@@ -1158,14 +1166,11 @@ class Config:
             new_channel = "stable"
         self._raw.faithlife_product_release_channel = new_channel
         self._write()
-    
+
     def toggle_installer_release_channel(self):
-        if self._raw.app_release_channel == "stable":
-            new_channel = "dev"
-        else:
-            new_channel = "stable"
-        self._raw.app_release_channel = new_channel
-        self._write()
+        self.app_release_channel = (
+            "dev" if self.app_release_channel == "stable" else "stable"
+        )
     
     @property
     def backup_dir(self) -> Path:
