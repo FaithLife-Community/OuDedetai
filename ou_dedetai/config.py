@@ -894,17 +894,17 @@ class Config:
 
     @property
     def wine_rootfs(self) -> str:
-        """This path may or may not exist"""
-        return f"{self.install_dir}/{self.wine_rootfs_relative}"
-    
+        """Directory containing the extracted Wine distribution."""
+        return self.wine_prefix
+
     @property
     def wine_rootfs_relative(self) -> str:
-        """This path may or may not exist"""
-        return "wine_rootfs/"
+        """Wine distribution directory relative to install_dir."""
+        return "data/wine64_bottle/"
 
     @property
     def wine_path_in_rootfs(self) -> str:
-        return str(next(Path(self.wine_rootfs).glob("*/bin/wine")))
+        return str(next(Path(self.wine_rootfs).glob("*/bin/wine")).absolute())
 
     @property
     def is_wine_binary_in_wine_rootfs(self) -> bool:
