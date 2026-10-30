@@ -108,6 +108,10 @@ class CLI(App):
             process.wait()
             sys.exit(process.returncode)
 
+    def select_wine(self):
+        from ou_dedetai.runtime import select_runtime
+        select_runtime(self)
+
     def set_appimage(self):
         utils.set_appimage_symlink(app=self)
 

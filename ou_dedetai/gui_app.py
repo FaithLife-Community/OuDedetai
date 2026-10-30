@@ -86,7 +86,7 @@ class GuiApp(App):
                 title=question,
                 initialdir=Path().home(),
             )
-        return answer
+        return answer or None
 
     def _info(self, message):
         """Display information to the user"""
@@ -306,6 +306,7 @@ class InstallerWindow:
             '<<ComboboxSelected>>',
             self.set_release
         )
+        self.gui.wine_select_button.config(command=self.select_runtime)
         self.gui.wine_dropdown.bind(
             '<<ComboboxSelected>>',
             self.set_wine
@@ -375,6 +376,7 @@ class InstallerWindow:
             self.gui.version_dropdown,
             self.gui.release_dropdown,
             self.gui.wine_dropdown,
+            self.gui.wine_select_button,
             self.gui.okay_button,
         ]
         if widgets == 'all':
@@ -396,6 +398,10 @@ class InstallerWindow:
         self.conf.faithlife_product_release = self.gui.releasevar.get()
         self.gui.release_dropdown.selection_clear()
         self._post_dropdown_change()
+
+    def select_runtime(self):
+        from ou_dedetai.runtime_gui import RuntimePicker
+        RuntimePicker(self.app)
 
     def set_wine(self, evt=None):
         self.conf.wine_binary = self.gui.winevar.get()
@@ -643,12 +649,8 @@ class ControlWindow(GuiApp):
         self.root.event_generate(evt)
 
     def set_appimage(self, evt=None):
-        # TODO: Separate as advanced feature.
-        appimage_filename = self.open_file_dialog("AppImage", "AppImage")
-        if not appimage_filename:
-            return
-        self.conf.wine_appimage_path = appimage_filename
-        self.start_thread(self.set_appimage_symlink)
+        from ou_dedetai.runtime_gui import RuntimePicker
+        RuntimePicker(self)
 
     def switch_logging(self, evt=None):
         desired_state = self.gui.loggingstatevar.get()
@@ -739,17 +741,14 @@ class ControlWindow(GuiApp):
     def update_latest_appimage_button(self, evt=None):
         state = None
         msg = None
+        self.gui.set_appimage_button.state(['!disabled'])
+        gui.ToolTip(self.gui.set_appimage_button, f"Current Wine: {self.conf._raw.wine_binary or 'Not selected'}")
         if not self.is_installed():
             state = "disabled"
             msg = "Please install first"
         elif self.conf._raw.wine_binary_code not in ["Recommended", "AppImage", None]:
             state = 'disabled'
             msg = "This button is disabled. The configured install was not created using an AppImage."
-            self.gui.set_appimage_button.state(['disabled'])
-            gui.ToolTip(
-                self.gui.set_appimage_button,
-                "This button is disabled. The configured install was not created using an AppImage."
-            )
         elif self.conf._raw.wine_binary is not None:
             status, _ = utils.compare_recommended_appimage_version(self)
             if status == 0:

@@ -1,8 +1,9 @@
 import copy
 import os
 import subprocess
+import tempfile
 from typing import Any, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import logging
 from pathlib import Path
@@ -329,6 +330,7 @@ class PersistentConfiguration:
     faithlife_product_logging: Optional[bool] = None
     install_dir: Optional[str] = None
     wine_binary: Optional[str] = None
+    wine_server: Optional[str] = None
     # FIXME: Should this be stored independently of wine_binary
     # (and potentially get out of sync), or
     # Should we derive this value from wine_binary?
@@ -407,6 +409,11 @@ class PersistentConfiguration:
             faithlife_product_logging=faithlife_product_logging,
             _legacy=legacy
         )
+
+    def __post_init__(self) -> None:
+        # Configs saved mid-install may hold the old names for the installer's choices.
+        if self.wine_binary in constants.LEGACY_WINE_SIGILS:
+            self.wine_binary = constants.LEGACY_WINE_SIGILS[self.wine_binary]
 
     def _as_dict(self) -> dict[str, Any]:
         # Copy the values into a flat structure for easy json dumping
@@ -611,6 +618,68 @@ class Config:
         self._raw.write_config()
         self.app._config_updated_event.set()
 
+    def select_wine_runtime(self, binary: str, server: str, code: str) -> None:
+        """Persist a complete runtime selection before publishing it to the UI."""
+        def stored_path(value: str) -> str:
+            path = Path(value)
+            return str(path.relative_to(self.install_dir)) if path.is_relative_to(self.install_dir) else str(path)
+
+        candidate = replace(self._raw, wine_binary=stored_path(binary),
+                            wine_server=stored_path(server), wine_binary_code=code)
+        content = (json.dumps(candidate._as_dict(), indent=4, sort_keys=True) + '\n').encode()
+        paths = list(dict.fromkeys([Path(self._overrides.config_path),
+                                   Path(self.install_dir) / f'{constants.BINARY_NAME}.json']))
+        originals: dict[Path, Optional[bytes]] = {}
+        written: list[Path] = []
+
+        def atomic_write(path: Path, data: bytes) -> None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as temporary:
+                temporary_path = Path(temporary.name)
+                try:
+                    temporary.write(data)
+                    temporary.flush()
+                    os.fsync(temporary.fileno())
+                except BaseException:
+                    temporary_path.unlink(missing_ok=True)
+                    raise
+            try:
+                os.replace(temporary_path, path)
+            finally:
+                temporary_path.unlink(missing_ok=True)
+
+        try:
+            for path in paths:
+                originals[path] = path.read_bytes() if path.exists() else None
+                atomic_write(path, content)
+                written.append(path)
+        except OSError:
+            for path in reversed(written):
+                previous = originals[path]
+                if previous is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    atomic_write(path, previous)
+            raise
+        self._raw = candidate
+        self._overrides.wine_appimage_path = None
+        self._wine64_path = None
+        self._wine_output_encoding = None
+        self._wine_binary_files = None
+        self._wine_appimage_files = None
+        self.app._config_updated_event.set()
+
+    def choose_wine_for_install(self, binary: str, server: Optional[str] = None) -> None:
+        """Record the Wine the installer should use, without copying or linking anything.
+
+        The installer later downloads, copies and links it exactly as it would
+        have for the same choice made in its own Wine prompt. A wineserver is only
+        stored when it isn't the one next to the binary."""
+        self.wine_binary = binary
+        if server is not None and Path(server) != Path(binary).parent / 'wineserver':
+            self._raw.wine_server = server
+            self._write()
+
     def _relative_from_install_dir(self, path: Path | str) -> str:
         """Takes in a possibly absolute path under install dir and turns it into an
         relative path if it is
@@ -622,8 +691,11 @@ class Config:
             path - absolute
         """
         output = str(path)
-        if Path(path).is_absolute() and output.startswith(self.install_dir):
-            output = output[len(self.install_dir):].lstrip("/")
+        # Don't prompt for the install dir just to store a path: before it is
+        # chosen nothing can be relative to it.
+        install_dir = self._overrides.install_dir or self._raw.install_dir
+        if install_dir and Path(path).is_absolute() and output.startswith(install_dir):
+            output = output[len(install_dir):].lstrip("/")
         return output
 
     def _absolute_from_install_dir(self, path: Path | str) -> str:
@@ -952,6 +1024,7 @@ class Config:
 
         if self._raw.wine_binary != relative:
             self._raw.wine_binary = relative
+            self._raw.wine_server = None
             # Reset dependents
             self._raw.wine_binary_code = None
             self._overrides.wine_appimage_path = None
@@ -985,6 +1058,11 @@ class Config:
 
     @property
     def wine64_binary(self) -> str:
+        # Explicit runtime selections use exactly the chosen loader, including build wrappers.
+        if self._raw.wine_server is not None:
+            if self.wine_binary.lower().endswith('.appimage'):
+                return str(Path(self.wine_binary).parent / 'wine64')
+            return self.wine_binary
         # Use cache if available
         if self._wine64_path:
             return self._wine64_path
@@ -1036,6 +1114,8 @@ class Config:
     @property
     # This used to be called WINESERVER_EXE
     def wineserver_binary(self) -> str:
+        if self._raw.wine_server is not None:
+            return self._absolute_from_install_dir(self._raw.wine_server)
         return str(Path(self.wine_binary).parent / 'wineserver')
 
     # FIXME: seems like the logic around wine appimages can be simplified

@@ -496,38 +496,9 @@ def find_wine_binary_files(app: App, release_version: Optional[str]) -> list[str
 
 
 def set_appimage_symlink(app: App):
-    # This function assumes make_skel() has been run once.
-    if app.conf.wine_binary_code not in ["AppImage", "Recommended"]:
-        logging.debug("AppImage commands disabled since we're not using an appimage")
-        return
-    if app.conf.wine_appimage_path is None:
-        logging.debug("No need to set appimage symlink, as it wasn't set")
-        return
-
-    logging.debug(f"{app.conf.wine_appimage_path=}")
-    logging.debug(f"{app.conf.wine_appimage_recommended_file_name=}")
-    appimage_file_path = Path(app.conf.wine_appimage_path)
-    appdir_bindir = Path(app.conf.installer_binary_dir)
-    appimage_symlink_path = appdir_bindir / app.conf.wine_appimage_link_file_name
-
-    destination_file_path = appdir_bindir / appimage_file_path.name
-
-    if appimage_file_path.name == app.conf.wine_appimage_recommended_file_name:
-        # Default case.
-        # This saves in the install binary dir
-        network.download_recommended_appimage(app)
-    else:
-        # Verify user-selected AppImage.
-        if not check_appimage(appimage_file_path):
-            app.exit(f"Cannot use {appimage_file_path}.")
-
-        if destination_file_path != appimage_file_path:
-            logging.info(f"Copying {destination_file_path} to {app.conf.installer_binary_dir}.")
-            shutil.copy(appimage_file_path, destination_file_path)
-
-    delete_symlink(appimage_symlink_path)
-    os.symlink(destination_file_path, appimage_symlink_path)
-    app.conf.wine_appimage_path = destination_file_path
+    from ou_dedetai.runtime import activate_runtime
+    if app.conf.wine_appimage_path is not None:
+        activate_runtime(app, Path(app.conf.wine_appimage_path))
 
 
 def update_to_latest_lli_release(app: App):
@@ -560,11 +531,11 @@ def update_to_latest_recommended_appimage(app: App):
     if app.conf.wine_binary_code not in ["AppImage", "Recommended"]:
         logging.debug("AppImage commands disabled since we're not using an appimage")
         return
-    app.conf.wine_appimage_path = Path(app.conf.wine_appimage_recommended_file_name)
+    from ou_dedetai.runtime import activate_runtime
     status, _ = compare_recommended_appimage_version(app)
     if status == 0:
-        # TODO: Consider also removing old appimage from install dir. 
-        set_appimage_symlink(app)
+        network.download_recommended_appimage(app)
+        activate_runtime(app, Path(app.conf.installer_binary_dir) / app.conf.wine_appimage_recommended_file_name)
     elif status == 1:
         logging.debug("The AppImage is already set to the latest recommended.")
     elif status == 2:

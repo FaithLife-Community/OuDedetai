@@ -131,6 +131,8 @@ class InstallerGui(Frame):
             self.wine_dropdown['values'] = [self.app.conf.wine_binary]
             self.winevar.set(self.app.conf.wine_binary)
 
+        self.wine_select_button = Button(self, text="Choose runtime…")
+
         # Skip Dependencies row.
         self.skipdeps_label = Label(self, text="Install Dependencies: ")
         self.skipdepsvar = BooleanVar(value=not self.app.conf.skip_install_system_dependencies) 
@@ -151,7 +153,8 @@ class InstallerGui(Frame):
         self.release_dropdown.grid(column=1, row=row, sticky='w', pady=2)
         row += 1
         self.wine_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.wine_dropdown.grid(column=1, row=row, columnspan=3, sticky='we', pady=2)
+        self.wine_dropdown.grid(column=1, row=row, columnspan=2, sticky='we', pady=2)
+        self.wine_select_button.grid(column=3, row=row, columnspan=2, sticky='e', pady=2)
         row += 1
         self.skipdeps_label.grid(column=0, row=row, sticky='nws', pady=2)
         self.skipdeps_checkbox.grid(column=1, row=row, sticky='w', pady=2)
@@ -269,8 +272,8 @@ class ControlGui(StatusGui):
             text="Update to Latest AppImage"
         )
         self.latest_appimage_button = Button(self, text="Run")
-        self.set_appimage_label = Label(self, text="Set AppImage")
-        self.set_appimage_button = Button(self, text="Run")
+        self.set_appimage_label = Label(self, text="Wine runtime")
+        self.set_appimage_button = Button(self, text="Select…")
         # App logging toggle
         self.loggingstatevar = StringVar(value='Enable')
         self.logging_label = Label(self, text="Toggle app logging")

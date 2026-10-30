@@ -125,6 +125,8 @@ class App(abc.ABC):
             invalid_response = "That response is not valid, please try again."
             new_question = f"{invalid_response}\n{question}"
             answer = self._ask(new_question, passed_options)
+            if answer is None or answer == self._exit_option:
+                raise UserExitedFromAsk
 
         if answer is not None:
             answer = validate_result(answer, options)
@@ -134,6 +136,13 @@ class App(abc.ABC):
                 self.exit("Failed to get a valid value from user")
 
         return answer
+
+    def choose_runtime(self, question: str, options: list[str], current: str | None) -> str:
+        return self.ask(question, options)
+
+    def choose_file(self, question: str, *, initial_dir: Path, appimages: bool = False) -> str:
+        """Choose an existing file; text-only frontends can still accept a path."""
+        return self.ask(question, [PROMPT_OPTION_FILE])
 
     def approve_or_exit(self, question: str, context: Optional[str] = None) -> bool:
         """Asks the user a question, if they refuse, shutdown"""
