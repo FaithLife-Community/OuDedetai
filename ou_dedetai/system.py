@@ -985,17 +985,27 @@ def ensure_winetricks(
 ):
     winetricks_path = Path(app.conf.installer_binary_dir) / "winetricks"
 
-    if winetricks_path.exists():
-        # No need to do anything
-        return
-
-    # Symlink if using an appimage
-    if (
-        app.conf.wine_appimage_path is not None
-        and app.conf.wine_appimage_path.exists()
-    ):
+    if app.conf.wine_appimage_path is not None and app.conf.wine_appimage_path.exists():
+        if winetricks_path.is_symlink() or winetricks_path.is_file():
+            winetricks_path.unlink()
         winetricks_path.symlink_to(app.conf.wine_appimage_path)
         logging.debug("Winetricks symlinked to appimage.")
+        return
+    elif app.conf.is_wine_binary_in_distribution:
+        bundled_winetricks = (
+                Path(app.conf.wine_path_in_distribution).parent / "winetricks"
+        )
+        if bundled_winetricks.is_file():
+            if winetricks_path.is_symlink() or winetricks_path.is_file():
+                winetricks_path.unlink()
+            winetricks_path.symlink_to(bundled_winetricks)
+            logging.debug("Winetricks symlinked to Wine distribution.")
+            return
+
+    if winetricks_path.is_symlink():
+        winetricks_path.unlink()
+
+    if winetricks_path.exists():
         return
 
     # Otherwise download
