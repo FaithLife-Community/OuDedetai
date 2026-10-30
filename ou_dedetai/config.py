@@ -970,19 +970,6 @@ class Config:
     @wine_binary.setter
     def wine_binary(self, value: str):
         """Takes in a path to the wine binary and stores it as relative for storage"""
-        #FIXME: We handle this case in the installer.
-        # Don't like how this value (which should only be a path to a wine binary)
-        # can sometimes be a download option - i.e. one that doesn't exist yet.
-        # But that's a problem for another day.
-        if value in [
-            constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,
-            constants.WINE_RECOMMENDED_TARBALL_SIGIL,
-            constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL,
-            constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL,
-            constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL,
-        ]:
-            pass
-
         # Make the path absolute for comparison
         relative = self._relative_from_install_dir(value)
         # FIXME: consider this, it doesn't work at present as the wine_binary may be an
