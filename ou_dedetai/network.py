@@ -298,7 +298,7 @@ class NetworkRequests:
         self._cache._write()
         return output
 
-    def wine_appimage_versions(self) -> GithubSoftwareReleasesInfo:
+    def wine_versions(self) -> GithubSoftwareReleasesInfo:
         repo = "FaithLife-Community/wine-appimages"
         return self._repo_version(repo)
 
@@ -307,22 +307,19 @@ class NetworkRequests:
         return self._repo_version(repo, version).download_url
 
     def wine_tarball_recommended_url(self) -> str:
+        """Returns the latest tarball prerelease for development testing."""
         repo = "FaithLife-Community/wine-appimages"
-        # XXX: remove
-        repo = "ctrlaltf24/dev-wine-appimages"
-        return self._repo_version(
-            repo,
-            asset_suffix=".tar.gz"
-        ).download_url
+        releases = self._repo_version(repo, asset_suffix=".tar.xz")
+        if releases.pre_release is None:
+            raise RuntimeError(f"No tarball prerelease found in {repo}")
+        return releases.pre_release.download_url
 
     def wine_appimage_recommended_url(self) -> str:
         repo = "FaithLife-Community/wine-appimages"
-        # XXX: remove
-        repo = "ctrlaltf24/dev-wine-appimages"
-        return self._repo_version(
-            repo,
-            asset_suffix=".appimage"
-        ).download_url
+        releases = self._repo_version(repo, asset_suffix=".AppImage")
+        if releases.latest is None:
+            raise RuntimeError(f"No stable AppImage found in {repo}")
+        return releases.latest.download_url
 
     def _url_size_and_hash(self, url: str) -> tuple[Optional[int], Optional[str]]:
         """Attempts to get the size and hash from a URL.
@@ -350,10 +347,57 @@ class NetworkRequests:
             tag: str | None = None,
             asset_suffix: str | None = None,
     ) -> GithubSoftwareReleasesInfo | SoftwareReleaseInfo:
-        return _get_release_data(
-            repository,
-            tag=tag,
-            asset_suffix=asset_suffix,
+        if tag is not None:
+            return _get_release_data(
+                repository,
+                tag=tag,
+                asset_suffix=asset_suffix,
+            )
+
+        cache_key = f"{repository}|{asset_suffix or '*'}"
+
+        has_latest = (
+                cache_key in self._cache.repository_latest_version
+                and cache_key in self._cache.repository_latest_url
+        )
+        has_pre_release = (
+                cache_key in self._cache.repository_latest_pre_release_version
+                and cache_key in self._cache.repository_latest_pre_release_url
+        )
+
+        if not has_latest or not has_pre_release:
+            result = _get_release_data(
+                repository,
+                asset_suffix=asset_suffix,
+            )
+
+            if result.latest is not None:
+                self._cache.repository_latest_version[cache_key] = result.latest.version
+                self._cache.repository_latest_url[cache_key] = result.latest.download_url
+
+            if result.pre_release is not None:
+                self._cache.repository_latest_pre_release_version[cache_key] = result.pre_release.version
+                self._cache.repository_latest_pre_release_url[cache_key] = result.pre_release.download_url
+
+            self._cache._write()
+
+        return GithubSoftwareReleasesInfo(
+            latest=(
+                SoftwareReleaseInfo(
+                    version=self._cache.repository_latest_version[cache_key],
+                    download_url=self._cache.repository_latest_url[cache_key],
+                )
+                if has_latest or cache_key in self._cache.repository_latest_version
+                else None
+            ),
+            pre_release=(
+                SoftwareReleaseInfo(
+                    version=self._cache.repository_latest_pre_release_version[cache_key],
+                    download_url=self._cache.repository_latest_pre_release_url[cache_key],
+                )
+                if has_pre_release or cache_key in self._cache.repository_latest_pre_release_version
+                else None
+            ),
         )
 
     def _repo_latest_version(
@@ -628,7 +672,10 @@ def _verify_downloaded_file(url: str, file_path: Path | str, app: App, status_me
     return True
 
 
-def _get_asset_url(json_data: dict, asset_suffix: Optional[str]) -> str:
+def _get_asset_url(
+    json_data: dict,
+    asset_suffix: Optional[str] = None,
+) -> str:
     assets = json_data.get("assets") or []
 
     if asset_suffix is not None:
@@ -677,7 +724,7 @@ def _get_release_data(
     data = _net_get(release_url)
     if data is None:
         logging.warning("Could not get releases from GitHub.")
-        if tag is not None or asset_suffix is not None:
+        if tag is not None:
             return SoftwareReleaseInfo(version=None, download_url=None)
         return GithubSoftwareReleasesInfo(latest=None, pre_release=None)
 
@@ -693,7 +740,7 @@ def _get_release_data(
             download_url=_get_asset_url(json_data, asset_suffix),
         )
 
-    json_data = sorted(
+    releases = sorted(
         json_data,
         key=lambda release: datetime.fromisoformat(
             release["updated_at"].replace("Z", "+00:00")
@@ -701,43 +748,22 @@ def _get_release_data(
         reverse=True,
     )
 
-    if asset_suffix is not None:
-        for release in json_data:
+    def find_release(prerelease: bool) -> Optional[SoftwareReleaseInfo]:
+        for release in releases:
+            if release.get("prerelease") is not prerelease:
+                continue
             try:
                 return SoftwareReleaseInfo(
                     version=_get_version_name(release),
                     download_url=_get_asset_url(release, asset_suffix),
                 )
-            except (ValueError, IndexError):
+            except ValueError:
                 continue
-        raise ValueError(
-            f"No release with an asset ending in {asset_suffix!r} "
-            f"found in {repository}"
-        )
-
-    pre_release = None
-    latest_release = None
-
-    if json_data and json_data[0]["prerelease"]:
-        pre_release = SoftwareReleaseInfo(
-            version=_get_version_name(json_data[0]),
-            download_url=_get_asset_url(json_data[0], None),
-        )
-
-    stable_releases = [
-        release for release in json_data
-        if release["prerelease"] is False
-    ]
-
-    if stable_releases:
-        latest_release = SoftwareReleaseInfo(
-            version=_get_version_name(stable_releases[0]),
-            download_url=_get_asset_url(stable_releases[0], None),
-        )
+        return None
 
     return GithubSoftwareReleasesInfo(
-        latest=latest_release,
-        pre_release=pre_release,
+        latest=find_release(False),
+        pre_release=find_release(True),
     )
 
 # FIXME: clean this up, this should ba handled by the install step
