@@ -208,9 +208,8 @@ def setup_wine(app: App):
         # Retain compatibility with existing AppImage-based installations.
         app.conf.wine_binary = str(downloaded_file.absolute())
     elif downloaded_file is not None and downloaded_file.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz")):
-        wine_rootfs = Path(app.conf.wine_rootfs)
-        wine_rootfs.mkdir(parents=True, exist_ok=True)
-
+        distribution_root = Path(app.conf.wine_distribution_dir)
+        distribution_root.mkdir(parents=True, exist_ok=True)
         with tarfile.open(downloaded_file, "r:*") as tarball:
             members = tarball.getmembers()
             top_level_dirs = {
@@ -218,20 +217,16 @@ def setup_wine(app: App):
                 for member in members
                 if "/" in member.name
             }
-
             if len(top_level_dirs) != 1:
                 raise RuntimeError("Wine tarball must contain exactly one top-level directory")
-
-            distribution_dir = wine_rootfs / next(iter(top_level_dirs))
+            distribution_dir = distribution_root / next(iter(top_level_dirs))
             if distribution_dir.exists():
                 shutil.rmtree(distribution_dir)
-
-            tarball.extractall(wine_rootfs, filter="data")
-
-        if not Path(app.conf.wine_path_in_rootfs).is_file():
+            tarball.extractall(distribution_root, filter="data")
+        wine_path = Path(app.conf.wine_path_in_distribution)
+        if not wine_path.is_file():
             raise RuntimeError("Downloaded tarball didn't contain the needed Wine binary")
-
-        app.conf.wine_binary = str(Path(app.conf.wine_path_in_rootfs).absolute())
+        app.conf.wine_binary = str(wine_path.absolute())
 
     create_wine_symlinks(app)
 
@@ -240,7 +235,7 @@ def update_to_latest_wine(app: App):
     """Update a managed Wine installation to the currently recommended build."""
     if app.conf.wine_appimage_path is not None:
         app.conf.wine_binary = constants.RECOMMENDED_WINE_APPIMAGE_SIGIL
-    elif app.conf.is_wine_binary_in_wine_rootfs:
+    elif app.conf.is_wine_binary_in_distribution:
         app.conf.wine_binary = constants.RECOMMENDED_WINE_TARBALL_SIGIL
     else:
         logging.debug("System wine detected - cowardly refusing to upgrade")
@@ -513,8 +508,8 @@ def create_wine_symlinks(app: App):
             p.symlink_to(symlink_to)
         return
 
-    if app.conf.is_wine_binary_in_wine_rootfs:
-        wine_bin_dir = Path(app.conf.wine_path_in_rootfs).parent
+    if app.conf.is_wine_binary_in_distribution:
+        wine_bin_dir = Path(app.conf.wine_path_in_distribution).parent
         symlinks = {
             "wine": wine_bin_dir / "wine",
             "wine64": wine_bin_dir / "wine",

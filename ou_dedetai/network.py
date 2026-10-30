@@ -297,27 +297,35 @@ class NetworkRequests:
         return self._repo_version(repo, version).download_url
 
     def wine_tarball_release(self, channel: str) -> SoftwareReleaseInfo:
-        """Returns the Wine tarball release selected by the Wine release channel."""
+        """Returns the Wine release selected by the Wine release channel."""
+        if channel not in ("stable", "dev"):
+            raise ValueError(f"Unknown Wine release channel: {channel}")
+
         repo = "FaithLife-Community/wine-appimages"
         releases = self._repo_version(repo, asset_suffix=".tar.xz")
-        if channel == "stable":
-            release = releases.latest
-            release_type = "stable"
-        elif channel == "dev":
-            release = releases.pre_release
-            release_type = "prerelease"
-        else:
-            raise ValueError(f"Unknown Wine release channel: {channel}")
-        if release is None:
-            raise RuntimeError(f"No {release_type} tarball found in {repo}")
-        return release
 
-    def wine_appimage_recommended_url(self) -> str:
+        if channel == "stable":
+            if releases.latest is None:
+                logging.info(
+                    "No stable Wine tarball found; falling back to the recommended AppImage."
+                )
+                return self.wine_appimage_recommended_release()
+            return releases.latest
+
+        if releases.pre_release is None:
+            raise RuntimeError(f"No prerelease tarball found in {repo}")
+        return releases.pre_release
+
+    def wine_appimage_recommended_release(self) -> SoftwareReleaseInfo:
+        """Returns the latest stable recommended Wine AppImage release."""
         repo = "FaithLife-Community/wine-appimages"
         releases = self._repo_version(repo, asset_suffix=".AppImage")
         if releases.latest is None:
             raise RuntimeError(f"No stable AppImage found in {repo}")
-        return releases.latest.download_url
+        return releases.latest
+
+    def wine_appimage_recommended_url(self) -> str:
+        return self.wine_appimage_recommended_release().download_url
 
     def _url_size_and_hash(self, url: str) -> tuple[Optional[int], Optional[str]]:
         """Attempts to get the size and hash from a URL.

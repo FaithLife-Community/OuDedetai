@@ -758,7 +758,7 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     updated_env = {k: wine_env.get(k) for k in wine_env_defaults.keys()}
 
     # Needed for the wrapper script
-    if app.conf.is_wine_binary_in_wine_rootfs:
+    if app.conf.is_wine_binary_in_distribution:
         wine_distribution = Path(app.conf.wine_binary).parent.parent
         wine_env["LD_PRELOAD"] = f"libapprun_hooks.so:{wine_env.get('LD_PRELOAD', '')}"
         wine_env["PATH"] = f"{wine_distribution / 'bin'}:{wine_env.get('PATH', '')}"
