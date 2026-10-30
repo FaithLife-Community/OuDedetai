@@ -189,10 +189,10 @@ def check_system_compatibility(app: App):
             app.conf.faithlife_product_version != '9'
             and not str(app.conf.wine_binary).lower().endswith('appimage')
             and app.conf.wine_binary not in [
-        constants.WINE_BETA_SIGIL,
-        constants.WINE_RECOMMENDED_SIGIL,
-        constants.RECOMMENDED_WINE_TARBALL_SIGIL,
-    ]
+                constants.WINE_BETA_SIGIL,
+                constants.WINE_RECOMMENDED_SIGIL,
+                constants.WINE_RECOMMENDED_TARBALL_SIGIL,
+            ]
     ):
         return
 
@@ -235,9 +235,9 @@ def setup_wine(app: App):
 def update_to_latest_wine(app: App):
     """Update a managed Wine installation to the currently recommended build."""
     if app.conf.wine_appimage_path is not None:
-        app.conf.wine_binary = constants.RECOMMENDED_WINE_APPIMAGE_SIGIL
+        app.conf.wine_binary = constants.WINE_RECOMMENDED_APPIMAGE_SIGIL
     elif app.conf.is_wine_binary_in_distribution:
-        app.conf.wine_binary = constants.RECOMMENDED_WINE_TARBALL_SIGIL
+        app.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL
     else:
         logging.debug("System wine detected - cowardly refusing to upgrade")
         return
@@ -247,11 +247,11 @@ def update_to_latest_wine(app: App):
 
 def download_wine(app: App) -> Optional[Path]:
     if app.conf.faithlife_product_version != "9" and app.conf.wine_binary not in [
-        constants.RECOMMENDED_WINE_APPIMAGE_SIGIL,
-        constants.RECOMMENDED_WINE_TARBALL_SIGIL,
-        constants.UNTESTED_WINE_STABLE_APPIMAGE_SIGIL,
-        constants.UNTESTED_WINE_STAGING_APPIMAGE_SIGIL,
-        constants.UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL,
+        constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,
+        constants.WINE_RECOMMENDED_TARBALL_SIGIL,
+        constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL,
+        constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL,
+        constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL,
     ]:
         return None
 

@@ -168,19 +168,7 @@ def get_wine_options(app: App) -> List[str]:
     logging.debug(f"{binaries=}")
     wine_binary_options = []
 
-    wine_binary_options.append(constants.RECOMMENDED_WINE_TARBALL_SIGIL)
-    # Commented out the old option to download the latest appimage.
-    # wine_binary_options.append(constants.RECOMMENDED_WINE_APPIMAGE_SIGIL)
-    
-    # Not sure if we should support this, but technically speaking sometimes people
-    # want to try different wine versions
-    # May be useful for us or in CI, but generally not recommended
-    # We might be able to also call --appimage-extract on the downloaded appimage to make everything follow the tarball
-    # logic
-
-    # wine_binary_options.append(constants.UNTESTED_WINE_STABLE_APPIMAGE_SIGIL)
-    # wine_binary_options.append(constants.UNTESTED_WINE_STAGING_APPIMAGE_SIGIL)
-    # wine_binary_options.append(constants.UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL)
+    wine_binary_options.append(constants.WINE_RECOMMENDED_TARBALL_SIGIL)
 
     # Add AppImages to list
     os_name, _ = system.get_os()

@@ -95,8 +95,13 @@ LOGOS_GRAY = '#E7E7E7'
 LOGOS_WHITE = '#FCFCFC'
 PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 
-WINE_RECOMMENDED_SIGIL = "Recommended"
 WINE_BETA_SIGIL = "Experimental (AKA Beta)"
+WINE_RECOMMENDED_SIGIL = "Recommended"
+WINE_RECOMMENDED_APPIMAGE_SIGIL= "Recommended Appimage"
+WINE_RECOMMENDED_TARBALL_SIGIL= "Recommended"
+WINE_UNTESTED_STABLE_APPIMAGE_SIGIL= "Latest (untested) Appimage from wine stable"
+WINE_UNTESTED_STAGING_APPIMAGE_SIGIL= "Latest (untested) Appimage from wine staging"
+WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL= "Latest (untested) Appimage from wine development" # noqa: E501
 
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
 FAITHLIFE_PRODUCT_VERSIONS = ["10"] # This used to include 9
@@ -118,11 +123,3 @@ PROMPT_OPTION_SIGILS = [PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE, PROMPT_OPTI
 # String for when a binary is meant to be downloaded later
 DOWNLOAD = "Download"
 WINDOWS_VERSIONS = ["vista", "win7", "win8", "win10", "win11", "Return to Main Menu"]
-
-# Sigils used in conditional logic
-RECOMMENDED_WINE_APPIMAGE_SIGIL="Recommended Appimage"
-# At preset all these files appear statically linked, no need to mess with LD_LIBRARY_PATH
-RECOMMENDED_WINE_TARBALL_SIGIL="Recommended"
-UNTESTED_WINE_STABLE_APPIMAGE_SIGIL="Latest (untested) Appimage from wine stable"
-UNTESTED_WINE_STAGING_APPIMAGE_SIGIL="Latest (untested) Appimage from wine staging"
-UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL="Latest (untested) Appimage from wine development" # noqa: E501
