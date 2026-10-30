@@ -99,9 +99,9 @@ WINE_BETA_SIGIL = "Experimental (AKA Beta)"
 WINE_RECOMMENDED_SIGIL = "Recommended"
 WINE_RECOMMENDED_APPIMAGE_SIGIL= "Recommended Appimage"
 WINE_RECOMMENDED_TARBALL_SIGIL= "Recommended"
-WINE_UNTESTED_STABLE_APPIMAGE_SIGIL= "Latest (untested) Appimage from wine stable"
-WINE_UNTESTED_STAGING_APPIMAGE_SIGIL= "Latest (untested) Appimage from wine staging"
-WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL= "Latest (untested) Appimage from wine development" # noqa: E501
+WINE_UNTESTED_STABLE_APPIMAGE_SIGIL= "Latest Appimage from wine stable (untested)"
+WINE_UNTESTED_STAGING_APPIMAGE_SIGIL= "Latest Appimage from wine staging (untested)"
+WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL= "Latest Appimage from wine development (untested)"
 
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
 FAITHLIFE_PRODUCT_VERSIONS = ["10"] # This used to include 9
