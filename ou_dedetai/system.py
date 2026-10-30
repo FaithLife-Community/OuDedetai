@@ -453,7 +453,7 @@ def get_package_manager() -> PackageManager | None:
         # Set default package list.
         packages = (
             "libfuse2 "  # appimages
-            "binutils wget winbind libfreetype6 "  # wine
+            "binutils wget winbind libfreetype6 "  # wine tarball
             "p7zip-full cabextract " # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
             "mesa-utils "  # verify opengl version
@@ -582,7 +582,7 @@ def get_package_manager() -> PackageManager | None:
         else:  # arch
             packages = (
                 "fuse2 "  # appimages
-                "binutils libwbclient samba wget freetype2 "  # wine
+                "binutils libwbclient samba wget freetype2 "  # wine tarball
                 "7zip cabextract " # winetricks (7zip used to be called pzip then p7zip)
                 "openjpeg2 libxcomposite libxinerama "  # display
                 "ocl-icd vulkan-icd-loader "  # hardware
