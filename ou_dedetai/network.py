@@ -368,6 +368,18 @@ class NetworkRequests:
         else:
             repo = "FaithLife-Community/test-builds"
         return self._repo_latest_version(repo)
+
+    def refresh_app_latest_version(self, channel: str) -> SoftwareReleaseInfo:
+        repo = (
+            "FaithLife-Community/OuDedetai"
+            if channel == "stable"
+            else "FaithLife-Community/test-builds"
+        )
+        self._cache.repository_latest_version.pop(repo, None)
+        self._cache.repository_latest_url.pop(repo, None)
+        self._cache.repository_latest_pre_release_version.pop(repo, None)
+        self._cache.repository_latest_pre_release_url.pop(repo, None)
+        return self._repo_latest_version(repo)
     
     def icu_latest_version(self) -> SoftwareReleaseInfo:
         return self._repo_latest_version("FaithLife-Community/icu")

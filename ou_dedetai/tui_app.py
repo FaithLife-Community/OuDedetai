@@ -550,6 +550,8 @@ class TUI(App):
                 control.edit_file(self.conf.config_file_path)
             elif choice == "Reload Config":
                 self.conf.reload()
+            elif choice == f"Check for {constants.APP_NAME} Updates":
+                utils.check_for_updates(self, force=True)
             elif choice == "Change Logos Release Channel":
                 self.conf.toggle_faithlife_product_release_channel()
             elif choice == f"Change {constants.APP_NAME} Release Channel":
@@ -610,7 +612,7 @@ class TUI(App):
             or (getattr(self.conf._raw, "install_dir", None) and Path(self.conf._raw.install_dir).exists())
         ):
             labels.append("Uninstall")
-        labels.extend(["Install Dependencies", "Edit Config", "Reload Config"])
+        labels.extend([f"Check for {constants.APP_NAME} Updates", "Install Dependencies", "Edit Config", "Reload Config"])
         if self.is_installed():
             labels.extend([
                 "Change Logos Release Channel",
