@@ -558,6 +558,9 @@ class TUI(App):
                 utils.install_dependencies(self)
             elif choice == "Install ICU":
                 wine.enforce_icu_data_files(self)
+            elif choice == "Create Desktop Shortcuts":
+                installer.create_launcher_shortcuts(self)
+                self.status("Desktop shortcuts created.")
             elif choice.endswith("Logging"):
                 self.logos.switch_logging()
             elif choice == "Check OpenGL":
@@ -616,6 +619,7 @@ class TUI(App):
                 "Change Logos Release Channel",
                 f"Change {constants.APP_NAME} Release Channel",
             ])
+            labels.append("Create Desktop Shortcuts")
         labels.append(
             "Enable Logging" if getattr(self.conf, "faithlife_product_logging", False)
             else "Disable Logging"
