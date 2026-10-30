@@ -3,7 +3,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tarfile
 from pathlib import Path
 from typing import Optional
 
@@ -16,6 +15,7 @@ from . import utils
 from . import wine
 
 from ou_dedetai.system import OpenGLIncompatible
+from .wine import setup_wine
 
 
 # This step doesn't do anything per-say, but "collects" all the choices in one step
@@ -197,38 +197,6 @@ def check_system_compatibility(app: App):
         return
 
     check_opengl(app=app)
-
-
-def setup_wine(app: App):
-    """Prepare the Wine executables for installation or update."""
-    downloaded_file = download_wine(app)
-
-    if downloaded_file is not None and downloaded_file.name.lower().endswith(".appimage"):
-        # Retain compatibility with existing AppImage-based installations.
-        app.conf.wine_binary = str(downloaded_file.absolute())
-    elif downloaded_file is not None and downloaded_file.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz")):
-        distribution_root = Path(app.conf.wine_distribution_dir)
-        distribution_root.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(downloaded_file, "r:*") as tarball:
-            members = tarball.getmembers()
-            top_level_dirs = {
-                member.name.split("/", 1)[0]
-                for member in members
-                if "/" in member.name
-            }
-            if len(top_level_dirs) != 1:
-                raise RuntimeError("Wine tarball must contain exactly one top-level directory")
-            distribution_dir = distribution_root / next(iter(top_level_dirs))
-            if distribution_dir.exists():
-                shutil.rmtree(distribution_dir)
-            tarball.extractall(distribution_root, filter="data")
-        wine_path = Path(app.conf.wine_path_in_distribution)
-        if not wine_path.is_file():
-            raise RuntimeError("Downloaded tarball didn't contain the needed Wine binary")
-        app.conf.wine_binary = str(wine_path.absolute())
-        app.conf.wine_appimage_path = None
-
-    create_wine_symlinks(app)
 
 
 def update_to_latest_wine(app: App):
