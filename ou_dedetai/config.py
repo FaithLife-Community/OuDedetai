@@ -329,6 +329,7 @@ class PersistentConfiguration:
     faithlife_product_logging: Optional[bool] = None
     install_dir: Optional[str] = None
     wine_binary: Optional[str] = None
+    wine_release_channel: str = "stable"
     # This is where to search for wine
     # wine_binary_code: Optional[str] = None
     backup_dir: Optional[str] = None
@@ -886,6 +887,27 @@ class Config:
         return get_logos_user_id(logos_appdata_dir)
 
     @property
+    def wine_release_channel(self) -> str:
+        return self._raw.wine_release_channel
+
+    @wine_release_channel.setter
+    def wine_release_channel(self, value: str) -> None:
+        if value not in ("stable", "dev"):
+            raise ValueError("Wine release channel must be 'recommended' or 'candidate'")
+        if self._raw.wine_release_channel != value:
+            self._raw.wine_release_channel = value
+            self._write()
+
+    def toggle_wine_release_channel(self) -> None:
+        self.wine_release_channel = (
+            "dev" if self.wine_release_channel == "stable" else "stable"
+        )
+
+    @property
+    def _wine_tarball_release(self) -> network.SoftwareReleaseInfo:
+        return self._network.wine_tarball_release(self.wine_release_channel)
+
+    @property
     # This used to be called WINEPREFIX
     def wine_prefix(self) -> str:
         if self._overrides.wine_prefix is not None:
@@ -1096,7 +1118,7 @@ class Config:
         elif self.wine_binary == constants.UNTESTED_WINE_DEVELOPMENT_APPIMAGE_SIGIL:
             return self._network.wine_appimage_upstream_url("continuous-devel")
         elif self.wine_binary == constants.RECOMMENDED_WINE_TARBALL_SIGIL:
-            return self._network.wine_tarball_recommended_url(self.app_release_channel)
+            return self._wine_tarball_release.download_url
         else:
             # self.wine_binary == constants.RECOMMENDED_WINE_APPIMAGE_SIGIL
             return self._network.wine_appimage_recommended_url()
@@ -1109,9 +1131,9 @@ class Config:
 
     @property
     def wine_recommended_version(self) -> str:
+        if self.wine_binary == constants.RECOMMENDED_WINE_TARBALL_SIGIL:
+            return self._wine_tarball_release.version
         filename = self.wine_download_file_name
-        if filename.endswith(".tar.xz"):
-            return filename.split("-")[1]
         # AppImage format: wine-[branch]_[version]-[arch]
         return filename.split("-")[1].split("_")[1]
 
