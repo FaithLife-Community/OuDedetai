@@ -28,8 +28,15 @@ from . import utils
 from . import wine
 
 
+class StatusLog(Log):
+    can_focus = False
+
+
 class MenuModal(ModalScreen[str]):
-    BINDINGS = [Binding("escape", "cancel", "Cancel", show=True)]
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=True),
+        Binding("ctrl+c", "exit", show=False, priority=True)
+    ]
 
     def __init__(self, title: str, options: list[str]) -> None:
         super().__init__()
@@ -57,8 +64,15 @@ class MenuModal(ModalScreen[str]):
     def action_cancel(self) -> None:
         self.dismiss("Return to Main Menu")
 
+    def action_exit(self) -> None:
+        self.app.exit()
+
 
 class InfoModal(ModalScreen[None]):
+    BINDINGS = [
+        Binding("ctrl+c", "exit", "Exit", show=False, priority=True)
+    ]
+
     def __init__(self, message: str, title: str = "Information") -> None:
         super().__init__()
         self.message = message
@@ -74,8 +88,15 @@ class InfoModal(ModalScreen[None]):
     def ok(self) -> None:
         self.dismiss()
 
+    def action_exit(self) -> None:
+        self.dismiss()
+
 
 class InputModal(ModalScreen[str]):
+    BINDINGS = [
+        Binding("ctrl+c", "exit", "Exit", show=False, priority=True)
+    ]
+
     def __init__(self, question: str, default: str = "") -> None:
         super().__init__()
         self.question = question
@@ -103,6 +124,9 @@ class InputModal(ModalScreen[str]):
     @on(Input.Submitted)
     def on_submit(self, event: Input.Submitted) -> None:
         self.dismiss(event.value)
+
+    def action_exit(self) -> None:
+        self.app.exit()
 
 
 class TextualUI(TextualApp[None]):
@@ -228,7 +252,7 @@ class TextualUI(TextualApp[None]):
         with Vertical(id="main-area"):
             yield Static("Main Menu", id="menu-title")
             yield OptionList(id="main-menu")
-        yield Log(id="console-area", max_lines=300, highlight=True)
+        yield StatusLog(id="console-area", max_lines=300, highlight=True)
         yield Footer()
         yield Static("FaithLife Community", id="status-bar")
 
@@ -290,7 +314,7 @@ class TextualUI(TextualApp[None]):
 
     def write_status(self, message: str) -> None:
         try:
-            self.query_one("#console-area", Log).write_line(message)
+            self.query_one("#console-area", StatusLog).write_line(message)
         except Exception:
             pass
 
