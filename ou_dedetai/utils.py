@@ -166,13 +166,17 @@ def get_wine_options(app: App) -> List[str]:
     binaries = app.conf.wine_binary_files
     logging.debug(f"{appimages=}")
     logging.debug(f"{binaries=}")
-    wine_binary_options = []
-
-    wine_binary_options.append(constants.WINE_RECOMMENDED_TARBALL_SIGIL)
+    wine_binary_options = [constants.WINE_RECOMMENDED_TARBALL_SIGIL]
 
     # Add AppImages to list
     os_name, _ = system.get_os()
     if os_name != "alpine":
+        wine_binary_options.extend([
+            constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL,
+        ])
         wine_binary_options.extend(appimages)
 
     sorted_binaries = sorted(list(set(binaries)))
