@@ -759,9 +759,10 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
 
     # Needed for the wrapper script
     if app.conf.is_wine_binary_in_wine_rootfs:
-        wine_env["LD_PRELOAD"] = f"libapprun_hooks.so:{wine_env.get("LD_PRELOAD","")}"
-        wine_env["PATH"] = f"{app.conf.wine_rootfs}:{wine_env.get("PATH", "")}"
-        wine_env["LD_LIBRARY_PATH"] = f"{Path(app.conf.wine_rootfs) / "lib" / "x86_64-linux-gnu"}:{Path(app.conf.wine_rootfs) / "usr" / "lib" / "x86_64-linux-gnu"}:{wine_env.get("LD_LIBRARY_PATH", "")}"
+        wine_distribution = Path(app.conf.wine_binary).parent.parent
+        wine_env["LD_PRELOAD"] = f"libapprun_hooks.so:{wine_env.get('LD_PRELOAD', '')}"
+        wine_env["PATH"] = f"{wine_distribution / 'bin'}:{wine_env.get('PATH', '')}"
+        wine_env["LD_LIBRARY_PATH"] = f"{wine_distribution / 'lib'}:{wine_env.get('LD_LIBRARY_PATH', '')}"
 
     logging.debug(f"Wine env: {updated_env}")
     # Extra safe calling this here, it should be called run run_command anyways
