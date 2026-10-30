@@ -569,7 +569,7 @@ def create_launcher_shortcuts(app: App):
 
     if constants.RUNMODE == 'binary':
         oudedetai_executable = f"{installdir}/{constants.BINARY_NAME}"
-    elif constants.RUNMODE == "source":
+    elif constants.RUNMODE in ("source", "script"):
         script = Path(sys.argv[0]).expanduser().resolve()
         repo_dir = None
         for p in script.parents:
