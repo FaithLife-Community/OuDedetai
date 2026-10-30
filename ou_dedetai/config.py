@@ -893,7 +893,7 @@ class Config:
     @wine_release_channel.setter
     def wine_release_channel(self, value: str) -> None:
         if value not in ("stable", "dev"):
-            raise ValueError("Wine release channel must be 'recommended' or 'candidate'")
+            raise ValueError("Wine release channel must be 'stable' or 'dev'")
         if self._raw.wine_release_channel != value:
             self._raw.wine_release_channel = value
             self._write()
@@ -915,22 +915,25 @@ class Config:
         return get_wine_prefix_path(self.install_dir)
 
     @property
-    def wine_rootfs(self) -> str:
+    def wine_distribution_dir(self) -> str:
         """Directory containing the extracted Wine distribution."""
-        return self.wine_prefix
+        return f"{self.installer_binary_dir}/wine-distribution"
 
     @property
-    def wine_rootfs_relative(self) -> str:
+    def wine_distribution_dir_relative(self) -> str:
         """Wine distribution directory relative to install_dir."""
-        return "data/wine64_bottle/"
+        return f"{constants.RELATIVE_BINARY_DIR}/wine-distribution/"
 
     @property
-    def wine_path_in_rootfs(self) -> str:
-        return str(next(Path(self.wine_rootfs).glob("*/bin/wine")).absolute())
+    def wine_path_in_distribution(self) -> str:
+        return str(next(Path(self.wine_distribution_dir).glob("*/bin/wine")).absolute())
 
     @property
-    def is_wine_binary_in_wine_rootfs(self) -> bool:
-        return self.wine_binary.startswith(self.wine_rootfs_relative) or self.wine_binary.startswith(self.wine_rootfs)
+    def is_wine_binary_in_distribution(self) -> bool:
+        return (
+                self.wine_binary.startswith(self.wine_distribution_dir_relative)
+                or self.wine_binary.startswith(self.wine_distribution_dir)
+        )
 
     @property
     def wine_binary(self) -> str:
