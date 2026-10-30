@@ -919,7 +919,7 @@ class Config:
     @property
     def wine_distribution_dir_relative(self) -> str:
         """Wine distribution directory relative to install_dir."""
-        return f"{constants.RELATIVE_BINARY_DIR}/wine-distribution/"
+        return constants.RELATIVE_WINE_DISTRIBUTION_DIR
 
     @property
     def wine_path_in_distribution(self) -> str:
