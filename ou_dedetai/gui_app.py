@@ -742,7 +742,12 @@ class ControlWindow(GuiApp):
         if not self.is_installed():
             state = "disabled"
             msg = "Please install first"
-        elif self.conf.wine_appimage_path is None:
+        elif self.conf.wine_binary not in (
+            constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL,
+        ):
             state = 'disabled'
             msg = "This button is disabled. The configured install was not created using an AppImage."
             self.gui.set_appimage_button.state(['disabled'])
