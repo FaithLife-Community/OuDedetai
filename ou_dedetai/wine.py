@@ -254,9 +254,40 @@ def initializeWineBottle(wine64_binary: str, app: App):
     )
 
 
+def get_win_version(app: App, exe: str) -> Optional[str]:
+    if exe == "logos":
+        process = run_wine_completed_process(
+            app, app.conf.wine_binary, exe="winecfg", exe_args=["/v"]
+        )
+        if process.returncode == 0:
+            return (process.stdout or process.stderr).strip() or None
+        return None
+
+    if exe == "indexer":
+        key = (
+            f"HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\"
+            f"{app.conf.faithlife_product}Indexer.exe"
+        )
+        process = run_wine_completed_process(
+            app, app.conf.wine_binary, exe="reg.exe",
+            exe_args=["query", key, "/v", "Version"],
+        )
+        if process.returncode == 0:
+            match = re.search(
+                r"^\s*Version\s+REG_SZ\s+(\S+)\s*$",
+                process.stdout, re.MULTILINE,
+            )
+            if match:
+                return match.group(1)
+
+        return get_win_version(app, "logos")
+
+    raise ValueError(f"Unknown executable: {exe}")
+
+
 def set_win_version(app: App, exe: str, windows_version: str):
     if exe == "logos":
-        # This operation is equivilent to f"winetricks -q settings {windows_version}"
+        # This operation is equivalent to f"winetricks -q settings {windows_version}"
         # but faster
         run_wine_during_install(
             app,
