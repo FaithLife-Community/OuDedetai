@@ -555,10 +555,11 @@ class TUI(App):
         if not choice or choice == "Return to Main Menu":
             self.go_to_main_menu()
             return
-        if choice == "Set Renderer":
+        if choice.startswith("Set Renderer"):
             self.ui.push_screen(
                 MenuModal("Choose Renderer", ["gdi", "gl", "dxvk", "vulkan", "Return to Main Menu"]),
-                callback=self.renderer_select)
+                callback=self.renderer_select,
+            )
         elif choice == "Set Windows Version for Logos":
             self.ui.push_screen(MenuModal("Windows Version for Logos", constants.WINDOWS_VERSIONS),
                                 callback=self.win_ver_logos_select)
@@ -627,10 +628,15 @@ class TUI(App):
         self.go_to_main_menu()
 
     def set_wineconfig_menu_options(self) -> list[str]:
+        renderer = wine.get_renderer(self)
+        renderer_label = renderer or "Unknown"
+        logos_win_version = wine.get_win_version(self, "logos") or "Unknown"
+        indexer_win_version = wine.get_win_version(self, "indexer") or "Default"
+
         return [
-            "Set Renderer",
-            "Set Windows Version for Logos",
-            "Set Windows Version for Indexer",
+            f"Set Renderer (Current: {renderer_label})",
+            f"Set Windows Version for Logos (Current: {logos_win_version})",
+            f"Set Windows Version for Indexer (Current: {indexer_win_version})",
             "Return to Main Menu",
         ]
 
