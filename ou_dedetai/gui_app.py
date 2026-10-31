@@ -1,375 +1,395 @@
-
-# References:
-#   - https://tkdocs.com/
-#   - https://github.com/thw26/LogosLinuxInstaller/blob/master/LogosLinuxInstaller.sh
-
 import copy
 import logging
-from pathlib import Path
-from queue import Queue
-
 import shutil
-from threading import Event
+import sys
 import threading
 import time
-from tkinter import PhotoImage, messagebox
-from tkinter import Tk
-from tkinter import Toplevel as TkToplevel
-from tkinter import filedialog as fd
-from tkinter.ttk import Style
+from pathlib import Path
+from threading import Event
 from typing import Callable, Optional
 
+from PySide6 import QtCore, QtGui, QtWidgets
+
 from ou_dedetai.app import App, UserExitedFromAsk
+from ou_dedetai.config import EphemeralConfiguration
 from ou_dedetai.constants import (
     PROMPT_OPTION_DIRECTORY,
     PROMPT_OPTION_FILE,
     PROMPT_OPTION_NEW_FILE,
 )
-from ou_dedetai.config import EphemeralConfiguration
+import ou_dedetai
 import ou_dedetai.logos
 
-from . import backup
-from . import constants
-from . import control
-from . import gui
-from . import installer
-from . import system
-from . import utils
-from . import wine
-import ou_dedetai
+from . import backup, constants, control, gui, installer, system, utils, wine
+
+
+class GuiBridge(QtCore.QObject):
+    invoke = QtCore.Signal(object)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.invoke.connect(self._run, QtCore.Qt.ConnectionType.QueuedConnection)
+
+    @QtCore.Slot(object)
+    def _run(self, request):
+        callback, event, result = request
+        try:
+            result["value"] = callback()
+        except Exception as exc:
+            result["error"] = exc
+        finally:
+            event.set()
+
+
+class Root(QtWidgets.QMainWindow):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.classname = kwargs.get("className", constants.BINARY_NAME)
+        self.icon = constants.APP_IMAGE_DIR / "icon.png"
+        self.setWindowIcon(QtGui.QIcon(str(self.icon)))
+
+    def set_content(self, widget):
+        self.setCentralWidget(widget)
+
+
+class Toplevel(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setModal(True)
+        self.setWindowIcon(QtGui.QIcon(str(constants.APP_IMAGE_DIR / "icon.png")))
+
 
 class GuiApp(App):
-    """Implements the App interface for all windows"""
+    """Implements the App interface for the GUI."""
 
     _exit_option: Optional[str] = None
 
-    def __init__(self, root: "Root", gui: gui.StatusGui, ephemeral_config: EphemeralConfiguration, **kwargs): 
+    def __init__(
+        self,
+        root: Root,
+        status_gui: gui.StatusGui,
+        ephemeral_config: EphemeralConfiguration,
+        **kwargs,
+    ):
         super().__init__(ephemeral_config)
         self.root = root
-        self._status_gui = gui
-        # Now spawn a new thread to ensure choices are set to set to defaults so user
-        # isn't App.ask'ed
-        def _populate_initial_defaults():
-            self.populate_defaults()
-        self.start_thread(_populate_initial_defaults)
+        self._status_gui = status_gui
+        self._bridge = GuiBridge(root)
+        self.start_thread(self.populate_defaults)
 
+    def _is_gui_thread(self):
+        return QtCore.QThread.currentThread() == self.root.thread()
+
+    def _dispatch(self, callback, wait=True):
+        """Execute a callback on the GUI thread."""
+        if self._is_gui_thread():
+            return callback()
+
+        event = Event()
+        result = {}
+        self._bridge.invoke.emit((callback, event, result))
+
+        if not wait:
+            return None
+
+        event.wait()
+        if "error" in result:
+            raise result["error"]
+        return result.get("value")
 
     def _ask(self, question: str, options: list[str] | str) -> Optional[str]:
-        # This cannot be run from the main thread as the dialog will never appear
-        # since the tinker mainloop hasn't started and we block on a response
-
         if isinstance(options, list):
-            answer_q: Queue[Optional[str]] = Queue()
-            answer_event = Event()
-            ChoicePopUp(question, options, answer_q, answer_event)
-
-            answer_event.wait()
-            answer: Optional[str] = answer_q.get()
-        elif isinstance(options, str):
+            answer = self._dispatch(
+                lambda: ChoicePopUp(question, options, self.root).get_answer()
+            )
+        else:
             answer = options
 
         if answer == PROMPT_OPTION_DIRECTORY:
-            answer = fd.askdirectory(
-                parent=self.root,
-                title=question,
-                initialdir=Path().home(),
+            return self._dispatch(
+                lambda: self._select_directory(question)
             )
-        elif answer == PROMPT_OPTION_FILE:
-            answer = fd.askopenfilename(
-                parent=self.root,
-                title=question,
-                initialdir=Path().home(),
+        if answer == PROMPT_OPTION_FILE:
+            return self._dispatch(
+                lambda: self._select_file(question)
             )
-        elif answer == PROMPT_OPTION_NEW_FILE:
-            answer = fd.asksaveasfilename(
-                parent=self.root,
-                title=question,
-                initialdir=Path().home(),
+        if answer == PROMPT_OPTION_NEW_FILE:
+            return self._dispatch(
+                lambda: self._save_file(question)
             )
         return answer
 
+    def _select_directory(self, question):
+        result = QtWidgets.QFileDialog.getExistingDirectory(
+            self.root, question, str(Path.home())
+        )
+        return result or None
+
+    def _select_file(self, question):
+        result, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self.root, question, str(Path.home())
+        )
+        return result or None
+
+    def _save_file(self, question):
+        result, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self.root, question, str(Path.home())
+        )
+        return result or None
+
     def _info(self, message):
-        """Display information to the user"""
-        InfoPopUp(message)
+        self._dispatch(lambda: InfoPopUp(message, self.root).exec())
 
     def _pop_up(self, title, message):
-        messagebox.showinfo(
-            title=title,
-            message=message
+        self._dispatch(
+            lambda: QtWidgets.QMessageBox.information(
+                self.root, title, message
+            )
         )
 
-    def _status(self, message, percent = None):
-        message = message.strip()
-        if percent is not None:
-            self._status_gui.progress.stop()
-            self._status_gui.progress.state(['disabled'])
-            self._status_gui.progress.config(mode='determinate')
-            self._status_gui.progressvar.set(percent)
-        else:
-            self._status_gui.progress.state(['!disabled'])
-            self._status_gui.progressvar.set(0)
-            self._status_gui.progress.config(mode='indeterminate')
-            self._status_gui.progress.start()
-        self._status_gui.statusvar.set(message)
+    def _status(self, message, percent=None):
+        self._status_gui.set_status(message, percent)
 
     def clear_status(self):
-        self._status('', 0)
+        self._status_gui.set_status('', 0)
 
     def approve(self, question: str, context: str | None = None) -> bool:
-        if context is None:
-            context = ""
-        message = f"{question}\n\n{context}"
-        return messagebox.askquestion(question, message.strip()) == 'yes'
+        message = f"{question}\n\n{context or ''}".strip()
+        return bool(self._dispatch(
+            lambda: QtWidgets.QMessageBox.question(
+                self.root,
+                question,
+                message,
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox.StandardButton.No,
+            ) == QtWidgets.QMessageBox.StandardButton.Yes
+        ))
 
-    def _schedule_exit_on_main_thread(self, reason: str, intended: bool) -> None:
-        # root.after is the supported way to run work on the mainloop (main)
-        # thread from another thread. The callback re-invokes exit() there, so
-        # _exit() (and root.destroy()) run on the main thread.
-        self.root.after(0, lambda: self.exit(reason, intended))
+    def _schedule_exit_on_main_thread(self, reason: str, intended: bool):
+        self._dispatch(lambda: self.exit(reason, intended), wait=False)
 
     def _exit(self, reason: str, intended: bool = False):
-        # Create a little dialog before we die so the user can see why this happened
         if not intended:
-            gui.show_error(reason, detail=constants.SUPPORT_MESSAGE, fatal=False)
-        self.root.destroy()
-    
+            self._dispatch(
+                lambda: QtWidgets.QMessageBox.critical(
+                    self.root,
+                    "Error",
+                    f"{reason}\n\n{constants.SUPPORT_MESSAGE}",
+                )
+            )
+        self._dispatch(self.root.close, wait=False)
+
     @property
     def superuser_command(self) -> str:
-        """Command when root privileges are needed.
-        
-        Raises:
-            SuperuserCommandNotFound - if no command is found
-
-        pkexec if found"""
-        if shutil.which('pkexec'):
+        if shutil.which("pkexec"):
             return "pkexec"
-        else:
-            raise system.SuperuserCommandNotFound("No superuser command found. Please install pkexec.")
-    
-    def populate_defaults(self) -> None:
-        """If any prompt is unset, set it to it's default value
-        
-        Useful for startign the UI at an installable state,
-        the user can change these choices later"""
+        raise system.SuperuserCommandNotFound(
+            "No superuser command found. Please install pkexec."
+        )
 
-        # For the GUI, use defaults until user says otherwise.
+    def populate_defaults(self):
+        """Populate unset configuration values with GUI defaults."""
         if self.conf._raw.faithlife_product is None:
             self.conf.faithlife_product = constants.FAITHLIFE_PRODUCTS[0]
-        if self.conf._raw.faithlife_product_version is None:
-            self.conf.faithlife_product_version = constants.FAITHLIFE_PRODUCT_VERSIONS[0] 
 
-        # Now that we know product and version are set we can download the releases
-        # And use the first one
-        # Also ensure that our network cache is populated
+        if self.conf._raw.faithlife_product_version is None:
+            self.conf.faithlife_product_version = (
+                constants.FAITHLIFE_PRODUCT_VERSIONS[0]
+            )
+
         if self.conf._network._faithlife_product_releases(
             self.conf._raw.faithlife_product,
             self.conf._raw.faithlife_product_version,
             self.conf._raw.faithlife_product_release_channel,
         ):
             if self.conf._raw.faithlife_product_release is None:
-                self.conf.faithlife_product_release = self.conf.faithlife_product_releases[0] 
+                self.conf.faithlife_product_release = (
+                    self.conf.faithlife_product_releases[0]
+                )
         else:
-            # Spawn a thread that does this, as the download takes a second
-            def _populate_product_release_default():
-                # Always Get the latest release
-                latest_release = self.conf.faithlife_product_releases[0]
-                # If the release wasn't set before, set it now
-                if self.conf._raw.faithlife_product_release is None:
-                    self.conf.faithlife_product_release = latest_release
-            self.start_thread(_populate_product_release_default)
+            def populate_release():
+                releases = self.conf.faithlife_product_releases
+                if releases and self.conf._raw.faithlife_product_release is None:
+                    self.conf.faithlife_product_release = releases[0]
 
-        # Set the install_dir to default, no option in the GUI to change it
+            self.start_thread(populate_release)
+
         if self.conf._raw.install_dir is None:
             self.conf.install_dir = self.conf.install_dir_default
 
         if self.conf._raw.wine_binary is None:
             wine_choices = utils.get_wine_options(self)
-            if len(wine_choices) > 0:
+            if wine_choices:
                 self.conf.wine_binary = wine_choices[0]
 
-class Root(Tk):
-    def __init__(self, *args, **kwargs):
-        super().__init__(**kwargs)
-        self.classname = kwargs.get('classname')
-        # Set the theme.
-        set_style(self)
 
-        # Make root widget's outer border expand with window.
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)
+class ChoicePopUp(Toplevel):
+    def __init__(self, question, options, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Question")
+        self.answer = None
 
-        # Set panel icon.
-        self.icon = constants.APP_IMAGE_DIR / 'icon.png'
-        self.pi = PhotoImage(file=f'{self.icon}', master=self)
-        self.iconphoto(False, self.pi)
+        self.gui = gui.ChoiceGui(self, question, options)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(self.gui)
 
+        self.gui.cancel_button.clicked.connect(self.reject)
+        self.gui.okay_button.clicked.connect(self.confirm)
 
-class Toplevel(TkToplevel):
-    def __init__(self, *args, **kwargs):
-        super().__init__(**kwargs)
-        set_style(self)
+        self.gui.answer_dropdown.setEditable(False)
+        self.gui.answer_dropdown.setCurrentIndex(0 if options else -1)
 
-        # Make root widget's outer border expand with window.
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)
+        self.resize(self.sizeHint())
 
+    def confirm(self):
+        answer = self.gui.answer_dropdown.currentText()
+        if answer and answer != gui.ChoiceGui._default_prompt:
+            self.answer = answer
+            self.accept()
 
-class ChoicePopUp:
-    """Creates a pop-up with a choice"""
-    def __init__(
-        self,
-        question: str,
-        options: list[str],
-        answer_q: Queue[Optional[str]],
-        answer_event: Event,
-        **kwargs
-    ):
-        self.root = Toplevel()
-        # Set root parameters.
-        self.gui = gui.ChoiceGui(self.root, question, options)
-        self.root.title("Question")
-        # Set root widget event bindings.
-        self.root.bind(
-            "<Return>",
-            self.on_confirm_choice
-        )
-        self.root.bind(
-            "<Escape>",
-            self.on_cancel_released
-        )
-        self.gui.cancel_button.config(command=self.on_cancel_released)
-        self.gui.okay_button.config(command=self.on_confirm_choice)
-        self.answer_q = answer_q
-        self.answer_event = answer_event
+    def get_answer(self):
+        self.exec()
+        return self.answer
 
-    def on_confirm_choice(self, evt=None):
-        if self.gui.answer_dropdown.get() == gui.ChoiceGui._default_prompt:
+    def keyPressEvent(self, event):
+        if event.key() == QtCore.Qt.Key.Key_Escape:
+            self.reject()
             return
-        answer = self.gui.answer_dropdown.get()
-        self.answer_q.put(answer)
-        self.answer_event.set()
-        self.root.destroy()
-
-    def on_cancel_released(self, evt=None):
-        self.answer_q.put(None)
-        self.answer_event.set()
-        self.root.destroy()
+        if event.key() in (
+            QtCore.Qt.Key.Key_Return,
+            QtCore.Qt.Key.Key_Enter,
+        ):
+            self.confirm()
+            return
+        super().keyPressEvent(event)
 
 
-class InfoPopUp:
-    """Creates a pop-up with info shared to the user"""
-    def __init__(self, message: str, **kwargs):
-        self.root = Toplevel()
-        # Set root parameters.
-        self.gui = gui.InfoGui(self.root, message)
-        self.root.title("Info")
-        # Set root widget event bindings.
-        self.root.bind(
-            "<Return>",
-            self.on_okay_released
-        )
-        self.root.bind(
-            "<Escape>",
-            self.on_okay_released
-        )
-        self.gui.okay_button.config(command=self.on_okay_released)
+class InfoPopUp(Toplevel):
+    def __init__(self, message: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Info")
 
-    def on_okay_released(self, evt=None):
-        self.root.destroy()
+        self.gui = gui.InfoGui(self, message)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(self.gui)
+
+        self.gui.okay_button.clicked.connect(self.accept)
+        self.resize(self.sizeHint())
+
+    def keyPressEvent(self, event):
+        if event.key() in (
+            QtCore.Qt.Key.Key_Return,
+            QtCore.Qt.Key.Key_Enter,
+            QtCore.Qt.Key.Key_Escape,
+        ):
+            self.accept()
+            return
+        super().keyPressEvent(event)
 
 
 class InstallerWindow:
-    def __init__(self, new_win, root: Root, app: "GuiApp", **kwargs):
-        # Set root parameters.
+    def __init__(self, new_win, root: Root, app: GuiApp, **kwargs):
         self.win = new_win
         self.root = root
-        self.win.title(f"{constants.APP_NAME} Installer")
-        self.win.resizable(False, False)
-        self.gui = gui.InstallerGui(self.win, app)
         self.app = app
         self.conf = app.conf
         self.start_thread = app.start_thread
-
-        # Initialize variables.
-        self.config_thread = None
-
-        # Set widget callbacks and event bindings.
-        self.gui.product_dropdown.bind(
-            '<<ComboboxSelected>>',
-            self.set_product
-        )
-        self.gui.version_dropdown.bind(
-            '<<ComboboxSelected>>',
-            self.set_version
-        )
-        self.gui.release_dropdown.bind(
-            '<<ComboboxSelected>>',
-            self.set_release
-        )
-        self.gui.wine_dropdown.bind(
-            '<<ComboboxSelected>>',
-            self.set_wine
-        )
-        self.gui.skipdeps_checkbox.config(command=self.set_skip_dependencies)
-        self.gui.cancel_button.config(command=self.on_cancel_released)
-        self.gui.okay_button.config(command=self.on_okay_released)
-
-        # Set root widget event bindings.
-        self.root.bind(
-            "<Return>",
-            self.on_okay_released
-        )
-        self.root.bind(
-            "<Escape>",
-            self.on_cancel_released
-        )
-
-        # Run commands.
-        self.app.config_updated_hooks += [self._config_updated_hook]
-        # Start out enforcing this
-        self._config_updated_hook()
-
-    def _config_updated_hook(self):
-        """Update the GUI to reflect changes in the configuration/network""" 
-
-        self.app.populate_defaults()
-
-        # Fill in the UI elements from the config
-        self.gui.productvar.set(self.conf.faithlife_product)
-        self.gui.versionvar.set(self.conf.faithlife_product_version)
-
-        # Now that we know product and version are set we can download the releases
-        self.gui.release_dropdown['values'] = self.conf.faithlife_product_releases
-        self.gui.releasevar.set(self.conf.faithlife_product_release)
-
-        self.gui.skipdepsvar.set(not self.conf.skip_install_system_dependencies)
-
-        # In case the product changes
-        self.root.icon = Path(self.conf.faithlife_product_icon_path)
-
-        self.gui.wine_dropdown['values'] = utils.get_wine_options(self.app)
-        if not self.gui.winevar.get():
-            # If no value selected, default to 1st item in list.
-            self.gui.winevar.set(self.gui.wine_dropdown['values'][0])
-
-        self.gui.winevar.set(self.conf._raw.wine_binary or '')
-
-        # At this point all variables are populated, we're ready to install!
-        self.set_input_widgets_state('enabled', [self.gui.okay_button])
-
-    def _post_dropdown_change(self):
-        """Steps to preform after a dropdown has been updated"""
-        # Ensure progress counter is reset.
+        self.gui = gui.InstallerGui(self.win, app)
         self.installer_step = 0
         self.installer_step_count = 0
-        # Reset install_dir to default based on possible new value
+
+        self.win.setWindowTitle(f"{constants.APP_NAME} Installer")
+        self.win.setModal(True)
+        self.win.setWindowFlags(
+            self.win.windowFlags()
+            & ~QtCore.Qt.WindowType.WindowMaximizeButtonHint
+        )
+
+        layout = QtWidgets.QVBoxLayout(self.win)
+        layout.addWidget(self.gui)
+
+        self.gui.product_dropdown.currentTextChanged.connect(self.set_product)
+        self.gui.version_dropdown.currentTextChanged.connect(self.set_version)
+        self.gui.release_dropdown.currentTextChanged.connect(self.set_release)
+        self.gui.wine_dropdown.currentTextChanged.connect(self.set_wine)
+        self.gui.skipdeps_checkbox.toggled.connect(self.set_skip_dependencies)
+        self.gui.cancel_button.clicked.connect(self.on_cancel_released)
+        self.gui.okay_button.clicked.connect(self.on_okay_released)
+
+        self.app.config_updated_hooks.append(self._config_updated_hook)
+        self._config_updated_hook()
+
+        self.win.installEventFilter(self)
+        self.win.resize(self.win.sizeHint())
+
+    def eventFilter(self, watched, event):
+        if watched is self.win and event.type() == QtCore.QEvent.Type.KeyPress:
+            if event.key() in (
+                QtCore.Qt.Key.Key_Return,
+                QtCore.Qt.Key.Key_Enter,
+            ):
+                self.on_okay_released()
+                return True
+            if event.key() == QtCore.Qt.Key.Key_Escape:
+                self.on_cancel_released()
+                return True
+        return super().eventFilter(watched, event)
+
+    def _config_updated_hook(self):
+        self.app._dispatch(self._update_config_gui, wait=False)
+
+    def _update_config_gui(self):
+        self.gui.product_dropdown.blockSignals(True)
+        self.gui.version_dropdown.blockSignals(True)
+        self.gui.release_dropdown.blockSignals(True)
+        self.gui.wine_dropdown.blockSignals(True)
+        self.gui.skipdeps_checkbox.blockSignals(True)
+
+        self.gui.product_dropdown.setCurrentText(
+            self.conf.faithlife_product or ""
+        )
+        self.gui.version_dropdown.setCurrentText(
+            self.conf.faithlife_product_version or ""
+        )
+
+        self.gui.release_dropdown.clear()
+        self.gui.release_dropdown.addItems(
+            self.conf.faithlife_product_releases
+        )
+        self.gui.release_dropdown.setCurrentText(
+            self.conf.faithlife_product_release or ""
+        )
+
+        wine_choices = utils.get_wine_options(self.app)
+        self.gui.wine_dropdown.clear()
+        self.gui.wine_dropdown.addItems(wine_choices)
+        self.gui.wine_dropdown.setCurrentText(
+            self.conf._raw.wine_binary or ""
+        )
+
+        self.gui.skipdeps_checkbox.setChecked(
+            not self.conf.skip_install_system_dependencies
+        )
+
+        self.gui.product_dropdown.blockSignals(False)
+        self.gui.version_dropdown.blockSignals(False)
+        self.gui.release_dropdown.blockSignals(False)
+        self.gui.wine_dropdown.blockSignals(False)
+        self.gui.skipdeps_checkbox.blockSignals(False)
+
+        self.root.setWindowIcon(
+            QtGui.QIcon(str(self.conf.faithlife_product_icon_path))
+        )
+        self.set_input_widgets_state("enabled", [self.gui.okay_button])
+
+    def _post_dropdown_change(self):
+        self.installer_step = 0
+        self.installer_step_count = 0
         self.conf.install_dir = self.conf.install_dir_default
 
-    def set_input_widgets_state(self, state, widgets='all'):
-        if state == 'enabled':
-            state = ['!disabled']
-        elif state == 'disabled':
-            state = ['disabled']
+    def set_input_widgets_state(self, state, widgets="all"):
+        enabled = state == "enabled"
         all_widgets = [
             self.gui.product_dropdown,
             self.gui.version_dropdown,
@@ -377,253 +397,252 @@ class InstallerWindow:
             self.gui.wine_dropdown,
             self.gui.okay_button,
         ]
-        if widgets == 'all':
+        if widgets == "all":
             widgets = all_widgets
-        for w in widgets:
-            w.state(state)
+        for widget in widgets:
+            widget.setEnabled(enabled)
 
-    def set_product(self, evt=None):
-        self.conf.faithlife_product = self.gui.productvar.get()
-        self.gui.product_dropdown.selection_clear()
-        self._post_dropdown_change()
+    def set_product(self, value):
+        if value:
+            self.conf.faithlife_product = value
+            self._post_dropdown_change()
 
-    def set_version(self, evt=None):
-        self.conf.faithlife_product_version = self.gui.versionvar.get()
-        self.gui.version_dropdown.selection_clear()
-        self._post_dropdown_change()
+    def set_version(self, value):
+        if value:
+            self.conf.faithlife_product_version = value
+            self._post_dropdown_change()
 
-    def set_release(self, evt=None):
-        self.conf.faithlife_product_release = self.gui.releasevar.get()
-        self.gui.release_dropdown.selection_clear()
-        self._post_dropdown_change()
+    def set_release(self, value):
+        if value:
+            self.conf.faithlife_product_release = value
+            self._post_dropdown_change()
 
-    def set_wine(self, evt=None):
-        self.conf.wine_binary = self.gui.winevar.get()
-        self.gui.wine_dropdown.selection_clear()
-        self._post_dropdown_change()
+    def set_wine(self, value):
+        if value:
+            self.conf.wine_binary = value
+            self._post_dropdown_change()
 
-    def set_skip_dependencies(self, evt=None):
-        self.conf.skip_install_system_dependencies = self.gui.skipdepsvar.get()  # invert True/False
-        logging.debug(f"> {self.conf.skip_install_system_dependencies=}") 
+    def set_skip_dependencies(self, checked):
+        self.conf.skip_install_system_dependencies = not checked
+        logging.debug(
+            f"> {self.conf.skip_install_system_dependencies=}"
+        )
 
-    def on_okay_released(self, evt=None):
-        # Update desktop panel icon.
+    def on_okay_released(self):
         self.start_install_thread()
 
     def close(self):
-        self.app.config_updated_hooks.remove(self._config_updated_hook)
-        # Reset status
+        if self._config_updated_hook in self.app.config_updated_hooks:
+            self.app.config_updated_hooks.remove(self._config_updated_hook)
         self.app.clear_status()
-        self.win.destroy()
+        self.win.close()
 
-    def on_cancel_released(self, evt=None):
-        self.app.clear_status()
+    def on_cancel_released(self):
         self.close()
-        return 1
 
-    def start_install_thread(self, evt=None):
-        def _install():
-            """Function to handle the install"""
-            # Close the options window and let the install run
-            self.close()
+    def start_install_thread(self):
+        self.app.status("Ready to install!", 0)
+        self.set_input_widgets_state("disabled")
+
+        def install_in_thread():
+            self.app._dispatch(self.close)
             installer.install(self.app)
-            # Install complete, cleaning up...
-            return 0
 
-        # Setup for the install
-        self.app.status('Ready to install!', 0)
-        self.set_input_widgets_state('disabled')
-
-        self.start_thread(_install)
+        self.start_thread(install_in_thread)
 
 
 class ControlWindow(GuiApp):
-    def __init__(self, root, control_gui: gui.ControlGui, 
-                 ephemeral_config: EphemeralConfiguration, *args, **kwargs):
+    def __init__(
+        self,
+        root,
+        control_gui: gui.ControlGui,
+        ephemeral_config: EphemeralConfiguration,
+        *args,
+        **kwargs,
+    ):
         super().__init__(root, control_gui, ephemeral_config)
-
-        # Set root parameters.
         self.root = root
         self.gui = control_gui
         self.actioncmd: Optional[Callable[[], None]] = None
 
-        ver = constants.LLI_CURRENT_VERSION
-        text = f"Update {constants.APP_NAME}\ncurrent: v{ver}\nlatest: ..." 
-        # Spawn a thread to update the label with the current version
-        def _update_lli_version():
-            text = f"Update {constants.APP_NAME}\ncurrent: v{ver}\nlatest: v{self.conf.app_latest_version}" 
-            self.gui.update_lli_label.config(text=text)
+        version = constants.LLI_CURRENT_VERSION
+        self.gui.update_lli_label.setText(
+            f"Update {constants.APP_NAME}\ncurrent: v{version}\nlatest: ..."
+        )
+        self.gui.update_lli_button.setEnabled(False)
+
+        def update_lli_version():
+            text = (
+                f"Update {constants.APP_NAME}\n"
+                f"current: v{version}\n"
+                f"latest: v{self.conf.app_latest_version}"
+            )
+            self._dispatch(
+                lambda: self.gui.update_lli_label.setText(text)
+            )
             self.update_latest_lli_release_button()
-        self.gui.update_lli_button.state(['disabled'])
-        self.start_thread(_update_lli_version)
+
+        self.start_thread(update_lli_version)
 
         if self.conf._raw.faithlife_product:
-            control_gui.update_product_labelvar.set(f"Update {self.conf._raw.faithlife_product}")
+            self.gui.update_product_label.setText(
+                f"Update {self.conf._raw.faithlife_product}"
+            )
 
-        # Spawn a thread to ensure our logos state stays up to date
-        def _monitor_faithlife_product_pids():
+        def monitor_faithlife_product_pids():
             last_state = copy.copy(self.logos.logos_state)
             while True:
                 if self.is_installed():
                     self.logos.monitor()
                     time.sleep(1)
                 else:
-                    # Will probably be some time before we need to monitor.
                     time.sleep(30)
-                # If our state changed, we need to update our button.
+
                 if last_state != self.logos.logos_state:
                     self.update_app_button()
                 last_state = copy.copy(self.logos.logos_state)
-        self.start_thread(_monitor_faithlife_product_pids)
-        self.gui.update_lli_label.config(text=text)
-        self.gui.run_indexing_radio.config(
-            command=self.on_action_radio_clicked
-        )
-        self.gui.remove_library_catalog_radio.config(
-            command=self.on_action_radio_clicked
-        )
-        self.gui.remove_index_files_radio.config(
-            command=self.on_action_radio_clicked
-        )
-        self.gui.uninstall_radio.config(
-            command=self.on_action_radio_clicked
-        )
-        self.gui.install_icu_radio.config(
-            command=self.on_action_radio_clicked
-        )
-        self.gui.actions_button.config(command=self.run_action_cmd)
 
-        self.gui.loggingstatevar.set('Enable')
-        self.gui.logging_button.config(
-            text=self.gui.loggingstatevar.get(),
-            command=self.switch_logging
-        )
-        self.gui.logging_button.state(['disabled'])
-        self.gui.support_button.config(command=self.get_support)
+        self.start_thread(monitor_faithlife_product_pids)
 
-        self.gui.config_button.config(command=self.edit_config)
-        self.gui.deps_button.config(command=self.install_deps)
-        self.gui.backup_button.config(command=self.run_backup)
-        self.gui.restore_button.config(command=self.run_restore)
-        self.gui.update_product_button.config(command=self.update_faithlife_product)
-        self.gui.update_lli_button.config(
-            command=self.update_to_latest_lli_release
+        self.gui.run_indexing_radio.toggled.connect(self.on_action_radio_clicked)
+        self.gui.remove_library_catalog_radio.toggled.connect(
+            self.on_action_radio_clicked
         )
-        self.gui.latest_appimage_button.config(
-            command=self.start_appimage_update
+        self.gui.remove_index_files_radio.toggled.connect(
+            self.on_action_radio_clicked
         )
-        self.gui.set_appimage_button.config(command=self.set_appimage)
+        self.gui.uninstall_radio.toggled.connect(self.on_action_radio_clicked)
+        self.gui.install_icu_radio.toggled.connect(self.on_action_radio_clicked)
+
+        self.gui.actions_button.clicked.connect(self.run_action_cmd)
+
+        self.gui.logging_button.setText("Enable")
+        self.gui.logging_button.clicked.connect(self.switch_logging)
+        self.gui.logging_button.setEnabled(False)
+
+        self.gui.support_button.clicked.connect(self.get_support)
+        self.gui.config_button.clicked.connect(self.edit_config)
+        self.gui.deps_button.clicked.connect(self.install_deps)
+        self.gui.backup_button.clicked.connect(self.run_backup)
+        self.gui.restore_button.clicked.connect(self.run_restore)
+        self.gui.update_product_button.clicked.connect(
+            self.update_faithlife_product
+        )
+        self.gui.update_lli_button.clicked.connect(
+            self.update_to_latest_lli_release
+        )
+        self.gui.latest_appimage_button.clicked.connect(
+            self.start_appimage_update
+        )
+        self.gui.set_appimage_button.clicked.connect(self.set_appimage)
 
         self._config_update_hook()
-        # These can be expanded to change the UI based on config changes.
-        self.config_updated_hooks += [self._config_update_hook]
+        self.config_updated_hooks.append(self._config_update_hook)
 
     def edit_config(self):
         control.edit_file(self.conf.config_file_path)
 
-    def run_install(self, evt=None):
-        """Directly install the product.
-        
-        Fallback to defaults if we don't know a response"""
-        def _install():
+    def run_install(self):
+        def install_in_thread():
             try:
                 self.populate_defaults()
                 installer.install(self)
             except UserExitedFromAsk:
-                # Ensure that the defaults are properly set back up
                 self.populate_defaults()
             finally:
-                # Enable the run button
-                self.gui.app_button.state(['!disabled'])
-                self.gui.app_install_advanced.state(['!disabled'])
-        # Disable the install buttons
-        self.gui.app_button.state(['disabled'])
-        self.gui.app_install_advanced.state(['disabled'])
-        # Start the install thread.
-        self.start_thread(_install)
+                self._dispatch(
+                    lambda: (
+                        self.gui.app_button.setEnabled(True),
+                        self.gui.app_install_advanced.setEnabled(True),
+                    ),
+                    wait=False,
+                )
 
-    def run_installer(self, evt=None):
-        classname = constants.BINARY_NAME
-        installer_window_top = Toplevel()
-        InstallerWindow(installer_window_top, self.root, app=self, class_=classname) 
+        self.gui.app_button.setEnabled(False)
+        self.gui.app_install_advanced.setEnabled(False)
+        self.start_thread(install_in_thread)
+
+    def run_installer(self):
+        dialog = Toplevel(self.root)
+        InstallerWindow(dialog, self.root, self)
+        dialog.exec()
 
     def stop_logos(self):
         self.start_thread(self.logos.stop)
 
-    def run_logos(self, evt=None):
+    def run_logos(self):
         self.start_thread(self.logos.start)
 
-    def run_action_cmd(self, evt=None):
+    def run_action_cmd(self):
         if self.actioncmd:
             self.actioncmd()
 
-    def on_action_radio_clicked(self, evt=None):
-        logging.debug("gui_app.ControlPanel.on_action_radio_clicked START")
-        if self.is_installed():
-            self.gui.actions_button.state(['!disabled'])
-            if self.gui.actionsvar.get() == 'run-indexing':
-                self.actioncmd = self.run_indexing
-            elif self.gui.actionsvar.get() == 'remove-library-catalog':
-                self.actioncmd = self.remove_library_catalog
-            elif self.gui.actionsvar.get() == 'remove-index-files':
-                self.actioncmd = self.remove_indexes
-            elif self.gui.actionsvar.get() == 'install-icu':
-                self.actioncmd = self.install_icu
-            elif self.gui.actionsvar.get() == 'uninstall':
-                self.actioncmd = self.uninstall
+    def on_action_radio_clicked(self, action):
+        logging.debug("gui_app.ControlWindow.on_action_radio_clicked START")
+        if not self.is_installed():
+            return
+
+        actions = {
+            'run-indexing': self.run_indexing,
+            'remove-library-catalog': self.remove_library_catalog,
+            'remove-index-files': self.remove_indexes,
+            'install-icu': self.install_icu,
+            'uninstall': self.uninstall,
+        }
+        self.actioncmd = actions.get(action)
+        self.gui.actions_button.setEnabled(self.actioncmd is not None)
 
     def run_indexing(self):
         self.start_thread(self.logos.index)
 
     def remove_library_catalog(self):
-        control.remove_library_catalog(self)
+        self.start_thread(control.remove_library_catalog, self)
 
     def remove_indexes(self):
-        self.gui.statusvar.set("Removing indexes…")
+        self._status("Removing indexes…")
         self.start_thread(control.remove_all_index_files, app=self)
 
     def install_icu(self):
-        self.gui.statusvar.set("Installing ICU files…")
+        self._status("Installing ICU files…")
         self.start_thread(wine.enforce_icu_data_files, app=self)
 
     def uninstall(self):
-        def _run():
+        def run():
             control.uninstall(self)
             self.clear_status()
             self.populate_defaults()
-        self.start_thread(_run)
+        self.start_thread(run)
 
-    def run_backup(self, evt=None):
-        # Prepare progress bar.
-        self.gui.progress.state(['!disabled'])
-        self.gui.progress.config(mode='determinate')
-        self.gui.progressvar.set(0)
-        # Start backup thread.
+    def run_backup(self):
+        self.gui.progress.setRange(0, 100)
+        self.gui.progress.setValue(0)
+        self.gui.progress.show()
         self.start_thread(backup.backup, app=self)
 
-    def run_restore(self, evt=None):
-        # FIXME: Allow user to choose restore source?
-        # Start restore thread.
+    def run_restore(self):
         self.start_thread(backup.restore, app=self)
 
-    def install_deps(self, evt=None):
+    def install_deps(self):
         self.start_thread(utils.install_dependencies, self)
 
     def open_file_dialog(self, filetype_name, filetype_extension):
-        file_path = fd.askopenfilename(
-            title=f"Select {filetype_name}",
-            filetypes=[
-                (filetype_name, f"*.{filetype_extension}"),
-                ("All Files", "*.*")
-            ],
-        )
-        return file_path
+        def select_file():
+            result, _ = QtWidgets.QFileDialog.getOpenFileName(
+                self.root,
+                f"Select {filetype_name}",
+                str(Path.home()),
+                f"{filetype_name} (*.{filetype_extension});;All Files (*)",
+            )
+            return result or None
+        return self._dispatch(select_file)
 
-    def update_faithlife_product(self, evt=None):
-        self.status(f"Updating {self.conf.faithlife_product} to latest release…")
+    def update_faithlife_product(self):
+        self.status(
+            f"Updating {self.conf.faithlife_product} to latest release…"
+        )
         self.start_thread(utils.update_faithlife_product, app=self)
 
-    def update_to_latest_lli_release(self, evt=None):
+    def update_to_latest_lli_release(self):
         self.status(f"Updating to latest {constants.APP_NAME} version…")
         self.start_thread(utils.update_to_latest_lli_release, app=self)
 
@@ -633,272 +652,332 @@ class ControlWindow(GuiApp):
 
     def start_appimage_update(self):
         self.status("Updating to latest AppImage…")
-        self.gui.latest_appimage_button.state(['disabled'])
-        evt = '<<AppImageUpdateDone>>'
-        self.root.bind(evt, self.update_latest_appimage_button)
-        self.start_thread(self.update_to_latest_appimage, evt=evt)
+        self.gui.latest_appimage_button.setEnabled(False)
+        self.start_thread(self.update_to_latest_appimage)
 
-    def update_to_latest_appimage(self, evt=None):
+    def update_to_latest_appimage(self):
         utils.update_to_latest_recommended_appimage(self)
-        self.root.event_generate(evt)
+        self._dispatch(self.update_latest_appimage_button, wait=False)
 
-    def set_appimage(self, evt=None):
-        # TODO: Separate as advanced feature.
-        appimage_filename = self.open_file_dialog("AppImage", "AppImage")
-        if not appimage_filename:
+    def set_appimage(self):
+        filename = self.open_file_dialog("AppImage", "AppImage")
+        if not filename:
             return
-        self.conf.wine_appimage_path = appimage_filename
+        self.conf.wine_appimage_path = filename
         self.start_thread(self.set_appimage_symlink)
 
-    def switch_logging(self, evt=None):
-        desired_state = self.gui.loggingstatevar.get()
+    def switch_logging(self):
+        desired_state = self.gui.logging_button.text()
         self._status(f"Switching app logging to '{desired_state}d'…")
-        self.gui.logging_button.state(['disabled'])
+        self.gui.logging_button.setEnabled(False)
         self.start_thread(
             self.logos.switch_logging,
-            action=desired_state.lower()
+            action=desired_state.lower(),
         )
 
     def get_support(self):
-        def _run():
-            control.get_support(self)
-        self.start_thread(_run)
+        self.start_thread(control.get_support, self)
 
-    def update_logging_button(self, evt=None):
-        state = self.reverse_logging_state_value(self.current_logging_state_value())
-        self.gui.loggingstatevar.set(state[:-1].title())
-        self.gui.logging_button.state(['!disabled'])
+    def update_logging_button(self):
+        if not self._is_gui_thread():
+            self._dispatch(self.update_logging_button, wait=False)
+            return
+        state = self.reverse_logging_state_value(
+            self.current_logging_state_value()
+        )
+        self.gui.logging_button.setText(state[:-1].title())
+        self.gui.logging_button.setEnabled(True)
 
-    def update_app_button(self, evt=None):
-        self.gui.app_button.state(['!disabled'])
+    def update_app_button(self):
+        if not self._is_gui_thread():
+            self._dispatch(self.update_app_button, wait=False)
+            return
+
+        self.gui.app_button.setEnabled(True)
+
+        try:
+            self.gui.app_button.clicked.disconnect()
+        except RuntimeError:
+            pass
+
         if self.is_installed():
             if self.logos.logos_state == ou_dedetai.logos.State.RUNNING:
-                self.gui.app_buttonvar.set(f"Stop {self.conf.faithlife_product}")
-                self.gui.app_button.config(command=self.stop_logos)
+                self.gui.app_button.setText(
+                    f"Stop {self.conf.faithlife_product}"
+                )
+                self.gui.app_button.clicked.connect(self.stop_logos)
             else:
-                self.gui.app_buttonvar.set(f"Run {self.conf.faithlife_product}")
-                self.gui.app_button.config(command=self.run_logos)
-            self.gui.logging_button.state(['!disabled'])
-            self.gui.app_install_advanced.grid_forget()
-            self.gui.actions_button.state(['!disabled'])
+                self.gui.app_button.setText(
+                    f"Run {self.conf.faithlife_product}"
+                )
+                self.gui.app_button.clicked.connect(self.run_logos)
+
+            self.gui.logging_button.setEnabled(True)
+            self.gui.app_install_advanced.hide()
+            self.gui.actions_button.setEnabled(True)
         else:
-            self.gui.app_buttonvar.set("Install")
-            self.gui.app_button.config(command=self.run_install)
-            self.gui.app_install_advanced.config(command=self.run_installer)
-            self.gui.show_advanced_install_button()
-            self.gui.actions_button.state(['disabled'])
-            # Make sure the product/version/channel/release is non-None
-            if None not in [
+            self.gui.app_button.setText("Install")
+            self.gui.app_button.clicked.connect(self.run_install)
+            self.gui.app_install_advanced.setEnabled(True)
+            self.gui.app_install_advanced.show()
+            self.gui.actions_button.setEnabled(False)
+
+            ready = all(value is not None for value in (
                 self.conf._raw.faithlife_product,
                 self.conf._raw.faithlife_product_version,
                 self.conf._raw.faithlife_product_release_channel,
-                self.conf._raw.faithlife_product_release
-            ]:
-                # Everything is ready, we can install
-                self.gui.app_button.state(['!disabled'])
-                self.gui.app_install_advanced.state(['!disabled'])
-            else:
-                # Disable Both install buttons
-                self.gui.app_button.state(['disabled'])
-                self.gui.app_install_advanced.state(['disabled'])
+                self.conf._raw.faithlife_product_release,
+            ))
+            self.gui.app_button.setEnabled(ready)
+            self.gui.app_install_advanced.setEnabled(ready)
 
-    def update_product_button(self, evt=None):
-        msg = None
+    def update_product_button(self):
+        if not self._is_gui_thread():
+            self._dispatch(self.update_product_button, wait=False)
+            return
+
         if not self.is_installed():
-            state = 'disabled'
-            msg = "This button is disabled. Please install first."
+            enabled = False
+            message = "Please install first."
         elif self.conf.is_installed_faithlife_product_release_latest:
-            state = 'disabled'
-            msg = f"This button is disabled. {self.conf.faithlife_product} is up-to-date."
+            enabled = False
+            message = f"{self.conf.faithlife_product} is up-to-date."
         else:
-            state = '!disabled'
-        if msg:
-            gui.ToolTip(self.gui.update_product_button, msg)
-        self.clear_status()
-        self.gui.update_product_button.state([state])
+            enabled = True
+            message = ""
 
-    def update_latest_lli_release_button(self, evt=None):
-        msg = None
-        result = utils.compare_logos_linux_installer_version(self)
-        if constants.RUNMODE != 'binary':
-            state = 'disabled'
-            msg = f"This button is disabled. Can't run self-update from {constants.RUNMODE}."
-        elif result == utils.VersionComparison.OUT_OF_DATE:
-            state = '!disabled'
-        elif result == utils.VersionComparison.UP_TO_DATE:
-            state = 'disabled'
-            msg = f"This button is disabled. {constants.APP_NAME} is up-to-date."
-        elif result == utils.VersionComparison.DEVELOPMENT:
-            state = 'disabled'
-            msg = f"This button is disabled. {constants.APP_NAME} is newer than the latest release."
-        if msg:
-            gui.ToolTip(self.gui.update_lli_button, msg)
-        self.clear_status()
-        self.gui.update_lli_button.state([state])
+        self.gui.update_product_button.setToolTip(message)
+        self.gui.update_product_button.setEnabled(enabled)
 
-    def update_latest_appimage_button(self, evt=None):
-        state = None
-        msg = None
-        if not self.is_installed():
-            state = "disabled"
-            msg = "Please install first"
-        elif self.conf._raw.wine_binary_code not in ["Recommended", "AppImage", None]:
-            state = 'disabled'
-            msg = "This button is disabled. The configured install was not created using an AppImage."
-            self.gui.set_appimage_button.state(['disabled'])
-            gui.ToolTip(
-                self.gui.set_appimage_button,
-                "This button is disabled. The configured install was not created using an AppImage."
+    def update_latest_lli_release_button(self):
+        if not self._is_gui_thread():
+            self._dispatch(
+                self.update_latest_lli_release_button,
+                wait=False,
             )
+            return
+
+        result = utils.compare_logos_linux_installer_version(self)
+        if constants.RUNMODE != "binary":
+            enabled = False
+            message = f"Can't run self-update from {constants.RUNMODE}."
+        elif result == utils.VersionComparison.OUT_OF_DATE:
+            enabled = True
+            message = ""
+        elif result == utils.VersionComparison.UP_TO_DATE:
+            enabled = False
+            message = f"{constants.APP_NAME} is up-to-date."
+        elif result == utils.VersionComparison.DEVELOPMENT:
+            enabled = False
+            message = (
+                f"{constants.APP_NAME} is newer than the latest release."
+            )
+        else:
+            enabled = False
+            message = ""
+
+        self.gui.update_lli_button.setToolTip(message)
+        self.gui.update_lli_button.setEnabled(enabled)
+
+    def update_latest_appimage_button(self):
+        if not self._is_gui_thread():
+            self._dispatch(
+                self.update_latest_appimage_button,
+                wait=False,
+            )
+            return
+
+        if not self.is_installed():
+            enabled = False
+            message = "Please install first."
+        elif self.conf._raw.wine_binary_code not in (
+            "Recommended", "AppImage", None
+        ):
+            enabled = False
+            message = (
+                "The configured install was not created using an AppImage."
+            )
+            self.gui.set_appimage_button.setEnabled(False)
+            self.gui.set_appimage_button.setToolTip(message)
         elif self.conf._raw.wine_binary is not None:
             status, _ = utils.compare_recommended_appimage_version(self)
             if status == 0:
-                state = '!disabled'
+                enabled, message = True, ""
             elif status == 1:
-                state = 'disabled'
-                msg = "This button is disabled. The AppImage is already set to the latest recommended."
+                enabled = False
+                message = (
+                    "The AppImage is already set to the latest recommended."
+                )
             elif status == 2:
-                state = 'disabled'
-                msg = "This button is disabled. The AppImage version is newer than the latest recommended."
+                enabled = False
+                message = (
+                    "The AppImage version is newer than the latest recommended."
+                )
             else:
-                # Failed to check
-                state = '!disabled'
+                enabled, message = True, ""
         else:
-            # Not enough context to figure out if this should be enabled or not
-            state = '!disabled'
-        if msg:
-            gui.ToolTip(self.gui.latest_appimage_button, msg)
-        self.clear_status()
-        self.gui.latest_appimage_button.state([state])
+            enabled, message = True, ""
+
+        self.gui.latest_appimage_button.setToolTip(message)
+        self.gui.latest_appimage_button.setEnabled(enabled)
 
     def _config_update_hook(self, evt=None):
+        if not self._is_gui_thread():
+            self._dispatch(self._config_update_hook, wait=False)
+            return
+
         self.update_logging_button()
         self.update_app_button()
-        try:
-            self.update_latest_lli_release_button()
-        except Exception:
-            logging.exception("Failed to update release button")
-        try:
-            self.update_latest_appimage_button()
-        except Exception:
-            logging.exception("Failed to update appimage button")
-        try:
-            self.update_product_button()
-        except Exception:
-            logging.exception("Failed to update product button")
+
+        for callback, name in (
+            (self.update_latest_lli_release_button, "release button"),
+            (self.update_latest_appimage_button, "AppImage button"),
+            (self.update_product_button, "product button"),
+        ):
+            try:
+                callback()
+            except Exception:
+                logging.exception("Failed to update %s", name)
+
         product = self.conf._raw.faithlife_product
         if product:
-            self.gui.update_product_labelvar.set(f"Update {product}")
+            self.gui.update_product_label.setText(f"Update {product}")
+
+    def current_logging_state_value(self):
+        return "ENABLED" if self.conf.faithlife_product_logging else "DISABLED"
+
+    def reverse_logging_state_value(self, state):
+        return "ENABLED" if state == "DISABLED" else "DISABLED"
 
 
-    def current_logging_state_value(self) -> str:
-        if self.conf.faithlife_product_logging:
-            return 'ENABLED'
-        else:
-            return 'DISABLED'
-
-    def reverse_logging_state_value(self, state) ->str:
-        if state == 'DISABLED':
-            return 'ENABLED'
-        else:
-            return 'DISABLED'
-
-
-def set_style(tkapp):
-    # Set the theme.
-    tkapp.style = Style()
-    tkapp.style.theme_use('alt')
-
-    # Update color scheme.
-    tkapp.style.configure('TCheckbutton', bordercolor=constants.LOGOS_GRAY)
-    tkapp.style.configure('TCombobox', bordercolor=constants.LOGOS_GRAY)
-    tkapp.style.configure('TCheckbutton', indicatorcolor=constants.LOGOS_GRAY)
-    tkapp.style.configure('TRadiobutton', indicatorcolor=constants.LOGOS_GRAY)
-    bg_widgets = [
-        'TCheckbutton', 'TCombobox', 'TFrame', 'TLabel', 'TRadiobutton'
-    ]
-    fg_widgets = ['TButton', 'TSeparator']
-    for w in bg_widgets:
-        tkapp.style.configure(w, background=constants.LOGOS_WHITE)
-    for w in fg_widgets:
-        tkapp.style.configure(w, background=constants.LOGOS_GRAY)
-    tkapp.style.configure(
-        'Horizontal.TProgressbar',
-        thickness=10, background=constants.LOGOS_BLUE,
-        bordercolor=constants.LOGOS_GRAY,
-        troughcolor=constants.LOGOS_GRAY,
+def set_style(app):
+    app.setStyle("Fusion")
+    palette = app.palette()
+    palette.setColor(
+        QtGui.QPalette.ColorRole.Window,
+        QtGui.QColor(constants.LOGOS_WHITE),
     )
-
-    # Justify to the left [('Button.label', {'sticky': 'w'})]
-    tkapp.style.layout(
-        "TButton", [(
-            'Button.border', {
-                'sticky': 'nswe', 'children': [(
-                    'Button.focus', {
-                        'sticky': 'nswe', 'children': [(
-                            'Button.padding', {
-                                'sticky': 'nswe', 'children': [(
-                                    'Button.label', {'sticky': 'w'}
-                                )]
-                            }
-                        )]
-                    }
-                )]
-            }
-        )]
+    palette.setColor(
+        QtGui.QPalette.ColorRole.Base,
+        QtGui.QColor(constants.LOGOS_WHITE),
     )
+    palette.setColor(
+        QtGui.QPalette.ColorRole.Button,
+        QtGui.QColor(constants.LOGOS_GRAY),
+    )
+    palette.setColor(
+        QtGui.QPalette.ColorRole.Highlight,
+        QtGui.QColor(constants.LOGOS_BLUE),
+    )
+    app.setPalette(palette)
 
 
 def start_gui_app(
     ephemeral_config: EphemeralConfiguration,
     recovery: Optional[Callable[[App], None]] = None,
-    install_only: bool = False
+    install_only: bool = False,
 ):
-    classname = constants.BINARY_NAME
-    root = Root(className=classname)
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication(sys.argv)
+    app.setStyleSheet("""
+        QWidget {
+            background-color: #252525;
+            color: #eeeeee;
+            font-size: 10pt;
+        }
+        QLabel {
+            color: #eeeeee;
+        }
+        QPushButton {
+            background-color: #3c3c3c;
+            color: #ffffff;
+            border: 1px solid #606060;
+            border-radius: 4px;
+            padding: 6px 12px;
+        }
+        QPushButton:hover {
+            background-color: #505050;
+        }
+        QComboBox, QLineEdit, QPlainTextEdit {
+            background-color: #333333;
+            color: #ffffff;
+            border: 1px solid #606060;
+            padding: 4px;
+        }
+        QRadioButton, QCheckBox {
+            color: #eeeeee;
+        }
+    """)
 
-    # Need to title/resize and create the initial gui
-    # BEFORE mainloop is started to get sizing correct other things
-    # in the ControlWindow constructor are run after mainloop is running
-    # To allow them to ask questions while the mainloop is running
-    root.title(f"{constants.APP_NAME} Control Panel")
-    root.resizable(False, False)
-
-    def _start_install() -> Callable[[], None]:
-        # This needs to be created before root.mainloop is called
-        installer_gui = gui.StatusWithLabelGui(root, "Installing FaithLife app")
-        def _run():
-            app = GuiApp(root, installer_gui, ephemeral_config)
-            # This may take a minute to run, as it may need to reach out to the internet
-            app.populate_defaults()
-            installer.install(app)
-            # Wait for a couple seconds so user can understand they're done.
-            time.sleep(3)
-            root.destroy()
-        return _run
-
-    def _start_control_panel() -> Callable[[], None]:
-        # This needs to be created before root.mainloop is called
-        control_gui = gui.ControlGui(root)
-        def _run():
-            if recovery:
-                recovery_gui = gui.StatusWithLabelGui(root, "Recovering FaithLife app")
-                recovery(GuiApp(root, recovery_gui, ephemeral_config))
-                recovery_gui.destroy()
-            ControlWindow(root, control_gui, ephemeral_config, class_=classname)
-        return _run
+    root = Root()
+    root.setWindowTitle(f"{constants.APP_NAME} Control Panel")
 
     if install_only:
-        target=_start_install()
+        status_gui = gui.StatusWithLabelGui(
+            root, "Installing FaithLife app"
+        )
+        root.set_content(status_gui)
+        root.adjustSize()
+        root.show()
+
+        gui_app = GuiApp(root, status_gui, ephemeral_config)
+
+        def install():
+            try:
+                gui_app.populate_defaults()
+                installer.install(gui_app)
+                time.sleep(3)
+            except Exception:
+                logging.exception("Installation failed")
+            finally:
+                gui_app._dispatch(root.close, wait=False)
+
+        threading.Thread(
+            target=install,
+            name=f"{constants.APP_NAME} installer",
+            daemon=True,
+        ).start()
+
+    elif recovery:
+        status_gui = gui.StatusWithLabelGui(
+            root, "Recovering FaithLife app"
+        )
+        root.set_content(status_gui)
+        root.adjustSize()
+        root.show()
+
+        recovery_app = GuiApp(root, status_gui, ephemeral_config)
+
+        def recover():
+            try:
+                recovery(recovery_app)
+            except Exception:
+                logging.exception("Recovery failed")
+
+            def show_control_panel():
+                control_gui = gui.ControlGui(root)
+                root.set_content(control_gui)
+                ControlWindow(root, control_gui, ephemeral_config)
+                root.setWindowTitle(
+                    f"{constants.APP_NAME} Control Panel"
+                )
+                root.adjustSize()
+                root.show()
+
+            recovery_app._dispatch(show_control_panel)
+
+        threading.Thread(
+            target=recover,
+            name=f"{constants.APP_NAME} recovery",
+            daemon=True,
+        ).start()
+
     else:
-        target=_start_control_panel()
+        control_gui = gui.ControlGui(root)
+        root.set_content(control_gui)
+        ControlWindow(root, control_gui, ephemeral_config)
+        root.adjustSize()
+        root.show()
 
-    # Start the control panel on a new thread so it can open dialogs
-    # as a part of it's constructor
-    threading.Thread(
-        name=f"{constants.APP_NAME} GUI main loop",
-        target=target,
-        daemon=True
-    ).start()
-
-    root.mainloop()
+    return app.exec()
