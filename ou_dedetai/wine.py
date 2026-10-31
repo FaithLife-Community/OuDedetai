@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 import logging
 import os
@@ -361,6 +362,34 @@ def disable_winemenubuilder(app: App, wine64_binary: str):
 "winemenubuilder.exe"=""
 '''
     wine_reg_install(app, name, reg_text, wine64_binary)
+
+
+def get_renderer(app: App) -> Optional[str]:
+    """Get the configured Wine Direct3D renderer."""
+    user_reg = Path(app.conf.wine_prefix) / "user.reg"
+    if not user_reg.is_file():
+        logging.debug("Wine user.reg not found: %s", user_reg)
+        return None
+
+    try:
+        contents = user_reg.read_text()
+        section = re.search(
+            r'^\[Software\\\\Wine\\\\Direct3D\].*?(?=^\[|\Z)',
+            contents,
+            re.MULTILINE | re.DOTALL | re.IGNORECASE,
+        )
+        if section:
+            renderer = re.search(
+                r'^"renderer"="([^"]+)"',
+                section.group(),
+                re.MULTILINE | re.IGNORECASE,
+            )
+            if renderer:
+                return renderer.group(1).lower()
+    except OSError:
+        logging.exception("Failed to read Wine renderer configuration")
+
+    return None
 
 
 def set_renderer(app: App, wine64_binary: str, value: str):
