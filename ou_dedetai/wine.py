@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 import logging
 import os
@@ -253,9 +254,40 @@ def initializeWineBottle(wine64_binary: str, app: App):
     )
 
 
+def get_win_version(app: App, exe: str) -> Optional[str]:
+    if exe == "logos":
+        process = run_wine_completed_process(
+            app, app.conf.wine_binary, exe="winecfg", exe_args=["/v"]
+        )
+        if process.returncode == 0:
+            return (process.stdout or process.stderr).strip() or None
+        return None
+
+    if exe == "indexer":
+        key = (
+            f"HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\"
+            f"{app.conf.faithlife_product}Indexer.exe"
+        )
+        process = run_wine_completed_process(
+            app, app.conf.wine_binary, exe="reg.exe",
+            exe_args=["query", key, "/v", "Version"],
+        )
+        if process.returncode == 0:
+            match = re.search(
+                r"^\s*Version\s+REG_SZ\s+(\S+)\s*$",
+                process.stdout, re.MULTILINE,
+            )
+            if match:
+                return match.group(1)
+
+        return get_win_version(app, "logos")
+
+    raise ValueError(f"Unknown executable: {exe}")
+
+
 def set_win_version(app: App, exe: str, windows_version: str):
     if exe == "logos":
-        # This operation is equivilent to f"winetricks -q settings {windows_version}"
+        # This operation is equivalent to f"winetricks -q settings {windows_version}"
         # but faster
         run_wine_during_install(
             app,
@@ -361,6 +393,34 @@ def disable_winemenubuilder(app: App, wine64_binary: str):
 "winemenubuilder.exe"=""
 '''
     wine_reg_install(app, name, reg_text, wine64_binary)
+
+
+def get_renderer(app: App) -> Optional[str]:
+    """Get the configured Wine Direct3D renderer."""
+    user_reg = Path(app.conf.wine_prefix) / "user.reg"
+    if not user_reg.is_file():
+        logging.debug("Wine user.reg not found: %s", user_reg)
+        return None
+
+    try:
+        contents = user_reg.read_text()
+        section = re.search(
+            r'^\[Software\\\\Wine\\\\Direct3D\].*?(?=^\[|\Z)',
+            contents,
+            re.MULTILINE | re.DOTALL | re.IGNORECASE,
+        )
+        if section:
+            renderer = re.search(
+                r'^"renderer"="([^"]+)"',
+                section.group(),
+                re.MULTILINE | re.IGNORECASE,
+            )
+            if renderer:
+                return renderer.group(1).lower()
+    except OSError:
+        logging.exception("Failed to read Wine renderer configuration")
+
+    return None
 
 
 def set_renderer(app: App, wine64_binary: str, value: str):
