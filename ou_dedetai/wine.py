@@ -393,6 +393,58 @@ def set_fontsmoothing_to_rgb(app: App, wine64_binary: str):
     wine_reg_install(app, name, reg_text, wine64_binary)
 
 
+# Font families Logos expects to exist on every Windows install. Its print preview
+# crashes when it can't find them (null typeface while building headers/footers).
+# Wine's DirectWrite reads HKCU\Software\Wine\Fonts\Replacements and, for each
+# missing family, adds one under that name backed by the first listed font that is
+# installed. Real fonts with these names (e.g. from ttf-mscorefonts-installer) win.
+FONT_REPLACEMENTS: dict[str, list[str]] = {
+    "Segoe UI": ["Selawik", "Noto Sans", "Liberation Sans", "DejaVu Sans"],
+    "Times New Roman": ["Liberation Serif", "Tinos", "Nimbus Roman"],
+    "Courier New": ["Liberation Mono", "Cousine", "Nimbus Mono PS"],
+    "Microsoft Sans Serif": ["Liberation Sans", "Arimo", "Nimbus Sans"],
+    "Calibri": ["Carlito", "Liberation Sans", "Arimo"],
+}
+
+
+def set_font_replacements(app: App, wine64_binary: str):
+    key = "HKCU\\Software\\Wine\\Fonts\\Replacements"
+    for family, replacements in FONT_REPLACEMENTS.items():
+        # wine's reg.exe splits REG_MULTI_SZ data on a literal "\0"
+        process = run_wine_during_install(
+            app,
+            wine64_binary,
+            exe='reg',
+            exe_args=[
+                'add', key,
+                '/v', family,
+                '/t', 'REG_MULTI_SZ',
+                '/d', "\\0".join(replacements),
+                '/f',
+            ]
+        )
+        if process is None:
+            app.exit(f"Failed to spawn command to set font replacement for {family}")
+    wineserver_wait(app)
+
+
+def configure_printing(app: App, wine64_binary: str):
+    # WPF prints through the XPS Print Document Package API whenever it thinks it is
+    # available, which Wine doesn't implement, so printing fails. This WPF switch
+    # makes it fall back to GDI (wineps -> CUPS). xpsprint is disabled so WPF doesn't
+    # pick the StartXpsPrintJob path either; Wine only has stubs for it.
+    name = 'configure-printing.reg'
+    reg_text = r'''REGEDIT4
+
+[HKEY_CURRENT_USER\Software\Microsoft\.NETFramework\Windows Presentation Foundation\Printing]
+"DisableXPSOMPrinting"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Wine\DllOverrides]
+"xpsprint"=""
+'''
+    wine_reg_install(app, name, reg_text, wine64_binary)
+
+
 def install_msi(app: App):
     app.status(f"Running MSI installer: {app.conf.faithlife_installer_name}.")
     # Define the Wine executable and initial arguments for msiexec

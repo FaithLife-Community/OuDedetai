@@ -340,6 +340,10 @@ def ensure_wineprefix_config(app: App):
     logging.debug("Setting fontsmoothing=rgb in wineprefix registry.")
     wine.set_fontsmoothing_to_rgb(app=app, wine64_binary=app.conf.wine64_binary)
 
+    # Printing: GDI print path instead of the unimplemented XPS one.
+    logging.debug("Configuring wineprefix for printing.")
+    wine.configure_printing(app=app, wine64_binary=app.conf.wine64_binary)
+
 
 def ensure_fonts(app: App):
     """Ensure the arial font is installed"""
@@ -348,6 +352,10 @@ def ensure_fonts(app: App):
     app.installer_step += 1
 
     wine.install_fonts(app)
+
+    # Open stand-ins for Windows fonts Logos needs (print preview crashes without them).
+    app.status("Configuring font replacements…")
+    wine.set_font_replacements(app, app.conf.wine64_binary)
 
 
 def ensure_icu_data_files(app: App):
