@@ -138,16 +138,13 @@ class UrlProps(Props):
 class CachedRequests:
     """This struct all network requests and saves to a cache"""
     # Some of these values are cached to avoid github api rate-limits
-    repository_releases_checked: dict[str, bool] = field(default_factory=dict)
-    """Repositories for which release discovery has completed, including repositories
-    where one or both release types are unavailable."""
     faithlife_product_releases: dict[str, dict[str, dict[str, list[str]]]] = field(default_factory=dict)
     """Cache of faithlife releases.
     
     Since this depends on the user's selection we need to scope the cache based on that
     The cache key is the product, version, and release channel
     """
-    repository_latest_version: dict[str, str] = field(default_factory=dict)
+    repository_latest_version: dict[str, str | None] = field(default_factory=dict)
     """Cache of the latest versions keyed by repository slug
     
     Keyed by repository slug Owner/Repo
@@ -157,7 +154,7 @@ class CachedRequests:
     
     Keyed by repository slug Owner/Repo
     """
-    repository_latest_pre_release_version: dict[str, str] = field(default_factory=dict)
+    repository_latest_pre_release_version: dict[str, str | None] = field(default_factory=dict)
     """Cache of the latest version (that may be a pre release) keyed by repository slug
     
     Keyed by repository slug Owner/Repo
@@ -314,58 +311,123 @@ class NetworkRequests:
     def url_md5(self, url: str) -> Optional[str]:
         return self._url_size_and_hash(url)[1]
 
-    @staticmethod
-    def _release_cache_key(repository: str, name: Optional[str] = None) -> str:
-        return f"{repository}::{name or ''}"
+    def _repo_version(
+        self,
+        repository: str,
+        tag: str | None = None,
+        asset_suffix: str | None = None,
+    ) -> GithubSoftwareReleasesInfo | SoftwareReleaseInfo:
+        if tag is not None:
+            return _get_release_data(
+                repository,
+                tag=tag,
+                asset_suffix=asset_suffix,
+            )
 
-    def _repo_version(self, repository: str, name: Optional[str] = None) -> GithubSoftwareReleasesInfo:
-        cache_key = self._release_cache_key(repository, name)
+        cache_key = f"{repository}|{asset_suffix}"
 
-        if cache_key not in self._cache.repository_releases_checked:
-            # If discovery fails, let the exception propagate. Do not cache
-            # the failure as an empty result.
-            output = _get_release_data(repository, name)
+        has_latest = (
+                cache_key in self._cache.repository_latest_version
+                and (
+                        self._cache.repository_latest_version[cache_key] is None
+                        or cache_key in self._cache.repository_latest_url
+                )
+        )
+        has_pre_release = (
+                cache_key in self._cache.repository_latest_pre_release_version
+                and (
+                        self._cache.repository_latest_pre_release_version[cache_key] is None
+                        or cache_key in self._cache.repository_latest_pre_release_url
+                )
+        )
 
-            if output.latest:
-                self._cache.repository_latest_version[cache_key] = output.latest.version
-                self._cache.repository_latest_url[cache_key] = output.latest.download_url
-            else:
-                self._cache.repository_latest_version.pop(cache_key, None)
-                self._cache.repository_latest_url.pop(cache_key, None)
+        if not has_latest or not has_pre_release:
+            for cache in (
+                    self._cache.repository_latest_version,
+                    self._cache.repository_latest_url,
+                    self._cache.repository_latest_pre_release_version,
+                    self._cache.repository_latest_pre_release_url,
+            ):
+                cache.pop(cache_key, None)
 
-            if output.pre_release:
-                self._cache.repository_latest_pre_release_version[cache_key] = output.pre_release.version
-                self._cache.repository_latest_pre_release_url[cache_key] = output.pre_release.download_url
-            else:
-                self._cache.repository_latest_pre_release_version.pop(cache_key, None)
-                self._cache.repository_latest_pre_release_url.pop(cache_key, None)
+            result = _get_release_data(
+                repository,
+                asset_suffix=asset_suffix,
+            )
 
-            self._cache.repository_releases_checked[cache_key] = True
+            self._cache.repository_latest_version[cache_key] = (
+                result.latest.version if result.latest else None
+            )
+            self._cache.repository_latest_pre_release_version[cache_key] = (
+                result.pre_release.version if result.pre_release else None
+            )
+
+            if result.latest is not None:
+                self._cache.repository_latest_url[cache_key] = result.latest.download_url
+
+            if result.pre_release is not None:
+                self._cache.repository_latest_pre_release_url[cache_key] = result.pre_release.download_url
+
             self._cache._write()
-            return output
 
-        latest = None
-        pre_release = None
+        latest_version = self._cache.repository_latest_version[cache_key]
+        pre_release_version = self._cache.repository_latest_pre_release_version[cache_key]
 
-        if cache_key in self._cache.repository_latest_version and cache_key in self._cache.repository_latest_url:
-            latest = SoftwareReleaseInfo(
-                version=self._cache.repository_latest_version[cache_key],
-                download_url=self._cache.repository_latest_url[cache_key]
+        return GithubSoftwareReleasesInfo(
+            latest=(
+                SoftwareReleaseInfo(
+                    version=latest_version,
+                    download_url=self._cache.repository_latest_url[cache_key],
+                )
+                if latest_version is not None else None
+            ),
+            pre_release=(
+                SoftwareReleaseInfo(
+                    version=pre_release_version,
+                    download_url=self._cache.repository_latest_pre_release_url[cache_key],
+                )
+                if pre_release_version is not None else None
+            ),
+        )
+
+    def _repo_latest_version(
+        self,
+        repository: str,
+        tag: Optional[str] = None,
+        asset_suffix: Optional[str] = None
+    ) -> SoftwareReleaseInfo:
+        if not tag:
+            tag = "latest"
+
+        # Keep differently filtered release requests in separate cache entries.
+        cache_key = (
+            repository
+            if tag == "latest" and asset_suffix is None
+            else f"{repository}|{tag}|{asset_suffix or ''}"
+        )
+
+        if (
+            cache_key not in self._cache.repository_latest_version
+            or self._cache.repository_latest_version[cache_key] is None
+            or cache_key not in self._cache.repository_latest_url
+            or (
+                asset_suffix is not None
+                and not self._cache.repository_latest_url[cache_key].endswith(asset_suffix)
             )
-
-        if cache_key in self._cache.repository_latest_pre_release_version and cache_key in self._cache.repository_latest_pre_release_url:
-            pre_release = SoftwareReleaseInfo(
-                version=self._cache.repository_latest_pre_release_version[cache_key],
-                download_url=self._cache.repository_latest_pre_release_url[cache_key]
+        ):
+            result = _get_release_data(
+                repository,
+                tag=tag,
+                asset_suffix=asset_suffix
             )
+            self._cache.repository_latest_version[cache_key] = result.version
+            self._cache.repository_latest_url[cache_key] = result.download_url
+            self._cache._write()
 
-        return GithubSoftwareReleasesInfo(latest=latest, pre_release=pre_release)
-
-    def _repo_latest_version(self, repository: str) -> SoftwareReleaseInfo:
-        result = self._repo_version(repository)
-        if result.latest is None:
-            raise RuntimeError(f"No stable release found for {repository}")
-        return result.latest
+        return SoftwareReleaseInfo(
+            version=self._cache.repository_latest_version[cache_key],
+            download_url=self._cache.repository_latest_url[cache_key]
+        )
 
     def app_latest_version(self, channel: str) -> SoftwareReleaseInfo:
         from . import system
