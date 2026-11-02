@@ -418,13 +418,13 @@ class TUI(App):
     def set_tui_menu_options(self) -> list[str]:
         labels: list[str] = []
 
-        if getattr(constants, "RUNMODE", "") == "binary":
-            try:
-                status = utils.compare_logos_linux_installer_version(self)
-                if status == utils.VersionComparison.OUT_OF_DATE:
-                    labels.append(f"Update {constants.APP_NAME}")
-            except Exception:
-                pass
+        try:
+            status = utils.compare_logos_linux_installer_version(self)
+            if status == utils.VersionComparison.OUT_OF_DATE:
+                labels.append(f"Update {constants.APP_NAME}")
+        except Exception as e:
+            logging.error("TUI: Error Comparing Ou Dedetai Version:\n"
+                          f"{e}")
 
         if self.is_installed():
             product = self.conf.faithlife_product

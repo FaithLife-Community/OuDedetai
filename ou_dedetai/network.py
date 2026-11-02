@@ -315,7 +315,7 @@ class NetworkRequests:
         self,
         repository: str,
         tag: str | None = None,
-        asset_suffix: str | None = None,
+        asset_suffix: str | None = None
     ) -> GithubSoftwareReleasesInfo | SoftwareReleaseInfo:
         if tag is not None:
             return _get_release_data(
@@ -342,14 +342,6 @@ class NetworkRequests:
         )
 
         if not has_latest or not has_pre_release:
-            for cache in (
-                    self._cache.repository_latest_version,
-                    self._cache.repository_latest_url,
-                    self._cache.repository_latest_pre_release_version,
-                    self._cache.repository_latest_pre_release_url,
-            ):
-                cache.pop(cache_key, None)
-
             result = _get_release_data(
                 repository,
                 asset_suffix=asset_suffix,
@@ -371,21 +363,23 @@ class NetworkRequests:
             self._cache._write()
 
         latest_version = self._cache.repository_latest_version[cache_key]
+        latest_url = self._cache.repository_latest_url.get(cache_key)
         pre_release_version = self._cache.repository_latest_pre_release_version[cache_key]
+        pre_release_url = self._cache.repository_latest_pre_release_url.get(cache_key)
+
+        logging.debug(
+            f"Release cache for {repository} ({asset_suffix}):\n"
+            f"stable={latest_version} ({latest_url})\n"
+            f"pre-release={pre_release_version} ({pre_release_url})"
+        )
 
         return GithubSoftwareReleasesInfo(
             latest=(
-                SoftwareReleaseInfo(
-                    version=latest_version,
-                    download_url=self._cache.repository_latest_url[cache_key],
-                )
+                SoftwareReleaseInfo(latest_version, latest_url)
                 if latest_version is not None else None
             ),
             pre_release=(
-                SoftwareReleaseInfo(
-                    version=pre_release_version,
-                    download_url=self._cache.repository_latest_pre_release_url[cache_key],
-                )
+                SoftwareReleaseInfo(pre_release_version, pre_release_url)
                 if pre_release_version is not None else None
             ),
         )
@@ -457,8 +451,13 @@ class NetworkRequests:
             raise RuntimeError(
                 f"No {release_type.replace('_', ' ')} release found for {repository}"
             )
+        logging.debug(f"App Latest Version: {channel}::{repository}::{release_type}\n"
+                      f"{release}")
 
         return release
+
+    def icu_latest_version(self) -> SoftwareReleaseInfo:
+        return self._repo_latest_version("FaithLife-Community/icu")
 
 
 def logos_reuse_download(
@@ -695,11 +694,21 @@ def _get_version_name(json_data: dict) -> str:
     return tag_name
 
 
-def _get_release_data(repository: str, name: Optional[str] = None) -> GithubSoftwareReleasesInfo:
+def _get_release_data(
+    repository: str,
+    name: Optional[str] = None,
+    tag: str | None = None,
+    asset_suffix: str | None = None
+) -> GithubSoftwareReleasesInfo:
     """Retrieve the newest published stable and prerelease releases."""
-    releases_url = f"https://api.github.com/repos/{repository}/releases"
-    data = _net_get(releases_url)
+    release_url = f"https://api.github.com/repos/{repository}/releases"
+    if tag is not None:
+        if tag == "latest":
+            releases_url = f"https://api.github.com/repos/{repository}/releases"
+        else:
+            release_url = f"https://api.github.com/repos/{repository}/releases/tags/{tag}"
 
+    data = _net_get(release_url)
     if data is None:
         raise RuntimeError(f"Could not retrieve releases from GitHub: {repository}")
 
