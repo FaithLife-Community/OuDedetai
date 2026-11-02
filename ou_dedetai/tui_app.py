@@ -28,8 +28,15 @@ from . import utils
 from . import wine
 
 
+class StatusLog(Log):
+    can_focus = False
+
+
 class MenuModal(ModalScreen[str]):
-    BINDINGS = [Binding("escape", "cancel", "Cancel", show=True)]
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=True),
+        Binding("ctrl+c", "exit", show=False, priority=True)
+    ]
 
     def __init__(self, title: str, options: list[str]) -> None:
         super().__init__()
@@ -57,8 +64,15 @@ class MenuModal(ModalScreen[str]):
     def action_cancel(self) -> None:
         self.dismiss("Return to Main Menu")
 
+    def action_exit(self) -> None:
+        self.app.exit()
+
 
 class InfoModal(ModalScreen[None]):
+    BINDINGS = [
+        Binding("ctrl+c", "exit", "Exit", show=False, priority=True)
+    ]
+
     def __init__(self, message: str, title: str = "Information") -> None:
         super().__init__()
         self.message = message
@@ -74,8 +88,15 @@ class InfoModal(ModalScreen[None]):
     def ok(self) -> None:
         self.dismiss()
 
+    def action_exit(self) -> None:
+        self.dismiss()
+
 
 class InputModal(ModalScreen[str]):
+    BINDINGS = [
+        Binding("ctrl+c", "exit", "Exit", show=False, priority=True)
+    ]
+
     def __init__(self, question: str, default: str = "") -> None:
         super().__init__()
         self.question = question
@@ -103,6 +124,9 @@ class InputModal(ModalScreen[str]):
     @on(Input.Submitted)
     def on_submit(self, event: Input.Submitted) -> None:
         self.dismiss(event.value)
+
+    def action_exit(self) -> None:
+        self.app.exit()
 
 
 class TextualUI(TextualApp[None]):
@@ -228,7 +252,7 @@ class TextualUI(TextualApp[None]):
         with Vertical(id="main-area"):
             yield Static("Main Menu", id="menu-title")
             yield OptionList(id="main-menu")
-        yield Log(id="console-area", max_lines=300, highlight=True)
+        yield StatusLog(id="console-area", max_lines=300, highlight=True)
         yield Footer()
         yield Static("FaithLife Community", id="status-bar")
 
@@ -266,14 +290,15 @@ class TextualUI(TextualApp[None]):
         menu = self.query_one("#main-menu", OptionList)
         options = [str(label) for label in self.domain.set_tui_menu_options()]
         current_options = [str(option.prompt) for option in menu.options]
-        if options == current_options:
-            return
         current = menu.highlighted
-        menu.clear_options()
-        for i, label in enumerate(options):
-            menu.add_option(Option(label, id=f"main-{i}"))
-        if current is not None and options:
-            menu.highlighted = min(current, len(options) - 1)
+
+        if options != current_options:
+            menu.clear_options()
+            for i, label in enumerate(options):
+                menu.add_option(Option(label, id=f"main-{i}"))
+
+        if options:
+            menu.highlighted = min(current if current is not None else 0, len(options) - 1)
 
     @on(OptionList.OptionSelected, "#main-menu")
     def on_main_menu(self, event: OptionList.OptionSelected) -> None:
@@ -289,7 +314,7 @@ class TextualUI(TextualApp[None]):
 
     def write_status(self, message: str) -> None:
         try:
-            self.query_one("#console-area", Log).write_line(message)
+            self.query_one("#console-area", StatusLog).write_line(message)
         except Exception:
             pass
 
@@ -312,10 +337,9 @@ class TextualUI(TextualApp[None]):
         return "system-light" if background >= 7 else "system-dark"
 
     def toggle_color_scheme(self) -> str:
-        if self.theme == "logos":
-            self.theme = self._system_theme()
-        else:
-            self.theme = "logos"
+        themes = ("logos", "system-dark", "system-light")
+        current = themes.index(self.theme) if self.theme in themes else 0
+        self.theme = themes[(current + 1) % len(themes)]
         return self.theme
 
 
@@ -475,8 +499,26 @@ class TUI(App):
             if self._installer_thread and self._installer_thread.is_alive():
                 self.status("A previous install is still running")
                 return
+
+            advanced = choice == "Advanced Install"
+            original_wine_binary = self.conf._raw.wine_binary
+
             if choice == "Install":
                 self.conf._overrides.assume_yes = True
+
+            def _install() -> None:
+                if advanced:
+                    self.conf._raw.wine_binary = None
+                try:
+                    installer.install(app=self)
+                except UserExitedFromAsk:
+                    pass
+                finally:
+                    if advanced and self.conf._raw.wine_binary is None:
+                        self.conf._raw.wine_binary = original_wine_binary
+                    self.conf._overrides.assume_yes = original_assume_yes
+                    self.go_to_main_menu()
+
             self._installer_thread = threading.Thread(target=_install, daemon=True)
             self._installer_thread.start()
             self.status("Starting installation…")
@@ -514,10 +556,15 @@ class TUI(App):
                 MenuModal("Utilities Menu", self.set_utilities_menu_options()),
                 callback=self.utilities_menu_select)
 
+
         elif choice == "Change Color Scheme":
             theme = self.ui.toggle_color_scheme()
-            scheme = "Logos Colors" if theme == "logos" else "System Colors"
-            self.status(f"Color scheme: {scheme}")
+            names = {
+                "logos": "Logos Colors",
+                "system-dark": "System Dark",
+                "system-light": "System Light",
+            }
+            self.status(f"Color scheme: {names[theme]}")
 
         elif choice == "Get Support":
             self.start_thread(self._get_support)
@@ -526,10 +573,11 @@ class TUI(App):
         if not choice or choice == "Return to Main Menu":
             self.go_to_main_menu()
             return
-        if choice == "Set Renderer":
+        if choice.startswith("Set Renderer"):
             self.ui.push_screen(
                 MenuModal("Choose Renderer", ["gdi", "gl", "dxvk", "vulkan", "Return to Main Menu"]),
-                callback=self.renderer_select)
+                callback=self.renderer_select,
+            )
         elif choice == "Set Windows Version for Logos":
             self.ui.push_screen(MenuModal("Windows Version for Logos", constants.WINDOWS_VERSIONS),
                                 callback=self.win_ver_logos_select)
@@ -550,14 +598,21 @@ class TUI(App):
                 control.edit_file(self.conf.config_file_path)
             elif choice == "Reload Config":
                 self.conf.reload()
+            elif choice == f"Check for {constants.APP_NAME} Updates":
+                utils.check_for_updates(self, force=True)
             elif choice == "Change Logos Release Channel":
                 self.conf.toggle_faithlife_product_release_channel()
             elif choice == f"Change {constants.APP_NAME} Release Channel":
                 self.conf.toggle_installer_release_channel()
+            elif choice == "Change Wine Release Channel":
+                self.conf.toggle_wine_release_channel()
             elif choice == "Install Dependencies":
                 utils.install_dependencies(self)
             elif choice == "Install ICU":
                 wine.enforce_icu_data_files(self)
+            elif choice == "Create Desktop Shortcuts":
+                installer.create_launcher_shortcuts(self)
+                self.status("Desktop shortcuts created.")
             elif choice.endswith("Logging"):
                 self.logos.switch_logging()
             elif choice == "Check OpenGL":
@@ -566,7 +621,7 @@ class TUI(App):
             elif choice == "Uninstall":
                 control.uninstall(self)
             elif choice == "Update to Latest AppImage":
-                utils.update_to_latest_recommended_appimage(self)
+                installer.update_to_latest_wine(self)
         except UserExitedFromAsk:
             pass
         self.go_to_main_menu()
@@ -593,10 +648,15 @@ class TUI(App):
         self.go_to_main_menu()
 
     def set_wineconfig_menu_options(self) -> list[str]:
+        renderer = wine.get_renderer(self)
+        renderer_label = renderer or "Unknown"
+        logos_win_version = wine.get_win_version(self, "logos") or "Unknown"
+        indexer_win_version = wine.get_win_version(self, "indexer") or "Default"
+
         return [
-            "Set Renderer",
-            "Set Windows Version for Logos",
-            "Set Windows Version for Indexer",
+            f"Set Renderer (Current: {renderer_label})",
+            f"Set Windows Version for Logos (Current: {logos_win_version})",
+            f"Set Windows Version for Indexer (Current: {indexer_win_version})",
             "Return to Main Menu",
         ]
 
@@ -610,12 +670,13 @@ class TUI(App):
             or (getattr(self.conf._raw, "install_dir", None) and Path(self.conf._raw.install_dir).exists())
         ):
             labels.append("Uninstall")
-        labels.extend(["Install Dependencies", "Edit Config", "Reload Config"])
+        labels.extend([f"Check for {constants.APP_NAME} Updates", "Install Dependencies", "Edit Config", "Reload Config"])
         if self.is_installed():
             labels.extend([
                 "Change Logos Release Channel",
                 f"Change {constants.APP_NAME} Release Channel",
             ])
+            labels.append("Create Desktop Shortcuts")
         labels.append(
             "Enable Logging" if getattr(self.conf, "faithlife_product_logging", False)
             else "Disable Logging"

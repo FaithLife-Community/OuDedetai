@@ -76,6 +76,7 @@ DEFAULT_APP_LOG_PATH = os.path.expanduser(f"{STATE_DIR}/{BINARY_NAME}.log")
 NETWORK_CACHE_PATH = f"{CACHE_DIR}/network.json"
 
 RELATIVE_BINARY_DIR = "data/bin"
+RELATIVE_WINE_DISTRIBUTION_DIR = f"{RELATIVE_BINARY_DIR}/wine-distribution"
 
 DEFAULT_WINEDEBUG = "err+all"
 LEGACY_CONFIG_FILES = [
@@ -95,8 +96,13 @@ LOGOS_GRAY = '#E7E7E7'
 LOGOS_WHITE = '#FCFCFC'
 PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 
-WINE_RECOMMENDED_SIGIL = "Recommended"
 WINE_BETA_SIGIL = "Experimental (AKA Beta)"
+WINE_RECOMMENDED_SIGIL = "Recommended"
+WINE_RECOMMENDED_APPIMAGE_SIGIL= "Recommended Appimage"
+WINE_RECOMMENDED_TARBALL_SIGIL= "Recommended Bundled"
+WINE_UNTESTED_STABLE_APPIMAGE_SIGIL= "Latest Appimage from wine stable (untested)"
+WINE_UNTESTED_STAGING_APPIMAGE_SIGIL= "Latest Appimage from wine staging (untested)"
+WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL= "Latest Appimage from wine development (untested)"
 
 FAITHLIFE_PRODUCTS = ["Logos", "Verbum"]
 FAITHLIFE_PRODUCT_VERSIONS = ["10"] # This used to include 9
