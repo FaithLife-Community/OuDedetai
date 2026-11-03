@@ -450,14 +450,22 @@ def get_package_manager() -> PackageManager | None:
         remove_command = ["apt", "remove", "-y"]
         query_command =  ["dpkg", "-l"]
         query_prefix = '.i  '
+        ubuntu_26_or_newer = os_name == 'ubuntu' and major_ver.isdigit() and int(major_ver) >= 26
+        debian_14_or_newer = os_name == 'debian' and major_ver.isdigit() and int(major_ver) >= 14
         # Set default package list.
         packages = (
             "libfuse2 "  # appimages
             "binutils wget winbind libfreetype6 "  # wine tarball
-            "p7zip-full cabextract " # winetricks
+            "cabextract " # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
             "mesa-utils "  # verify opengl version
         )
+
+        # p7zip-full was replaced by 7zip
+        if ubuntu_26_or_newer or debian_14_or_newer:
+            packages += "7zip "  # winetricks
+        else:
+            packages += "p7zip-full "  # winetricks
 
         # Now set the appimage packages, this has changed over time
         # NOTE: Package names changed together for Ubuntu 24+, Debian 13+, and
@@ -470,6 +478,7 @@ def get_package_manager() -> PackageManager | None:
         # - https://github.com/which-distro/os-release/tree/main
         if (
             (os_name == 'debian' and major_ver >= '13')
+            or ubuntu_26_or_newer
         ):
             packages += (
                 "libfuse3-4 "  # appimages
