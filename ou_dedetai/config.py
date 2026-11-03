@@ -32,8 +32,6 @@ class LegacyConfiguration:
     LAST_UPDATED: Optional[str] = None # Unused in new code
     RECOMMENDED_WINE64_APPIMAGE_URL: Optional[str] = None # Unused in new code
     LLI_LATEST_VERSION: Optional[str] = None # Unused in new code
-    logos_release_channel: Optional[str] = None
-    lli_release_channel: Optional[str] = None
 
     # Legacy Extended Configuration
     APPIMAGE_LINK_SELECTION_NAME: Optional[str] = None
@@ -336,7 +334,7 @@ class PersistentConfiguration:
     curses_color_scheme: Optional[str] = None
     # Faithlife's release channel. Either "stable" or "beta"
     faithlife_product_release_channel: str = "stable"
-    # The Installer's release channel. Either "stable" or "beta"
+    # The Installer's release channel. Either "stable" or "dev"
     app_release_channel: str = "stable"
 
     _legacy: Optional[LegacyConfiguration] = None
@@ -374,7 +372,11 @@ class PersistentConfiguration:
             logging.info("Not reading new values from non-existent config")
 
         # Now override with values from ENV
-        config_env = PersistentConfiguration.from_legacy(LegacyConfiguration.load_from_env()) 
+        legacy_env = LegacyConfiguration.load_from_env()
+        config_env = PersistentConfiguration.from_legacy(legacy_env)
+        config_env.faithlife_product_release_channel = config_dict["faithlife_product_release_channel"]
+        config_env.app_release_channel = config_dict["app_release_channel"]
+        config_env._legacy = None
         for k, v in config_env.__dict__.items():
             if v is not None:
                 config_dict[k] = v
@@ -382,7 +384,10 @@ class PersistentConfiguration:
         return PersistentConfiguration(**config_dict)
 
     @classmethod
-    def from_legacy(cls, legacy: LegacyConfiguration) -> "PersistentConfiguration":
+    def from_legacy(
+        cls,
+        legacy: LegacyConfiguration
+    ) -> "PersistentConfiguration":
         faithlife_product_logging = None
         if legacy.LOGS is not None:
             faithlife_product_logging = utils.parse_bool(legacy.LOGS)
@@ -394,10 +399,8 @@ class PersistentConfiguration:
             backup_dir=legacy.BACKUPDIR,
             curses_color_scheme=legacy.curses_colors,
             faithlife_product_release=legacy.TARGET_RELEASE_VERSION,
-            faithlife_product_release_channel=legacy.logos_release_channel or 'stable',
             faithlife_product_version=legacy.TARGETVERSION,
             install_dir=install_dir,
-            app_release_channel=legacy.lli_release_channel or 'stable',
             wine_binary=legacy.WINE_EXE,
             faithlife_product_logging=faithlife_product_logging,
             _legacy=legacy
@@ -785,6 +788,14 @@ class Config:
     def app_release_channel(self) -> str:
         return self._raw.app_release_channel
 
+    @app_release_channel.setter
+    def app_release_channel(self, value: str):
+        if value not in ("stable", "dev"):
+            raise ValueError(f"Invalid app release channel: {value}")
+        if self._raw.app_release_channel != value:
+            self._raw.app_release_channel = value
+            self._write()
+
     @property
     def winetricks_binary(self) -> str:
         """Download winetricks if it doesn't exist"""
@@ -1107,10 +1118,19 @@ class Config:
         elif self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL:
             return self._wine_tarball_release.download_url
         else:
-            # self.wine_binary == constants.RECOMMENDED_WINE_APPIMAGE_SIGIL
-            return self._network.wine_appimage_recommended_url()
+            return versions.latest.download_url
+
+    @property
+    def wine_appimage_beta_url(self) -> Optional[str]:
+        """URL to beta appimage.
         
-    
+        Talks to the network if required"""
+        versions = self._network.wine_appimage_versions()
+        if versions.pre_release is None:
+            return None
+        else:
+            return versions.pre_release.download_url
+
     @property
     def wine_download_file_name(self) -> str:
         """Returns the file name of the recommended appimage with extension"""
@@ -1172,14 +1192,11 @@ class Config:
             new_channel = "stable"
         self._raw.faithlife_product_release_channel = new_channel
         self._write()
-    
+
     def toggle_installer_release_channel(self):
-        if self._raw.app_release_channel == "stable":
-            new_channel = "dev"
-        else:
-            new_channel = "stable"
-        self._raw.app_release_channel = new_channel
-        self._write()
+        self.app_release_channel = (
+            "dev" if self.app_release_channel == "stable" else "stable"
+        )
     
     @property
     def backup_dir(self) -> Path:

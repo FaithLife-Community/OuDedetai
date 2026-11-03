@@ -127,7 +127,7 @@ def initialize_tui_logging():
 def update_log_level(new_level: int | str):
     # Update logging level from config.
     for h in logging.getLogger().handlers:
-        if type(h) is logging.StreamHandler:
+        if h.name == "terminal":
             h.setLevel(new_level)
     logging.info(f"Terminal log level set to {get_log_level_name(new_level)}")
 
