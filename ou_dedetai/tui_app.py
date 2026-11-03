@@ -512,8 +512,26 @@ class TUI(App):
             if self._installer_thread and self._installer_thread.is_alive():
                 self.status("A previous install is still running")
                 return
+
+            advanced = choice == "Advanced Install"
+            original_wine_binary = self.conf._raw.wine_binary
+
             if choice == "Install":
                 self.conf._overrides.assume_yes = True
+
+            def _install() -> None:
+                if advanced:
+                    self.conf._raw.wine_binary = None
+                try:
+                    installer.install(app=self)
+                except UserExitedFromAsk:
+                    pass
+                finally:
+                    if advanced and self.conf._raw.wine_binary is None:
+                        self.conf._raw.wine_binary = original_wine_binary
+                    self.conf._overrides.assume_yes = original_assume_yes
+                    self.go_to_main_menu()
+
             self._installer_thread = threading.Thread(target=_install, daemon=True)
             self._installer_thread.start()
             self.status("Starting installation…")
@@ -568,10 +586,11 @@ class TUI(App):
         if not choice or choice == "Return to Main Menu":
             self.go_to_main_menu()
             return
-        if choice == "Set Renderer":
+        if choice.startswith("Set Renderer"):
             self.ui.push_screen(
                 MenuModal("Choose Renderer", ["gdi", "gl", "dxvk", "vulkan", "Return to Main Menu"]),
-                callback=self.renderer_select)
+                callback=self.renderer_select,
+            )
         elif choice == "Set Windows Version for Logos":
             self.ui.push_screen(MenuModal("Windows Version for Logos", constants.WINDOWS_VERSIONS),
                                 callback=self.win_ver_logos_select)
@@ -598,6 +617,8 @@ class TUI(App):
                 self.conf.toggle_faithlife_product_release_channel()
             elif choice == f"Change {constants.APP_NAME} Release Channel":
                 self.conf.toggle_installer_release_channel()
+            elif choice == "Change Wine Release Channel":
+                self.conf.toggle_wine_release_channel()
             elif choice == "Install Dependencies":
                 utils.install_dependencies(self)
             elif choice == "Install ICU":
@@ -613,7 +634,7 @@ class TUI(App):
             elif choice == "Uninstall":
                 control.uninstall(self)
             elif choice == "Update to Latest AppImage":
-                utils.update_to_latest_recommended_appimage(self)
+                installer.update_to_latest_wine(self)
         except UserExitedFromAsk:
             pass
         self.go_to_main_menu()
@@ -640,10 +661,15 @@ class TUI(App):
         self.go_to_main_menu()
 
     def set_wineconfig_menu_options(self) -> list[str]:
+        renderer = wine.get_renderer(self)
+        renderer_label = renderer or "Unknown"
+        logos_win_version = wine.get_win_version(self, "logos") or "Unknown"
+        indexer_win_version = wine.get_win_version(self, "indexer") or "Default"
+
         return [
-            "Set Renderer",
-            "Set Windows Version for Logos",
-            "Set Windows Version for Indexer",
+            f"Set Renderer (Current: {renderer_label})",
+            f"Set Windows Version for Logos (Current: {logos_win_version})",
+            f"Set Windows Version for Indexer (Current: {indexer_win_version})",
             "Return to Main Menu",
         ]
 

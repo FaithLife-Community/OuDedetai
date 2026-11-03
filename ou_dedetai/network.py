@@ -298,6 +298,41 @@ class NetworkRequests:
             pre_release=pre_release,
         )
 
+    def wine_appimage_upstream_url(self, version: str) -> str:
+        repo = "mmtrt/WINE_AppImage"
+        return self._repo_version(repo, version).download_url
+
+    def wine_tarball_release(self, channel: str) -> SoftwareReleaseInfo:
+        """Returns the Wine release selected by the Wine release channel."""
+        if channel not in ("stable", "dev"):
+            raise ValueError(f"Unknown Wine release channel: {channel}")
+
+        repo = "FaithLife-Community/wine-appimages"
+        releases = self._repo_version(repo, asset_suffix=".tar.xz")
+
+        if channel == "stable":
+            if releases.latest is None:
+                logging.info(
+                    "No stable Wine tarball found; falling back to the recommended AppImage."
+                )
+                return self.wine_appimage_recommended_release()
+            return releases.latest
+
+        if releases.pre_release is None:
+            raise RuntimeError(f"No prerelease tarball found in {repo}")
+        return releases.pre_release
+
+    def wine_appimage_recommended_release(self) -> SoftwareReleaseInfo:
+        """Returns the latest stable recommended Wine AppImage release."""
+        repo = "FaithLife-Community/wine-appimages"
+        releases = self._repo_version(repo, asset_suffix=".AppImage")
+        if releases.latest is None:
+            raise RuntimeError(f"No stable AppImage found in {repo}")
+        return releases.latest
+
+    def wine_appimage_recommended_url(self) -> str:
+        return self.wine_appimage_recommended_release().download_url
+
     def _url_size_and_hash(self, url: str) -> tuple[Optional[int], Optional[str]]:
         """Attempts to get the size and hash from a URL.
         Uses cache if it exists
@@ -681,15 +716,16 @@ def _get_release_data(
         download_url=_get_asset_url(json_data, asset_suffix or name)
     )
 
+# FIXME: clean this up, this should ba handled by the install step
 def download_recommended_appimage(app: App):
-    wine64_appimage_full_filename = Path(app.conf.wine_appimage_recommended_file_name)
+    wine64_appimage_full_filename = Path(app.conf.wine_download_file_name)  # noqa: E501
     dest_path = Path(app.conf.installer_binary_dir) / wine64_appimage_full_filename
     if dest_path.is_file():
         return
     else:
         logos_reuse_download(
-            app.conf.wine_appimage_recommended_url,
-            app.conf.wine_appimage_recommended_file_name,
+            app.conf.wine_download_url,
+            app.conf.wine_download_file_name,
             app.conf.installer_binary_dir,
             app=app
         )
