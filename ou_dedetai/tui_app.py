@@ -445,7 +445,9 @@ class TUI(App):
         try:
             status = utils.compare_logos_linux_installer_version(self)
             if status == utils.VersionComparison.OUT_OF_DATE:
-                labels.append(f"Update {constants.APP_NAME}")
+                labels.append(
+                    f"Update {constants.APP_NAME} [{self.conf.app_latest_version}]"
+                )
         except Exception as e:
             logging.error("TUI: Error Comparing Ou Dedetai Version:\n"
                           f"{e}")
@@ -463,7 +465,11 @@ class TUI(App):
                 labels.append("Run Indexing")
 
             if not getattr(self.conf, "is_installed_faithlife_product_release_latest", True):
-                labels.append(f"Update {product}")
+                latest = getattr(self.conf, "latest_faithlife_product_release", None)
+                label = f"Update {product}"
+                if latest:
+                    label += f" to {latest}"
+                labels.append(label)
         else:
             labels.extend(["Install", "Advanced Install"])
 
@@ -581,7 +587,7 @@ class TUI(App):
                 self.conf.reload()
             elif choice == f"Check for {constants.APP_NAME} Updates":
                 utils.check_for_updates(self, force=True)
-            elif choice == "Change Logos Release Channel":
+            elif choice == "Change FaithLife Release Channel":
                 self.conf.toggle_faithlife_product_release_channel()
             elif choice == f"Change {constants.APP_NAME} Release Channel":
                 self.conf.toggle_installer_release_channel()

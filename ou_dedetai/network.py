@@ -155,26 +155,9 @@ class CachedRequests:
     The cache key is the product, version, and release channel
     """
     repository_latest_version: dict[str, str | None] = field(default_factory=dict)
-    """Cache of the latest versions keyed by repository slug
-    
-    Keyed by repository slug Owner/Repo
-    """
-    repository_latest_url: dict[str, str] = field(default_factory=dict)
-    """Cache of the latest download url keyed by repository slug
-    
-    Keyed by repository slug Owner/Repo
-    """
-    repository_latest_pre_release_version: dict[str, str | None] = field(default_factory=dict)
-    """Cache of the latest version (that may be a pre release) keyed by repository slug
-    
-    Keyed by repository slug Owner/Repo
-    """
-    repository_latest_pre_release_url: dict[str, str] = field(default_factory=dict)
-    """Cache of the latest download url (that may be a pre release) keyed by repository slug
-    
-    Keyed by repository slug Owner/Repo
-    """
-
+    """Cache of release versions keyed by repository, tag, and asset suffix."""
+    repository_latest_url: dict[str, str | None] = field(default_factory=dict)
+    """Cache of release download URLs keyed by repository, tag, and asset suffix."""
 
     url_size_and_hash: dict[str, tuple[Optional[int], Optional[str]]] = field(default_factory=dict)
 
@@ -296,10 +279,24 @@ class NetworkRequests:
         self._cache.faithlife_product_releases[product][version][channel] = output
         self._cache._write()
         return output
-    
+
     def wine_appimage_versions(self) -> GithubSoftwareReleasesInfo:
-        repo = "FaithLife-Community/wine-appimages"
-        return self._repo_version(repo)
+        latest = self._repo_version(
+            "FaithLife-Community/wine-appimages",
+            tag="latest"
+        )
+        try:
+            pre_release = self._repo_version(
+                "FaithLife-Community/wine-appimages",
+                tag="prerelease"
+            )
+        except LookupError:
+            pre_release = None
+
+        return GithubSoftwareReleasesInfo(
+            latest=latest,
+            pre_release=pre_release,
+        )
 
     def _url_size_and_hash(self, url: str) -> tuple[Optional[int], Optional[str]]:
         """Attempts to get the size and hash from a URL.
@@ -324,114 +321,42 @@ class NetworkRequests:
     def _repo_version(
         self,
         repository: str,
-        tag: str | None = None,
-        asset_suffix: str | None = None
-    ) -> GithubSoftwareReleasesInfo | SoftwareReleaseInfo:
-        if tag is not None:
-            return _get_release_data(
-                repository,
-                tag=tag,
-                asset_suffix=asset_suffix,
-            )
-
-        cache_key = f"{repository}|{asset_suffix}"
-
-        has_latest = (
-                cache_key in self._cache.repository_latest_version
-                and (
-                        self._cache.repository_latest_version[cache_key] is None
-                        or cache_key in self._cache.repository_latest_url
-                )
-        )
-        has_pre_release = (
-                cache_key in self._cache.repository_latest_pre_release_version
-                and (
-                        self._cache.repository_latest_pre_release_version[cache_key] is None
-                        or cache_key in self._cache.repository_latest_pre_release_url
-                )
-        )
-
-        if not has_latest or not has_pre_release:
-            result = _get_release_data(
-                repository,
-                asset_suffix=asset_suffix,
-            )
-
-            self._cache.repository_latest_version[cache_key] = (
-                result.latest.version if result.latest else None
-            )
-            self._cache.repository_latest_pre_release_version[cache_key] = (
-                result.pre_release.version if result.pre_release else None
-            )
-
-            if result.latest is not None:
-                self._cache.repository_latest_url[cache_key] = result.latest.download_url
-
-            if result.pre_release is not None:
-                self._cache.repository_latest_pre_release_url[cache_key] = result.pre_release.download_url
-
-            self._cache._write()
-
-        latest_version = self._cache.repository_latest_version[cache_key]
-        latest_url = self._cache.repository_latest_url.get(cache_key)
-        pre_release_version = self._cache.repository_latest_pre_release_version[cache_key]
-        pre_release_url = self._cache.repository_latest_pre_release_url.get(cache_key)
-
-        logging.debug(
-            f"Release cache for {repository} ({asset_suffix}):\n"
-            f"stable={latest_version} ({latest_url})\n"
-            f"pre-release={pre_release_version} ({pre_release_url})"
-        )
-
-        return GithubSoftwareReleasesInfo(
-            latest=(
-                SoftwareReleaseInfo(latest_version, latest_url)
-                if latest_version is not None else None
-            ),
-            pre_release=(
-                SoftwareReleaseInfo(pre_release_version, pre_release_url)
-                if pre_release_version is not None else None
-            ),
-        )
-
-    def _repo_latest_version(
-        self,
-        repository: str,
-        tag: Optional[str] = None,
-        asset_suffix: Optional[str] = None
+        tag: str = "latest",
+        asset_suffix: str | None = None,
     ) -> SoftwareReleaseInfo:
-        if not tag:
-            tag = "latest"
-
-        # Keep differently filtered release requests in separate cache entries.
-        cache_key = (
-            repository
-            if tag == "latest" and asset_suffix is None
-            else f"{repository}|{tag}|{asset_suffix or ''}"
-        )
+        cache_key = f"{repository}|{tag}|{asset_suffix or ''}"
 
         if (
-            cache_key not in self._cache.repository_latest_version
-            or self._cache.repository_latest_version[cache_key] is None
-            or cache_key not in self._cache.repository_latest_url
-            or (
-                asset_suffix is not None
-                and not self._cache.repository_latest_url[cache_key].endswith(asset_suffix)
-            )
+                cache_key not in self._cache.repository_latest_version
+                or cache_key not in self._cache.repository_latest_url
         ):
-            result = _get_release_data(
-                repository,
-                tag=tag,
-                asset_suffix=asset_suffix
-            )
-            self._cache.repository_latest_version[cache_key] = result.version
-            self._cache.repository_latest_url[cache_key] = result.download_url
+            try:
+                release = _get_release_data(
+                    repository,
+                    tag=tag,
+                    asset_suffix=asset_suffix,
+                )
+            except LookupError:
+                self._cache.repository_latest_version[cache_key] = None
+                self._cache.repository_latest_url[cache_key] = None
+                self._cache._write()
+                raise
+
+            self._cache.repository_latest_version[cache_key] = release.version
+            self._cache.repository_latest_url[cache_key] = release.download_url
             self._cache._write()
 
-        return SoftwareReleaseInfo(
-            version=self._cache.repository_latest_version[cache_key],
-            download_url=self._cache.repository_latest_url[cache_key]
+        version = self._cache.repository_latest_version[cache_key]
+        url = self._cache.repository_latest_url[cache_key]
+        logging.debug(
+            f"Release cache lookup: {cache_key}\n"
+            f"version={version}\n"
+            f"url={url}"
         )
+        if version is None or url is None:
+            raise LookupError(f"No suitable release found for {repository}")
+
+        return SoftwareReleaseInfo(version=version, download_url=url)
 
     def app_latest_version(self, channel: str) -> SoftwareReleaseInfo:
         from . import system
@@ -445,29 +370,24 @@ class NetworkRequests:
         if architecture not in asset_names:
             raise RuntimeError(f"Unsupported architecture: {architecture}")
 
-        if channel == "stable":
-            repository = "FaithLife-Community/OuDedetai"
-            release_type = "latest"
-        elif channel == "dev":
-            repository = "FaithLife-Community/test-builds"
-            release_type = "pre_release"
-        else:
-            raise ValueError(f"Invalid app release channel: {channel}")
+        repositories = {
+            "stable": ("FaithLife-Community/OuDedetai", "latest"),
+            "dev": ("FaithLife-Community/test-builds", "prerelease"),
+        }
 
-        releases = self._repo_version(repository, asset_names[architecture])
-        release = getattr(releases, release_type)
+        try:
+            repository, tag = repositories[channel]
+        except KeyError:
+            raise ValueError(f"Invalid app release channel: {channel}") from None
 
-        if release is None:
-            raise RuntimeError(
-                f"No {release_type.replace('_', ' ')} release found for {repository}"
-            )
-        logging.debug(f"App Latest Version: {channel}::{repository}::{release_type}\n"
-                      f"{release}")
-
-        return release
+        return self._repo_version(
+            repository,
+            tag=tag,
+            asset_suffix=asset_names[architecture],
+        )
 
     def icu_latest_version(self) -> SoftwareReleaseInfo:
-        return self._repo_latest_version("FaithLife-Community/icu")
+        return self._repo_version("FaithLife-Community/icu")
 
 
 def logos_reuse_download(
@@ -684,7 +604,13 @@ def _verify_downloaded_file(url: str, file_path: Path | str, app: App, status_me
 def _get_asset_url(release: dict, name: Optional[str] = None) -> str:
     assets = release.get("assets") or []
     if name is not None:
-        assets = [asset for asset in assets if asset.get("name") == name]
+        matching_assets = [asset for asset in assets if asset.get("name") == name]
+        if not matching_assets and name in ("oudedetai-x86_64", "oudedetai-arm"):
+            logging.debug(f"Asset {name} not found; trying legacy asset 'oudedetai'.")
+            matching_assets = [
+                asset for asset in assets if asset.get("name") == "oudedetai"
+            ]
+        assets = matching_assets
     if not assets:
         raise ValueError(f"Could not find asset {name!r} in release {release.get('tag_name')}")
     download_url = assets[0].get("browser_download_url")
@@ -704,58 +630,73 @@ def _get_version_name(json_data: dict) -> str:
     return tag_name
 
 
+def _published_at(release: dict) -> datetime:
+    published_at = release.get("published_at")
+    if not published_at:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    return datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+
+
 def _get_release_data(
     repository: str,
     name: Optional[str] = None,
-    tag: str | None = None,
-    asset_suffix: str | None = None
-) -> GithubSoftwareReleasesInfo:
-    """Retrieve the newest published stable and prerelease releases."""
+    tag: str = "latest",
+    asset_suffix: str | None = None,
+) -> SoftwareReleaseInfo:
     release_url = f"https://api.github.com/repos/{repository}/releases"
-    if tag is not None:
-        if tag == "latest":
-            releases_url = f"https://api.github.com/repos/{repository}/releases"
-        else:
-            release_url = f"https://api.github.com/repos/{repository}/releases/tags/{tag}"
+    if tag == "latest":
+        release_url += "/latest"
+    elif tag != "prerelease":
+        release_url += f"/tags/{tag}"
 
     data = _net_get(release_url)
     if data is None:
         raise RuntimeError(f"Could not retrieve releases from GitHub: {repository}")
 
     try:
-        json_data: list[dict] = json.loads(data.decode())
+        json_data = json.loads(data.decode())
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logging.error(f"Error decoding GitHub's JSON response: {e}")
         raise
 
-    def published_at(release: dict) -> datetime:
-        value = release.get("published_at")
-        if not value:
-            return datetime.min.replace(tzinfo=timezone.utc)
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-    json_data = sorted(
-        (release for release in json_data if not release.get("draft", False)),
-        key=published_at,
-        reverse=True
-    )
-
-    def find_release(prerelease: bool) -> Optional[SoftwareReleaseInfo]:
-        for release in json_data:
-            if release.get("prerelease", False) != prerelease:
-                continue
+    if tag == "prerelease":
+        if not isinstance(json_data, list):
+            raise ValueError(f"Unexpected GitHub response for releases in {repository}")
+        releases = sorted(
+            (release for release in json_data
+             if not release.get("draft", False)
+             and release.get("prerelease", False)),
+            key=_published_at,
+            reverse=True,
+        )
+        logging.debug(
+            f"GitHub prereleases for {repository} "
+            f"(asset_suffix={asset_suffix or name}):"
+        )
+        for release in releases:
+            logging.debug(
+                f"  tag={release.get('tag_name')}, "
+                f"prerelease={release.get('prerelease')}, "
+                f"published_at={release.get('published_at')}, "
+                f"assets={[asset.get('name') for asset in release.get('assets', [])]}"
+            )
             try:
+                logging.debug(
+                    f"Selected GitHub release: {release.get('tag_name')}"
+                )
                 return SoftwareReleaseInfo(
                     version=_get_version_name(release),
-                    download_url=_get_asset_url(release, name)
+                    download_url=_get_asset_url(release, asset_suffix or name),
                 )
             except ValueError as e:
                 logging.warning(f"Skipping release {release.get('tag_name')}: {e}")
-        return None
+        raise LookupError(f"No suitable prerelease found for {repository}")
 
-    return GithubSoftwareReleasesInfo(
-        latest=find_release(False),
-        pre_release=find_release(True)
+    if not isinstance(json_data, dict):
+        raise ValueError(f"Unexpected GitHub response for release {tag}")
+    return SoftwareReleaseInfo(
+        version=_get_version_name(json_data),
+        download_url=_get_asset_url(json_data, asset_suffix or name)
     )
 
 def download_recommended_appimage(app: App):

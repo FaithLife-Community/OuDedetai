@@ -313,7 +313,7 @@ def compare_logos_linux_installer_version(app: App) -> Optional[VersionCompariso
     current = Version(constants.LLI_CURRENT_VERSION)
     latest = Version(app.conf.app_latest_version)
     logging.debug(f"Ou Dedetai Current Version: {current}")
-    logging.debug(f"Ou Dedetai Latest Version: {current}")
+    logging.debug(f"Ou Dedetai Latest Version: {latest}")
     if current < latest:
         # Current release is older than recommended.
         output = VersionComparison.OUT_OF_DATE
