@@ -433,6 +433,7 @@ class PackageManager:
 def get_package_manager() -> PackageManager | None:
     major_ver = distro.major_version()
     os_name = distro.id()
+    ubuntu_26_or_newer = os_name in ('ubuntu', 'kubuntu') and major_ver.isdigit() and int(major_ver) >= 26
     logging.debug(f"{os_name=}; {major_ver=}")
     # Check for package manager and associated packages.
 
@@ -459,6 +460,9 @@ def get_package_manager() -> PackageManager | None:
             "mesa-utils "  # verify opengl version
         )
 
+        if ubuntu_26_or_newer:
+            packages = packages.replace('p7zip-full ', '7zip ')
+
         # Now set the appimage packages, this has changed over time
         # NOTE: Package names changed together for Ubuntu 24+, Debian 13+, and
         # derivatives. This does not include an exhaustive list of distros that
@@ -470,6 +474,7 @@ def get_package_manager() -> PackageManager | None:
         # - https://github.com/which-distro/os-release/tree/main
         if (
             (os_name == 'debian' and major_ver >= '13')
+            or ubuntu_26_or_newer
         ):
             packages += (
                 "libfuse3-4 "  # appimages
