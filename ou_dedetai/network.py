@@ -9,6 +9,7 @@ import time
 from typing import Callable, Optional
 import requests
 import shutil
+import subprocess
 import sys
 from base64 import b64encode
 from pathlib import Path
@@ -785,7 +786,12 @@ def update_lli_binary(app: App):
     # Remove existing downloaded file if different version.
     if lli_download_path.is_file():
         logging.info("Checking if existing LLI binary is latest version.")
-        lli_download_ver = utils.get_lli_release_version(lli_download_path)
+        try:
+            lli_download_ver = utils.get_lli_release_version(lli_download_path)
+        except (OSError, subprocess.CalledProcessError) as e:
+            # e.g. a binary for another architecture
+            logging.warning(f"Failed to run \"{lli_download_path}\": {e}")
+            lli_download_ver = None
         if not lli_download_ver or lli_download_ver != app.conf.app_latest_version:
             logging.info(f"Removing \"{lli_download_path}\", version: {lli_download_ver}")
             # Remove incompatible file.
