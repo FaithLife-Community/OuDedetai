@@ -380,6 +380,8 @@ class TUI(App):
         if answer == "Return to Main Menu":
             self.ui.call_from_thread(self.ui.go_to_main_menu)
             return None
+        if answer == constants.PROMPT_OPTION_FILE:
+            return self._ask(question, answer)
         return answer
 
     def _info(self, message: str) -> None:
