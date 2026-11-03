@@ -62,7 +62,7 @@ if RUNMODE == 'snap':
     CACHE_DIR = str(Path(_snap_user_common) / '.cache' / 'FaithLife-Community')
     del _snap_user_common
 else:
-    CACHE_DIR = str(Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache' / 'FaithLife-Community'))) 
+    CACHE_DIR = str(Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache')) / 'FaithLife-Community')
 
 XDG_DATA_HOME = str(Path(os.getenv('XDG_DATA_HOME', str(Path.home() / '.local/share'))))
 DATA_HOME = str(Path(XDG_DATA_HOME)/ 'FaithLife-Community') 
