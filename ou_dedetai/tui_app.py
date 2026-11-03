@@ -19,7 +19,7 @@ from textual.widgets.option_list import Option
 from ou_dedetai.app import App, UserExitedFromAsk
 from ou_dedetai.config import EphemeralConfiguration
 
-from . import control
+from . import control, msg
 from . import constants
 from . import installer
 from . import logos
@@ -661,6 +661,7 @@ class TUI(App):
 
 
 def control_panel_app(ephemeral_config: EphemeralConfiguration) -> None:
+    msg.initialize_tui_logging()
     tui = TUI(ephemeral_config)
     try:
         tui.ui.run()
