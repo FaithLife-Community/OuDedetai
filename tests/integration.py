@@ -1,6 +1,39 @@
-"""Basic implementations of some rudimentary tests
+"""End-to-end tests: real install of Logos/Verbum, then driving the app via xdotool.
 
-Should be migrated into unittests once that branch is merged
+Run directly (not via unittest), with the dev venv active. Either:
+
+- Nested X server (recommended; keeps xdotool off your desktop):
+
+      Xephyr :1 -screen 1920x1080 &
+      DISPLAY=:1 xfce4-session &
+      DISPLAY=:1 python tests/integration.py
+
+- Current X11 session (xdotool types into your real desktop; don't touch it
+  while running):
+
+      python tests/integration.py
+
+Builds dist/oudedetai via scripts/build-binary.sh when source is newer than it.
+
+Requirements:
+- X11 only (Wayland unsupported); $DISPLAY must be set.
+- xdotool on PATH.
+- A window manager in the X session. xfce4 works; openbox and KDE Plasma hit a
+  menu bug. Without a WM, typed "@" may come out as "2".
+
+Environment:
+- INSTALLDIR / CONFIG_FILE: reuse an existing install. Skips install and the
+  final uninstall. Otherwise a temp dir is used and uninstalled afterwards.
+- LOGOS_USERNAME / LOGOS_PASSWORD: log in and download resources on first run.
+  Feature and crash-detection tests only run when logged in. Account needs three
+  login options.
+- FLPRODUCT: Logos (default) or Verbum.
+- logos_release_channel: stable (default) or beta.
+- wine_log, LOGOS_LOG: passed through to oudedetai.
+- BACKUPDIR: not yet supported; raises if set and not logged in.
+
+Crash-detection tests deliberately break the install (e.g. hide the Fonts dir)
+to confirm the harness notices; they restore it afterwards.
 """
 # FIXME: refactor into unittests
 
