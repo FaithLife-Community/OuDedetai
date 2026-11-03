@@ -378,17 +378,20 @@ class PersistentConfiguration:
         # Now override with values from ENV
         legacy_env = LegacyConfiguration.load_from_env()
         config_env = PersistentConfiguration.from_legacy(legacy_env)
+        config_env.faithlife_product_release_channel = config_dict["faithlife_product_release_channel"]
+        config_env.app_release_channel = config_dict["app_release_channel"]
+        config_env._legacy = None
         for k, v in config_env.__dict__.items():
-            if v is not None and k not in (
-                    "faithlife_product_release_channel",
-                    "app_release_channel",
-            ):
+            if v is not None:
                 config_dict[k] = v
 
         return PersistentConfiguration(**config_dict)
 
     @classmethod
-    def from_legacy(cls, legacy: LegacyConfiguration) -> "PersistentConfiguration":
+    def from_legacy(
+        cls,
+        legacy: LegacyConfiguration
+    ) -> "PersistentConfiguration":
         faithlife_product_logging = None
         if legacy.LOGS is not None:
             faithlife_product_logging = utils.parse_bool(legacy.LOGS)
