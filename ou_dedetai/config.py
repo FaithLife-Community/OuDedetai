@@ -1082,21 +1082,30 @@ class Config:
         """URL to recommended appimage.
         
         Talks to the network if required"""
-        return self._network.wine_appimage_versions().latest.download_url
+        versions = self._network.wine_appimage_versions()
+        if versions.latest is None:
+            raise ValueError("Failed to find release for wine appimage")
+        else:
+            return versions.latest.download_url
 
     @property
     def wine_appimage_beta_url(self) -> Optional[str]:
         """URL to beta appimage.
         
         Talks to the network if required"""
-        pre_release = self._network.wine_appimage_versions().pre_release
-        return pre_release.download_url if pre_release else None
+        versions = self._network.wine_appimage_versions()
+        if versions.pre_release is None:
+            return None
+        else:
+            return versions.pre_release.download_url
 
     @property
     def wine_appimage_beta_file_name(self) -> Optional[str]:
         """Returns the file name of the recommended appimage with extension"""
         pre_release = self._network.wine_appimage_versions().pre_release
-        return os.path.basename(pre_release.download_url) if pre_release else None
+        if pre_release is None:
+            return None
+        return os.path.basename(pre_release.download_url)
 
     @property
     def wine_appimage_recommended_file_name(self) -> str:
