@@ -348,11 +348,6 @@ class NetworkRequests:
 
         version = self._cache.repository_latest_version[cache_key]
         url = self._cache.repository_latest_url[cache_key]
-        logging.debug(
-            f"Release cache lookup: {cache_key}\n"
-            f"version={version}\n"
-            f"url={url}"
-        )
         if version is None or url is None:
             raise LookupError(f"No suitable release found for {repository}")
 
@@ -669,21 +664,8 @@ def _get_release_data(
             key=_published_at,
             reverse=True,
         )
-        logging.debug(
-            f"GitHub prereleases for {repository} "
-            f"(asset_suffix={asset_suffix or name}):"
-        )
         for release in releases:
-            logging.debug(
-                f"  tag={release.get('tag_name')}, "
-                f"prerelease={release.get('prerelease')}, "
-                f"published_at={release.get('published_at')}, "
-                f"assets={[asset.get('name') for asset in release.get('assets', [])]}"
-            )
             try:
-                logging.debug(
-                    f"Selected GitHub release: {release.get('tag_name')}"
-                )
                 return SoftwareReleaseInfo(
                     version=_get_version_name(release),
                     download_url=_get_asset_url(release, asset_suffix or name),
