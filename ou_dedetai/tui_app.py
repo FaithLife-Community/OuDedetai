@@ -289,16 +289,23 @@ class TextualUI(TextualApp[None]):
     def _populate_main_menu(self) -> None:
         menu = self.query_one("#main-menu", OptionList)
         options = [str(label) for label in self.domain.set_tui_menu_options()]
-        current_options = [str(option.prompt) for option in menu.options]
-        current = menu.highlighted
+        current = (
+            str(menu.get_option_at_index(menu.highlighted).prompt)
+            if menu.highlighted is not None and menu.option_count
+            else None
+        )
 
+        current_options = [str(option.prompt) for option in menu.options]
         if options != current_options:
             menu.clear_options()
             for i, label in enumerate(options):
                 menu.add_option(Option(label, id=f"main-{i}"))
 
         if options:
-            menu.highlighted = min(current if current is not None else 0, len(options) - 1)
+            if current in options:
+                menu.highlighted = options.index(current)
+            else:
+                menu.highlighted = min(menu.highlighted or 0, len(options) - 1)
 
     @on(OptionList.OptionSelected, "#main-menu")
     def on_main_menu(self, event: OptionList.OptionSelected) -> None:
