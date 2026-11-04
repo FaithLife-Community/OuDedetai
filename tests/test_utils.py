@@ -1,14 +1,19 @@
 import queue
+import json
+import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch, PropertyMock
 from pathlib import Path
+from types import SimpleNamespace
 
 from packaging.version import InvalidVersion
 
 import ou_dedetai.constants as constants
 import ou_dedetai.utils as utils
+from ou_dedetai.config import Config, LegacyConfiguration, PersistentConfiguration
 from . import REPODIR
 from . import TESTDATADIR
 
@@ -90,9 +95,44 @@ class TestAppUtils(unittest.TestCase):
         ]
         self.assertEqual(utils.get_wine_options(self.app), options)
 
-    @unittest.skip("Test not feasible.")
     def test_set_appimage_symlink(self):
-        pass
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bindir = root / 'bin'
+            bindir.mkdir()
+            source = root / 'custom.AppImage'
+            shutil.copy(TESTDATADIR / 'wine_tiny_v2.AppImage', source)
+            source.chmod(0o640)
+            destination = bindir / source.name
+            config_path = root / 'config.json'
+            # Use a real config without changing the application's singleton.
+            conf = object.__new__(Config)
+            conf.app = self.app
+            conf._raw = PersistentConfiguration(
+                install_dir=tmp, wine_binary='/usr/bin/wine', faithlife_product='Logos',
+            )
+            conf._overrides = SimpleNamespace(
+                install_dir=None, installer_binary_dir=str(bindir),
+                wine_appimage_path=str(source), wine_appimage_link_file_name=None,
+            )
+            conf._wine64_path = '/usr/bin/wine64'
+            self.app.conf = conf
+            with patch.object(Config, 'wine_download_file_name', new_callable=PropertyMock,
+                              return_value='recommended.AppImage'), \
+                    patch.object(LegacyConfiguration, 'config_file_path', return_value=str(config_path)):
+                utils.set_appimage_symlink(self.app)
+
+            self.assertEqual(conf.wine_binary, str(destination))
+            self.assertEqual(conf.wine_appimage_path, destination)
+            self.assertIsNone(conf._wine64_path)
+            self.assertEqual(destination.stat().st_mode & 0o777, 0o740)
+            self.assertEqual(source.stat().st_mode & stat.S_IXUSR, 0)
+            self.assertEqual((bindir / conf.wine_appimage_link_file_name).resolve(), destination)
+            for path in (config_path, root / f'{constants.BINARY_NAME}.json'):
+                with path.open() as saved:
+                    self.assertEqual(json.load(saved)['wine_binary'], 'bin/custom.AppImage')
+                self.assertEqual(PersistentConfiguration.load_from_path(str(path)).wine_binary,
+                                 'bin/custom.AppImage')
 
     @unittest.skip("Test not feasible.")
     def test_update_to_latest_recommended_appimage(self):

@@ -474,8 +474,11 @@ def set_appimage_symlink(app: App):
             logging.info(f"Copying {destination_file_path} to {app.conf.installer_binary_dir}.")
             shutil.copy(appimage_file_path, destination_file_path)
 
+    destination_file_path.chmod(destination_file_path.stat().st_mode | stat.S_IXUSR)
     delete_symlink(appimage_symlink_path)
     os.symlink(destination_file_path, appimage_symlink_path)
+    # Persist the runtime selection; wine_appimage_path is only an override.
+    app.conf.wine_binary = str(destination_file_path)
     app.conf.wine_appimage_path = destination_file_path
 
 
