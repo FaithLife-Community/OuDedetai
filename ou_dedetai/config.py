@@ -1118,6 +1118,7 @@ class Config:
         elif self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL:
             return self._wine_tarball_release.download_url
         else:
+            versions = self._network.wine_appimage_versions()
             return versions.latest.download_url
 
     @property
