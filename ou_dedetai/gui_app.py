@@ -55,16 +55,15 @@ class GuiApp(App):
 
 
     def _ask(self, question: str, options: list[str] | str) -> Optional[str]:
-        # This cannot be run from the main thread as the dialog will never appear
-        # since the tinker mainloop hasn't started and we block on a response
-
+        # Safe from any thread once mainloop runs; wait_window pumps Tk events.
         if isinstance(options, list):
             answer_q: Queue[Optional[str]] = Queue()
             answer_event = Event()
-            ChoicePopUp(question, options, answer_q, answer_event)
+            popup = ChoicePopUp(question, options, answer_q, answer_event)
 
-            answer_event.wait()
-            answer: Optional[str] = answer_q.get()
+            self.root.wait_window(popup.root)
+            # Empty if closed via the window manager
+            answer: Optional[str] = answer_q.get_nowait() if not answer_q.empty() else None
         elif isinstance(options, str):
             answer = options
 

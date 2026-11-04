@@ -309,27 +309,19 @@ class NetworkRequests:
             raise ValueError(f"Unknown Wine release channel: {channel}")
 
         repo = "FaithLife-Community/wine-appimages"
-        releases = self._repo_version(repo, asset_suffix=".tar.xz")
-
-        if channel == "stable":
-            if releases.latest is None:
-                logging.info(
-                    "No stable Wine tarball found; falling back to the recommended AppImage."
-                )
-                return self.wine_appimage_recommended_release()
-            return releases.latest
-
-        if releases.pre_release is None:
-            raise RuntimeError(f"No prerelease tarball found in {repo}")
-        return releases.pre_release
+        try:
+            release = self._repo_version(repo, tag="latest" if channel == "stable" else "prerelease", asset_suffix=".tar.xz")
+        except (LookupError, ValueError):
+            logging.info(
+                "No stable Wine tarball found; falling back to the recommended AppImage."
+            )
+            return self.wine_appimage_recommended_release()
+        return release
 
     def wine_appimage_recommended_release(self) -> SoftwareReleaseInfo:
         """Returns the latest stable recommended Wine AppImage release."""
         repo = "FaithLife-Community/wine-appimages"
-        releases = self._repo_version(repo, asset_suffix=".AppImage")
-        if releases.latest is None:
-            raise RuntimeError(f"No stable AppImage found in {repo}")
-        return releases.latest
+        return self._repo_version(repo, asset_suffix=".AppImage")
 
     def wine_appimage_recommended_url(self) -> str:
         return self.wine_appimage_recommended_release().download_url
