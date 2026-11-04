@@ -145,6 +145,10 @@ def get_parser():
         help="install your distro's dependencies",
     )
     cmd.add_argument(
+        '--update-wine-config', action='store_true',
+        help="re-apply the installer's Wine settings to an existing install",
+    )
+    cmd.add_argument(
         '--backup', action='store_true',
         help='backup current data',
     )
@@ -289,6 +293,7 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
         'run_indexing',
         'run_installed_app',
         'update_installed_app',
+        'update_wine_config',
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
@@ -409,6 +414,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         'run_indexing',
         'run_installed_app',
         'update_installed_app',
+        'update_wine_config',
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
