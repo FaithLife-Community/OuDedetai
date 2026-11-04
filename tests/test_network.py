@@ -60,3 +60,24 @@ class TestGetAssetUrl(unittest.TestCase):
     def test_no_name_returns_first(self):
         url = network._get_asset_url(self.release)
         self.assertEqual(url, 'https://x/oudedetai-arm')
+
+
+class TestRunnerReleases(unittest.TestCase):
+    def test_recommended_runner_assets(self):
+        from unittest.mock import Mock
+        requests = object.__new__(network.NetworkRequests)
+        release = network.SoftwareReleaseInfo('11.0', 'https://example.org/runner')
+        requests._repo_version = Mock(return_value=release)
+        for channel, tag in (('stable', 'latest'), ('dev', 'prerelease')):
+            self.assertEqual(requests.wine_tarball_release(channel), release)
+            requests._repo_version.assert_called_with('FaithLife-Community/wine-appimages',
+                                                     tag=tag, asset_suffix='.tar.xz')
+        self.assertEqual(requests.wine_appimage_recommended_release(), release)
+        requests._repo_version.assert_called_with('FaithLife-Community/wine-appimages', asset_suffix='.AppImage')
+
+    def test_missing_stable_tarball_falls_back_to_appimage(self):
+        from unittest.mock import Mock
+        requests = object.__new__(network.NetworkRequests)
+        release = network.SoftwareReleaseInfo('11.0', 'https://example.org/wine.AppImage')
+        requests._repo_version = Mock(side_effect=[LookupError(), release])
+        self.assertEqual(requests.wine_tarball_release('stable'), release)

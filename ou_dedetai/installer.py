@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -213,6 +214,9 @@ def update_to_latest_wine(app: App):
 
 
 def download_wine(app: App) -> Optional[Path]:
+    local_runner = Path(app.conf.wine_binary)
+    if local_runner.is_file() and local_runner.name.lower().endswith((".appimage", ".tar.gz", ".tgz", ".tar.xz")):
+        return local_runner.resolve()
     if app.conf.faithlife_product_version != "9" and app.conf.wine_binary not in [
         constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,
         constants.WINE_RECOMMENDED_TARBALL_SIGIL,
@@ -463,16 +467,16 @@ def create_wine_symlinks(app: App):
         else:
             appimage_filename = app.conf.wine_download_file_name
         appimage_file = appdir_bindir / appimage_filename
-        downloaded_file = utils.get_downloaded_file_path(
-            app.conf.download_dir, appimage_filename
-        )
+        downloaded_file: Optional[str | Path] = app.conf.wine_appimage_path
+        if not app.conf.wine_appimage_path.is_file():
+            downloaded_file = utils.get_downloaded_file_path(app.conf.download_dir, appimage_filename)
         if downloaded_file is None:
             logging.critical("Failed to get a valid wine appimage")
             return
-        if not appimage_file.exists():
+        if Path(downloaded_file).resolve() != appimage_file.resolve():
             app.status(f"Copying: {downloaded_file} into: {appdir_bindir}")
             shutil.copy(downloaded_file, appdir_bindir)
-        os.chmod(appimage_file, 0o755)
+        appimage_file.chmod(appimage_file.stat().st_mode | stat.S_IXUSR)
         app.conf.wine_appimage_path = appimage_file
         app.conf.wine_binary = str(appimage_file)
         appimage_link.unlink(missing_ok=True)

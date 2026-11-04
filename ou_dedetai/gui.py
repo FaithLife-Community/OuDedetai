@@ -269,8 +269,8 @@ class ControlGui(StatusGui):
             text="Update to Latest AppImage"
         )
         self.latest_appimage_button = Button(self, text="Run")
-        self.set_appimage_label = Label(self, text="Set AppImage")
-        self.set_appimage_button = Button(self, text="Run")
+        self.select_runner_label = Label(self, text="Select Runner")
+        self.select_runner_button = Button(self, text="Run")
         # App logging toggle
         self.loggingstatevar = StringVar(value='Enable')
         self.logging_label = Label(self, text="Toggle app logging")
@@ -323,8 +323,8 @@ class ControlGui(StatusGui):
         self.latest_appimage_label.grid(column=0, row=row, sticky='w', pady=2)
         self.latest_appimage_button.grid(column=1, row=row, sticky='w', pady=2)
         row += 1
-        self.set_appimage_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.set_appimage_button.grid(column=1, row=row, sticky='w', pady=2)
+        self.select_runner_label.grid(column=0, row=row, sticky='w', pady=2)
+        self.select_runner_button.grid(column=1, row=row, sticky='w', pady=2)
         row += 1
         self.logging_label.grid(column=0, row=row, sticky='w', pady=2)
         self.logging_button.grid(column=1, row=row, sticky='w', pady=2)

@@ -899,7 +899,7 @@ def setup_wine(app: App):
             if distribution_dir.exists():
                 shutil.rmtree(distribution_dir)
             tarball.extractall(distribution_root, filter="data")
-        wine_path = Path(app.conf.wine_path_in_distribution)
+        wine_path = distribution_dir / "bin" / "wine"
         if not wine_path.is_file():
             raise RuntimeError("Downloaded tarball didn't contain the needed Wine binary")
         app.conf.wine_binary = str(wine_path.absolute())

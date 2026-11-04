@@ -9,6 +9,7 @@ from pathlib import Path
 from queue import Queue
 
 import shutil
+import tarfile
 from threading import Event
 import threading
 import time
@@ -40,6 +41,28 @@ import ou_dedetai
 
 class GuiApp(App):
     """Implements the App interface for all windows"""
+
+    _runner_file_option = "Choose runner from filesystem…"
+
+    def runner_options(self):
+        return utils.get_wine_options(self) + [self._runner_file_option]
+
+    def select_runner(self, choice):
+        if choice == self._runner_file_option:
+            choice = fd.askopenfilename(
+                parent=self.root, title="Select Runner",
+                filetypes=[("Wine runners", "*.AppImage *.appimage *.tar.gz"), ("All Files", "*")],
+            )
+            if not choice:
+                return False
+            if not (utils.check_appimage(choice) or
+                    (choice.lower().endswith('.tar.gz') and tarfile.is_tarfile(choice))):
+                messagebox.showerror("Invalid runner", "Select a Wine AppImage or tar.gz archive.", parent=self.root)
+                return False
+        elif choice not in self.runner_options():
+            return False
+        self.conf.wine_binary = choice
+        return True
 
     _exit_option: Optional[str] = None
 
@@ -241,6 +264,7 @@ class ChoicePopUp:
         self.gui.okay_button.config(command=self.on_confirm_choice)
         self.answer_q = answer_q
         self.answer_event = answer_event
+        self.root.protocol("WM_DELETE_WINDOW", self.on_cancel_released)
 
     def on_confirm_choice(self, evt=None):
         if self.gui.answer_dropdown.get() == gui.ChoiceGui._default_prompt:
@@ -347,7 +371,7 @@ class InstallerWindow:
         # In case the product changes
         self.root.icon = Path(self.conf.faithlife_product_icon_path)
 
-        self.gui.wine_dropdown['values'] = utils.get_wine_options(self.app)
+        self.gui.wine_dropdown['values'] = self.app.runner_options()
         if not self.gui.winevar.get():
             # If no value selected, default to 1st item in list.
             self.gui.winevar.set(self.gui.wine_dropdown['values'][0])
@@ -398,9 +422,11 @@ class InstallerWindow:
         self._post_dropdown_change()
 
     def set_wine(self, evt=None):
-        self.conf.wine_binary = self.gui.winevar.get()
+        selected = self.app.select_runner(self.gui.winevar.get())
+        self.gui.winevar.set(self.conf.wine_binary)
         self.gui.wine_dropdown.selection_clear()
-        self._post_dropdown_change()
+        if selected:
+            self._post_dropdown_change()
 
     def set_skip_dependencies(self, evt=None):
         self.conf.skip_install_system_dependencies = self.gui.skipdepsvar.get()  # invert True/False
@@ -512,7 +538,7 @@ class ControlWindow(GuiApp):
         self.gui.latest_appimage_button.config(
             command=self.start_appimage_update
         )
-        self.gui.set_appimage_button.config(command=self.set_appimage)
+        self.gui.select_runner_button.config(command=lambda: self.start_thread(self.set_runner))
 
         self._config_update_hook()
         # These can be expanded to change the UI based on config changes.
@@ -627,10 +653,6 @@ class ControlWindow(GuiApp):
         self.status(f"Updating to latest {constants.APP_NAME} version…")
         self.start_thread(utils.update_to_latest_lli_release, app=self)
 
-    def set_appimage_symlink(self):
-        utils.set_appimage_symlink(self)
-        self.update_latest_appimage_button()
-
     def start_appimage_update(self):
         self.status("Updating to latest AppImage…")
         self.gui.latest_appimage_button.state(['disabled'])
@@ -642,13 +664,12 @@ class ControlWindow(GuiApp):
         installer.update_to_latest_wine(self)
         self.root.event_generate(evt)
 
-    def set_appimage(self, evt=None):
-        # TODO: Separate as advanced feature.
-        appimage_filename = self.open_file_dialog("AppImage", "AppImage")
-        if not appimage_filename:
-            return
-        self.conf.wine_appimage_path = appimage_filename
-        self.start_thread(self.set_appimage_symlink)
+    def set_runner(self):
+        choice = self._ask("Select Runner", self.runner_options())
+        if choice and self.select_runner(choice):
+            wine.setup_wine(self)
+            system.ensure_winetricks(self)
+            self.update_latest_appimage_button()
 
     def switch_logging(self, evt=None):
         desired_state = self.gui.loggingstatevar.get()
@@ -737,6 +758,7 @@ class ControlWindow(GuiApp):
         self.gui.update_lli_button.state([state])
 
     def update_latest_appimage_button(self, evt=None):
+        self.gui.select_runner_button.state(['!disabled' if self.is_installed() else 'disabled'])
         state = None
         msg = None
         if not self.is_installed():
@@ -750,11 +772,6 @@ class ControlWindow(GuiApp):
         ):
             state = 'disabled'
             msg = "This button is disabled. The configured install was not created using an AppImage."
-            self.gui.set_appimage_button.state(['disabled'])
-            gui.ToolTip(
-                self.gui.set_appimage_button,
-                "This button is disabled. The configured install was not created using an AppImage."
-            )
         elif self.conf._raw.wine_binary is not None:
             status, _ = utils.compare_recommended_wine_version(self)
             if status == 0:
