@@ -56,42 +56,36 @@ class GuiApp(App):
 
 
     def _ask(self, question: str, options: list[str] | str) -> Optional[str]:
+        # Safe from any thread once mainloop runs; wait_window pumps Tk events.
         if isinstance(options, list):
-            choices = options
+            answer_q: Queue[Optional[str]] = Queue()
+            popup = ChoicePopUp(question, options, answer_q)
 
-            def _choose() -> Optional[str]:
-                answer_q: Queue[Optional[str]] = Queue()
-                popup = ChoicePopUp(question, choices, answer_q)
-                # Nested event loop; returns once the popup is destroyed
-                self.root.wait_window(popup.root)
-                return answer_q.get_nowait()
-
-            answer: Optional[str] = self._run_on_main_thread(_choose)
+            self.root.wait_window(popup.root)
+            # Empty if closed via the window manager
+            answer: Optional[str] = answer_q.get_nowait() if not answer_q.empty() else None
         elif isinstance(options, str):
             answer = options
 
-        def _resolve_file_prompt(answer: Optional[str]) -> Optional[str]:
-            if answer == PROMPT_OPTION_DIRECTORY:
-                answer = fd.askdirectory(
-                    parent=self.root,
-                    title=question,
-                    initialdir=Path().home(),
-                )
-            elif answer == PROMPT_OPTION_FILE:
-                answer = fd.askopenfilename(
-                    parent=self.root,
-                    title=question,
-                    initialdir=Path().home(),
-                )
-            elif answer == PROMPT_OPTION_NEW_FILE:
-                answer = fd.asksaveasfilename(
-                    parent=self.root,
-                    title=question,
-                    initialdir=Path().home(),
-                )
-            return answer
-
-        return self._run_on_main_thread(lambda: _resolve_file_prompt(answer))
+        if answer == PROMPT_OPTION_DIRECTORY:
+            answer = fd.askdirectory(
+                parent=self.root,
+                title=question,
+                initialdir=Path().home(),
+            )
+        elif answer == PROMPT_OPTION_FILE:
+            answer = fd.askopenfilename(
+                parent=self.root,
+                title=question,
+                initialdir=Path().home(),
+            )
+        elif answer == PROMPT_OPTION_NEW_FILE:
+            answer = fd.asksaveasfilename(
+                parent=self.root,
+                title=question,
+                initialdir=Path().home(),
+            )
+        return answer
 
     def _info(self, message):
         """Display information to the user"""

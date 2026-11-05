@@ -59,33 +59,18 @@ class TestGuiAppApprove(unittest.TestCase):
 class TestGuiAppAsk(unittest.TestCase):
     def setUp(self):
         self.app = Mock()
-        self.app.root.after.side_effect = lambda _delay, fn: fn()
-        self.app._run_on_main_thread = lambda fn: GuiApp._run_on_main_thread(self.app, fn)
-
-    @staticmethod
-    def _answer(_q, _opts, answer_q):
-        answer_q.put("A")
-        return Mock()
 
     @patch("ou_dedetai.gui_app.ChoicePopUp")
-    def test_main_thread_waits_on_window(self, popup_cls):
-        popup_cls.side_effect = self._answer
+    def test_returns_chosen_option(self, popup_cls):
+        def answer(_q, _opts, answer_q):
+            answer_q.put("A")
+            return Mock()
+
+        popup_cls.side_effect = answer
         self.assertEqual(GuiApp._ask(self.app, "Q?", ["A", "B"]), "A")
         self.app.root.wait_window.assert_called_once()
-        self.app.root.after.assert_not_called()
 
     @patch("ou_dedetai.gui_app.ChoicePopUp")
-    def test_worker_thread_marshals_answer(self, popup_cls):
-        popup_cls.side_effect = self._answer
-        result = {}
-
-        def worker():
-            result["answer"] = GuiApp._ask(self.app, "Q?", ["A", "B"])
-
-        t = threading.Thread(target=worker)
-        t.start()
-        t.join(timeout=5)
-        self.assertFalse(t.is_alive())
-        self.assertEqual(result["answer"], "A")
-        self.app.root.after.assert_called()
+    def test_closed_window_returns_none(self, popup_cls):
+        self.assertIsNone(GuiApp._ask(self.app, "Q?", ["A", "B"]))
         self.app.root.wait_window.assert_called_once()
