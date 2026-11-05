@@ -60,3 +60,22 @@ class TestGetAssetUrl(unittest.TestCase):
     def test_no_name_returns_first(self):
         url = network._get_asset_url(self.release)
         self.assertEqual(url, 'https://x/oudedetai-arm')
+
+
+class TestNewestPublishedRelease(unittest.TestCase):
+    def test_newest_skips_drafts_and_unrelated_assets(self):
+        import json
+        from unittest.mock import patch
+        releases = [
+            {'tag_name': 'draft', 'draft': True, 'published_at': '2026-11-06T00:00:00Z',
+             'assets': [{'name': 'Akousousin-x86_64.AppImage', 'browser_download_url': 'draft'}]},
+            {'tag_name': 'whisper', 'published_at': '2026-11-05T00:00:00Z',
+             'assets': [{'name': 'whisper.tar.gz', 'browser_download_url': 'unrelated'}]},
+            {'tag_name': 'older', 'published_at': '2026-11-01T00:00:00Z',
+             'assets': [{'name': 'Akousousin-x86_64.AppImage', 'browser_download_url': 'older'}]},
+            {'tag_name': 'newer', 'prerelease': True, 'published_at': '2026-11-04T00:00:00Z',
+             'assets': [{'name': 'Akousousin-x86_64.AppImage', 'browser_download_url': 'newer'}]},
+        ]
+        with patch.object(network, '_net_get', return_value=json.dumps(releases).encode()):
+            release = network._get_release_data('jg00dman/akousousin', name='Akousousin-x86_64.AppImage', tag='newest')
+        self.assertEqual(release.download_url, 'newer')

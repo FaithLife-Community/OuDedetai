@@ -22,6 +22,13 @@ The main program is a distributable executable binary and contains Python itself
 
 When running the program, it will attempt to determine your operating system and package manager.
 It will then attempt to install all needed system dependencies during the installation of Logos.
+Installation also installs [Akousousin](https://github.com/jg00dman/akousousin) and
+registers its SAPI voices in the Wine prefix. Akousousin starts speech on demand
+and unloads idle models itself; Ou Dedetai has no speech enable switch or runtime
+service management. An existing shared installation is reused; otherwise the newest
+published Linux AppImage is downloaded, including beta releases. The engine must
+support on-demand SAPI startup.
+
 When the installation is finished, it will place two shortcuts on your computer: one will launch Logos directly; the other will launch the Control Panel.
 
 To access the GUI version of the program, double-click the executable in your file browser or on your desktop, and then follow the prompts.
