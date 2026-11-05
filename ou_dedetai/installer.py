@@ -332,9 +332,9 @@ def ensure_wineprefix_config(app: App):
     logging.debug("Setting wineprefix registry to ignore winemenubuilder.exe.")
     wine.disable_winemenubuilder(app=app, wine64_binary=app.conf.wine64_binary)
 
-    # Force renderer=dxvk in registry.
-    logging.debug("Setting renderer=dxvk in wineprefix registry.")
-    wine.set_renderer(app=app, wine64_binary=app.conf.wine64_binary, value='dxvk')
+    # Force renderer=vulkan in registry.
+    logging.debug("Setting renderer=vulkan in wineprefix registry.")
+    wine.set_renderer(app=app, wine64_binary=app.conf.wine64_binary, value='vulkan')
 
     # Force fontsmooth=rgb in registry.
     logging.debug("Setting fontsmoothing=rgb in wineprefix registry.")
