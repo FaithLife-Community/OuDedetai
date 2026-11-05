@@ -66,9 +66,14 @@ def uninstall(app: App):
     delete_paths = [
         app.conf.config_file_path,
     ]
-    # Only add install_dir if we know what it is
-    if app.conf._raw.install_dir is not None:
-        delete_paths += [app.conf._raw.install_dir]
+    install_dir = app.conf._raw.install_dir
+    if install_dir is not None:
+        home = Path.home().resolve()
+        resolved = Path(install_dir).expanduser().resolve()
+        if resolved == home or resolved in home.parents:
+            logging.warning(f"Not removing {install_dir}: it's the home folder or above")
+        else:
+            delete_paths += [install_dir]
 
     question = "Are you sure you want to uninstall?"
     context = (
@@ -87,10 +92,12 @@ def uninstall(app: App):
         delete_paths += [constants.CACHE_DIR, constants.STATE_DIR]
 
     for del_path in delete_paths:
-        path = Path(del_path)
-        if not path.exists():
+        path = Path(del_path).expanduser()
+        if path.is_symlink():
+            path.unlink()
+        elif not path.exists():
             continue
-        if path.is_file():
+        elif path.is_file():
             os.remove(path)
         elif path.is_dir():
             shutil.rmtree(path)
