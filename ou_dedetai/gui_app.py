@@ -9,7 +9,6 @@ from pathlib import Path
 from queue import Queue
 
 import shutil
-from threading import Event
 import threading
 import time
 from tkinter import PhotoImage, messagebox
@@ -17,7 +16,7 @@ from tkinter import Tk
 from tkinter import Toplevel as TkToplevel
 from tkinter import filedialog as fd
 from tkinter.ttk import Style
-from typing import Callable, Optional
+from typing import Callable, Optional, TypeVar
 
 from ou_dedetai.app import App, UserExitedFromAsk
 from ou_dedetai.constants import (
@@ -37,6 +36,8 @@ from . import system
 from . import utils
 from . import wine
 import ou_dedetai
+
+T = TypeVar("T")
 
 class GuiApp(App):
     """Implements the App interface for all windows"""
@@ -58,8 +59,7 @@ class GuiApp(App):
         # Safe from any thread once mainloop runs; wait_window pumps Tk events.
         if isinstance(options, list):
             answer_q: Queue[Optional[str]] = Queue()
-            answer_event = Event()
-            popup = ChoicePopUp(question, options, answer_q, answer_event)
+            popup = ChoicePopUp(question, options, answer_q)
 
             self.root.wait_window(popup.root)
             # Empty if closed via the window manager
@@ -89,13 +89,10 @@ class GuiApp(App):
 
     def _info(self, message):
         """Display information to the user"""
-        InfoPopUp(message)
+        self._run_on_main_thread(lambda: InfoPopUp(message))
 
     def _pop_up(self, title, message):
-        messagebox.showinfo(
-            title=title,
-            message=message
-        )
+        self._run_on_main_thread(lambda: messagebox.showinfo(title=title, message=message))
 
     def _status(self, message, percent = None):
         message = message.strip()
@@ -115,10 +112,32 @@ class GuiApp(App):
         self._status('', 0)
 
     def approve(self, question: str, context: str | None = None) -> bool:
-        if context is None:
-            context = ""
-        message = f"{question}\n\n{context}"
-        return messagebox.askquestion(question, message.strip()) == 'yes'
+        message = f"{question}\n\n{context or ''}".strip()
+        return self._run_on_main_thread(lambda: messagebox.askquestion(question, message) == 'yes')
+
+    def _run_on_main_thread(self, fn: Callable[[], T]) -> T:
+        """Run fn on the Tk main thread and return its result; fn's exceptions re-raise here.
+
+        Tk dialogs opened off the main thread don't respond to input.
+        fn must not return an exception instance; it would be raised instead.
+        """
+        # Calling directly avoids blocking the mainloop that would run the callback
+        if threading.current_thread() is threading.main_thread():
+            return fn()
+
+        result_q: Queue[T | BaseException] = Queue()
+
+        def _run_and_reply():
+            try:
+                result_q.put(fn())
+            except BaseException as e:
+                result_q.put(e)
+
+        self.root.after(0, _run_and_reply)
+        reply = result_q.get()
+        if isinstance(reply, BaseException):
+            raise reply
+        return reply
 
     def _schedule_exit_on_main_thread(self, reason: str, intended: bool) -> None:
         # root.after is the supported way to run work on the mainloop (main)
@@ -220,7 +239,6 @@ class ChoicePopUp:
         question: str,
         options: list[str],
         answer_q: Queue[Optional[str]],
-        answer_event: Event,
         **kwargs
     ):
         self.root = Toplevel()
@@ -238,20 +256,18 @@ class ChoicePopUp:
         )
         self.gui.cancel_button.config(command=self.on_cancel_released)
         self.gui.okay_button.config(command=self.on_confirm_choice)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_cancel_released)
         self.answer_q = answer_q
-        self.answer_event = answer_event
 
     def on_confirm_choice(self, evt=None):
         if self.gui.answer_dropdown.get() == gui.ChoiceGui._default_prompt:
             return
         answer = self.gui.answer_dropdown.get()
         self.answer_q.put(answer)
-        self.answer_event.set()
         self.root.destroy()
 
     def on_cancel_released(self, evt=None):
         self.answer_q.put(None)
-        self.answer_event.set()
         self.root.destroy()
 
 
