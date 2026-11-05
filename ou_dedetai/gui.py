@@ -275,6 +275,7 @@ class ControlGui(StatusGui):
         self.loggingstatevar = StringVar(value='Enable')
         self.logging_label = Label(self, text="Toggle app logging")
         self.logging_button = Button(self, textvariable=self.loggingstatevar)
+        self.media_button = Button(self, text="Toggle experimental media support", state='disabled')
         # Support options
         self.support_state_var = StringVar(value='Get Support')
         self.support_label = Label(self, text="Troubleshooting")
@@ -328,6 +329,8 @@ class ControlGui(StatusGui):
         row += 1
         self.logging_label.grid(column=0, row=row, sticky='w', pady=2)
         self.logging_button.grid(column=1, row=row, sticky='w', pady=2)
+        row += 1
+        self.media_button.grid(column=0, row=row, columnspan=3, sticky='w', pady=2)
         row += 1
         self.support_label.grid(column=0, row=row, sticky='w', pady=2)
         self.support_button.grid(column=1, row=row, sticky='w', pady=2)

@@ -515,6 +515,7 @@ class ControlWindow(GuiApp):
         )
         self.gui.logging_button.state(['disabled'])
         self.gui.support_button.config(command=self.get_support)
+        self.gui.media_button.config(command=self.toggle_media_support)
 
         self.gui.config_button.config(command=self.edit_config)
         self.gui.deps_button.config(command=self.install_deps)
@@ -674,6 +675,16 @@ class ControlWindow(GuiApp):
             action=desired_state.lower()
         )
 
+    def toggle_media_support(self):
+        self.gui.media_button.state(['disabled'])
+
+        def toggle():
+            try:
+                wine.toggle_media_support(self)
+            finally:
+                self._run_on_main_thread(lambda: self.gui.media_button.state(['!disabled']))
+        self.start_thread(toggle)
+
     def get_support(self):
         def _run():
             control.get_support(self)
@@ -685,6 +696,7 @@ class ControlWindow(GuiApp):
         self.gui.logging_button.state(['!disabled'])
 
     def update_app_button(self, evt=None):
+        self.gui.media_button.state(['!disabled' if self.is_installed() else 'disabled'])
         self.gui.app_button.state(['!disabled'])
         if self.is_installed():
             if self.logos.logos_state == ou_dedetai.logos.State.RUNNING:
