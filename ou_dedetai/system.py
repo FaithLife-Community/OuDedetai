@@ -969,11 +969,17 @@ def install_dependencies(app: App, target_version=10):
             run_command(command_str, shell=True)
         except subprocess.CalledProcessError as e:
             if e.returncode == 127:
-                logging.error("User cancelled dependency installation.")
+                logging.error("Superuser authentication failed or was cancelled.")
             else:
                 logging.error(f"An error occurred in install_dependencies(): {e}")
                 logging.error(f"Command output: {e.output}")
             install_deps_failed = True
+            app.info(
+                "Failed to install some dependencies: "
+                f"{' '.join(missing_packages + conflicting_packages)}. "
+                "Warning: the app may not function properly, please report this "
+                "and your OS using \"Get Support\"."
+            )
 
 
     if reboot_required:
