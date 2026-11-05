@@ -18,7 +18,7 @@ from packaging.version import Version
 from pathlib import Path
 from typing import Optional, Tuple
 
-from ou_dedetai import constants, network, wine
+from ou_dedetai import constants, network
 from ou_dedetai.app import App
 
 
@@ -376,8 +376,7 @@ class OpenGLIncompatible(Exception):
 
 def check_opengl_version(app: App, required_version="3.2") -> tuple[bool, str]:
     try:
-        env = wine.get_wine_env(app, None)
-        result = run_command(['glxinfo'], env=fix_ld_library_path(env), capture_output=True, text=True, check=True)
+        result = run_command(['glxinfo'], env=fix_ld_library_path(None), capture_output=True, text=True, check=True)
     except FileNotFoundError:
         return False, "glxinfo command not found. Please install mesa-utils or equivalent."
     except subprocess.CalledProcessError as e:
