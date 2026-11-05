@@ -809,6 +809,17 @@ def enforce_icu_data_files(app: App):
         os.makedirs(icu_win_dir)
 
     shutil.copytree(icu_win_dir, f"{drive_c}/windows", dirs_exist_ok=True)
+
+    # Use the installed ICU files to avoid culture-enumeration crashes.
+    # https://bugs.winehq.org/show_bug.cgi?id=58805#c6
+    reg_text = r'''REGEDIT4
+
+[HKEY_CURRENT_USER\Software\Wine\DllOverrides]
+"icu"="native"
+"icuin"="native"
+"icuuc"="native"
+'''
+    wine_reg_install(app, "set-native-icu.reg", reg_text, app.conf.wine64_binary)
     app.status("ICU files copied.", 100)
 
 
