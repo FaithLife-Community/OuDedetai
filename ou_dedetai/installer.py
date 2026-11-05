@@ -385,9 +385,44 @@ def ensure_product_installed(app: App):
     logging.debug(f"> {app.conf.logos_exe=}")
 
 
-def ensure_config_file(app: App):
+def ensure_akousousin(app: App):
+    """Install shared speech and register SAPI; Akousousin owns its lifecycle."""
     app.installer_step_count += 1
     ensure_product_installed(app=app)
+    app.installer_step += 1
+    app.status("Ensuring Akousousin speech support is installed…")
+
+    filename = "Akousousin-x86_64.AppImage"
+    target = Path(constants.XDG_DATA_HOME) / "Akousousin" / filename
+    image = target
+    if not target.is_file():
+        release = network._get_release_data("jg00dman/akousousin", name=filename, tag="newest")
+        # A release-specific cache name prevents reusing another release's bytes.
+        cached = f"{release.version.replace('/', '_')}-{filename}"
+        network.logos_reuse_download(release.download_url, cached, app.conf.download_dir, app=app)
+        image = Path(app.conf.download_dir) / cached
+    image.chmod(image.stat().st_mode | 0o100)
+    env = os.environ.copy()
+    env.update(APPIMAGE_EXTRACT_AND_RUN="1", PYINSTALLER_RESET_ENVIRONMENT="1")
+    help_result = system.run_command([str(image), "--help"], env=env, timeout=30, check=False)
+    if help_result is None or help_result.returncode or "--api-start" not in help_result.stdout:
+        app.exit("Akousousin needs a release with on-demand SAPI startup. "
+                 "Install an updated Akousousin release and retry installation.")
+    if image != target:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(image, target)
+    result = system.run_command(
+        [str(target), "--wine-prefix", str(app.conf.wine_prefix),
+         "--wine", str(app.conf.wine64_binary), "--install-only"],
+        env=env, timeout=180, check=False,
+    )
+    if result is None or result.returncode:
+        app.exit("Akousousin SAPI registration failed. " + (result.stderr if result else "See the installation log."))
+
+
+def ensure_config_file(app: App):
+    app.installer_step_count += 1
+    ensure_akousousin(app=app)
     app.installer_step += 1
     app.status("Ensuring config file is up-to-date…")
 
