@@ -682,8 +682,14 @@ class ControlWindow(GuiApp):
             try:
                 wine.toggle_media_support(self)
             finally:
-                self._run_on_main_thread(lambda: self.gui.media_button.state(['!disabled']))
+                self._run_on_main_thread(self.update_media_button)
         self.start_thread(toggle)
+
+    def update_media_button(self):
+        installed = self.is_installed()
+        enabled = installed and wine.media_support_enabled(self)
+        self.gui.media_button.config(text="Disable" if enabled else "Enable")
+        self.gui.media_button.state(['!disabled' if installed else 'disabled'])
 
     def get_support(self):
         def _run():
@@ -696,7 +702,7 @@ class ControlWindow(GuiApp):
         self.gui.logging_button.state(['!disabled'])
 
     def update_app_button(self, evt=None):
-        self.gui.media_button.state(['!disabled' if self.is_installed() else 'disabled'])
+        self.update_media_button()
         self.gui.app_button.state(['!disabled'])
         if self.is_installed():
             if self.logos.logos_state == ou_dedetai.logos.State.RUNNING:
