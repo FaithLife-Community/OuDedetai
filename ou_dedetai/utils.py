@@ -1,6 +1,7 @@
 import atexit
 from datetime import datetime
 import enum
+import glob
 import inspect
 import json
 import logging
@@ -185,6 +186,7 @@ def get_wine_options(app: App) -> List[str]:
     for wine_binary_path in sorted_binaries:
         # Create wine binary option array
         wine_binary_options.append(wine_binary_path)
+    wine_binary_options.append(constants.PROMPT_OPTION_FILE)
     logging.debug(f"{wine_binary_options=}")
     return wine_binary_options
 
@@ -410,20 +412,36 @@ def find_appimage_files(app: App) -> list[str]:
 
 
 def find_wine_binary_files(app: App, release_version: Optional[str]) -> list[str]:
+    home = os.path.expanduser("~")
     wine_binary_path_list = [
         "/usr/local/bin",
-        os.path.expanduser("~") + "/bin",
-        os.path.expanduser("~") + "/PlayOnLinux/wine/linux-amd64/*/bin",
-        os.path.expanduser("~") + "/.steam/steam/steamapps/common/Proton*/files/bin",
+        home + "/bin",
+        home + "/PlayOnLinux/wine/linux-amd64/*/bin",
     ]
+
+    steam_roots = [
+        home + "/.steam/steam",
+        home + "/.local/share/Steam",
+        home + "/.var/app/com.valvesoftware.Steam/.local/share/Steam",
+    ]
+    steam_libraries = list(steam_roots)
+    for root in steam_roots:
+        manifest = Path(root) / "steamapps/libraryfolders.vdf"
+        if manifest.is_file():
+            steam_libraries += re.findall(r'"path"\s+"([^"]+)"', manifest.read_text(errors="ignore"))
+    for library in steam_libraries:
+        for layout in ("files", "dist"):
+            wine_binary_path_list.append(f"{library}/steamapps/common/Proton*/{layout}/bin")
+            wine_binary_path_list.append(f"{library}/compatibilitytools.d/*/{layout}/bin")
 
     if app.conf._overrides.custom_binary_path is not None:
         wine_binary_path_list.append(app.conf._overrides.custom_binary_path)
 
     # Temporarily modify PATH for additional WINE64 binaries.
-    for p in wine_binary_path_list:
-        if p not in os.environ['PATH'] and os.path.isdir(p):
-            os.environ['PATH'] = os.environ['PATH'] + os.pathsep + p
+    for pattern in wine_binary_path_list:
+        for p in glob.glob(pattern) or [pattern]:
+            if p not in os.environ['PATH'].split(os.pathsep) and os.path.isdir(p):
+                os.environ['PATH'] = os.environ['PATH'] + os.pathsep + p
 
     # Check each directory in PATH for wine64; add to list
     binaries = []
