@@ -114,6 +114,9 @@ class CLI(App):
     def toggle_app_logging(self):
         self.logos.switch_logging()
 
+    def toggle_media_support(self):
+        wine.toggle_media_support(self)
+
     def update_latest_appimage(self):
         installer.update_to_latest_wine(self)
 
