@@ -25,6 +25,7 @@ from . import constants
 from . import network
 from . import system
 from . import wine
+from .database import LogosPaths
 
 
 # FIXME: This function isn't used and should probably be removed.
@@ -626,7 +627,7 @@ def parse_bool(string: str) -> bool:
 
 
 def get_logos_paths(ephemeral_config):
-    from .config import EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path, get_wine_user, \
+    from .config import PersistentConfiguration, get_wine_prefix_path, get_wine_user, \
         get_logos_appdata_dir, get_logos_user_id
     persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
     if persistent_config.install_dir is None:
@@ -646,7 +647,6 @@ def get_logos_paths(ephemeral_config):
     if logos_user_id is None:
         raise RuntimeError("Unable to find Logos user ID")
 
-    from .database import LogosPaths
     return LogosPaths(
         appdata=appdata,
         data=appdata / "Data" / logos_user_id,

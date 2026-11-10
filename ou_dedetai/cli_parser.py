@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+from pathlib import Path
 from typing import Tuple, Callable
 
 from . import constants, msg, cli, utils
@@ -8,20 +9,6 @@ from .config import EphemeralConfiguration
 
 
 def get_parser():
-    desc = "Installs FaithLife Bible Software with Wine."
-
-    parser = argparse.ArgumentParser(description=desc)
-
-    parser.add_argument(
-        '-v', '--version',
-        action='version',
-        version=(
-            f"{constants.APP_NAME}, "
-            f"{constants.LLI_CURRENT_VERSION} by {constants.LLI_AUTHOR}"
-        ),
-    )
-
-
     desc = "Installs FaithLife Bible Software with Wine."
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument(
@@ -244,15 +231,47 @@ def add_database_parser(subparsers):
         "count",
         help="show note counts",
     )
-    dump_parser = notes_commands.add_parser(
-        "dump",
-        help="dump sample notes",
+    get_parser = notes_commands.add_parser(
+        "get",
+        help="show a single note",
     )
-    dump_parser.add_argument(
+    get_parser.add_argument(
+        "note_id",
+        type=int,
+        help="NoteId to display",
+    )
+    render_parser = notes_commands.add_parser(
+        "render",
+        help="render a note as Markdown",
+    )
+    render_parser.add_argument(
+        "note_id",
+        type=int,
+        help="NoteId to render",
+    )
+    search_parser = notes_commands.add_parser(
+        "search",
+        help="search Logos notes",
+    )
+    search_parser.add_argument(
+        "query",
+        help="text to search for",
+    )
+    search_parser.add_argument(
         "--limit",
         type=int,
-        default=5,
-        help="number of notes to dump",
+        default=20,
+        help="maximum number of results",
+    )
+    export_parser = notes_commands.add_parser(
+        "export",
+        help="export Logos notes as Markdown",
+    )
+    export_parser.add_argument(
+        "export_dir",
+        nargs="?",
+        type=Path,
+        help="directory for exported notes; defaults to <install_dir>/export",
     )
     return db_parser
 
@@ -266,8 +285,11 @@ def parse_database_command(args, ephemeral_config):
 
     if args.database_command == "notes":
         if args.notes_command == "dump":
-            ephemeral_config.database_limit = args.limit
             return main.database_notes_dump_operation
+        if args.notes_command == "get":
+            return main.database_notes_get_operation
+        if args.notes_command == "render":
+            return main.database_notes_render_operation
 
     raise RuntimeError(f"Unknown database command: {args.database_command}")
 
