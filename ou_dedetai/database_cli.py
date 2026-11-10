@@ -1,7 +1,6 @@
 from pathlib import Path
 
-from .database import NotesDatabase, SQLiteDatabase, DatabaseInspector
-from .paths import LogosPaths
+from .database import NotesDatabase, SQLiteDatabase, DatabaseInspector, LogosPaths
 from .config import (
     EphemeralConfiguration,
     PersistentConfiguration,
