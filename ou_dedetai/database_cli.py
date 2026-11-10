@@ -94,10 +94,10 @@ def database_list_operation(ephemeral_config: EphemeralConfiguration):
         print(database)
 
 
-def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration):
+def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration, limit: int):
     paths = get_logos_paths(ephemeral_config)
     with NotesDatabase(paths.appdata, paths.user_id) as db:
-        for note in db.sample("Notes", ephemeral_config.database_limit):
+        for note in db.sample("Notes", limit):
             print(dict(note))
             print()
 
@@ -108,11 +108,11 @@ def parse_database_command(args, ephemeral_config):
         return database_list_operation
 
     if args.database_command == "notes":
-        ephemeral_config.notes_command = args.notes_command
-
         if args.notes_command == "dump":
-            ephemeral_config.database_limit = args.limit
-            return database_notes_dump_operation
+            def database_notes_dump_action(config):
+                return database_notes_dump_operation(config, args.limit)
+            database_notes_dump_action.__name__ = "database_notes_dump_operation"
+            return database_notes_dump_action
 
     raise RuntimeError(
         f"Unknown database command: {args.database_command}"
