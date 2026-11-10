@@ -59,7 +59,7 @@ class TestAkousousinInstall(unittest.TestCase):
         system.ensure_akousousin(self.app)
         self.assertTrue(self.logos_reuse_download.call_args.args[1].endswith('Akousousin-Linux-x86_64.tar.gz'))
         self.app.conf._network._repo_version.assert_called_once_with(
-            "jg00dman/akousousin", tag="published", asset_name=r"Akousousin\-Linux\-x86_64\.tar\.gz",
+            "jg00dman/akousousin", tag="latest", asset_name=r"Akousousin\-Linux\-x86_64\.tar\.gz",
         )
         self.assertEqual(self.run_command.call_count, 2)
         self.assert_registration(self.launcher)
@@ -89,21 +89,15 @@ class TestAkousousinInstall(unittest.TestCase):
         self.app.exit.assert_called_once()
 
 
-class TestPublishedAkousousinRelease(unittest.TestCase):
-    def test_newest_published_release_excludes_drafts_and_accepts_stable_and_beta(self):
-        def release(tag, date, prerelease=False, draft=False):
-            return {"tag_name": tag, "published_at": date, "prerelease": prerelease, "draft": draft,
-                    "assets": [{"name": "Akousousin-Linux-x86_64.tar.gz", "browser_download_url": f"https://x/{tag}"}]}
-
-        stable = release("stable", "2026-11-01T00:00:00Z")
-        beta = release("beta", "2026-11-02T00:00:00Z", prerelease=True)
-        draft = release("draft", "2026-11-04T00:00:00Z", draft=True)
-        for candidates, expected in (([draft, stable, beta], "beta"),
-                                     ([beta, release("stable", "2026-11-03T00:00:00Z"), draft], "stable")):
-            with self.subTest(expected=expected), patch.object(
-                network, "_net_get", return_value=json.dumps(candidates).encode(),
-            ) as get:
-                result = network._get_release_data("jg00dman/akousousin", tag="published",
-                                                   asset_name=r"Akousousin-Linux-x86_64\.tar\.gz")
-                self.assertEqual(result.version, expected)
-                get.assert_called_once_with("https://api.github.com/repos/jg00dman/akousousin/releases")
+class TestStableAkousousinRelease(unittest.TestCase):
+    def test_uses_github_latest_stable_endpoint_and_exact_tar_asset(self):
+        release = {"tag_name": "v1.0", "assets": [
+            {"name": "Akousousin-x86_64.AppImage", "browser_download_url": "https://x/appimage"},
+            {"name": "Akousousin-Linux-x86_64.tar.gz", "browser_download_url": "https://x/tar"},
+        ]}
+        with patch.object(network, "_net_get", return_value=json.dumps(release).encode()) as get:
+            result = network._get_release_data("jg00dman/akousousin", tag="latest",
+                                               asset_name=r"Akousousin-Linux-x86_64\.tar\.gz")
+        self.assertEqual(result.version, "1.0")
+        self.assertEqual(result.download_url, "https://x/tar")
+        get.assert_called_once_with("https://api.github.com/repos/jg00dman/akousousin/releases/latest")

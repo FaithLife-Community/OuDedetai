@@ -1062,7 +1062,7 @@ def ensure_akousousin(app: App):
         if not launcher.is_file():
             filename = "Akousousin-Linux-x86_64.tar.gz"
             release = app.conf._network._repo_version(
-                "jg00dman/akousousin", tag="published", asset_name=re.escape(filename),
+                "jg00dman/akousousin", tag="latest", asset_name=re.escape(filename),
             )
             cached = f"{release.version.replace('/', '_')}-{filename}"
             network.logos_reuse_download(release.download_url, cached, app.conf.download_dir, app=app)
