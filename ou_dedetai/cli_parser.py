@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Tuple, Callable
 
-from . import constants, database_cli, msg, cli, utils
+from . import constants, msg, cli, utils
 from .config import EphemeralConfiguration
 
 
@@ -207,7 +207,7 @@ def get_parser():
         help="run winetricks command",
     )
 
-    database_cli.add_database_parser(
+    add_database_parser(
         parser.add_subparsers(
             dest="command",
             title="commands",
@@ -217,7 +217,63 @@ def get_parser():
     return parser
 
 
+def add_database_parser(subparsers):
+    db_parser = subparsers.add_parser(
+        "database",
+        help="inspect Logos SQLite databases",
+    )
+    db_commands = db_parser.add_subparsers(
+        dest="database_command",
+        title="database commands",
+        required=True,
+    )
+    db_commands.add_parser(
+        "list",
+        help="list Logos SQLite databases",
+    )
+    notes_parser = db_commands.add_parser(
+        "notes",
+        help="inspect Logos Notes database",
+    )
+    notes_commands = notes_parser.add_subparsers(
+        dest="notes_command",
+        title="notes commands",
+        required=True,
+    )
+    notes_commands.add_parser(
+        "count",
+        help="show note counts",
+    )
+    dump_parser = notes_commands.add_parser(
+        "dump",
+        help="dump sample notes",
+    )
+    dump_parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="number of notes to dump",
+    )
+    return db_parser
+
+
+def parse_database_command(args, ephemeral_config):
+    from . import main
+    ephemeral_config.database_command = args.database_command
+
+    if args.database_command == "list":
+        return main.database_list_operation
+
+    if args.database_command == "notes":
+        if args.notes_command == "dump":
+            ephemeral_config.database_limit = args.limit
+            return main.database_notes_dump_operation
+
+    raise RuntimeError(f"Unknown database command: {args.database_command}")
+
+
 def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]:
+    from . import main
     if args.config:
         ephemeral_config = EphemeralConfiguration.load_from_path(args.config)
     else:
@@ -226,9 +282,8 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
     if args.command == "database":
         return (
             ephemeral_config,
-            database_cli.parse_database_command(
-                args,
-                ephemeral_config,
+            main.parse_database_command(
+                args
             ),
         )
 

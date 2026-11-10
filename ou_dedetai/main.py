@@ -18,6 +18,7 @@ from .cli_parser import get_parser, od_parse_args
 from .config import EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path
 from .repair import detect_and_recover
 
+
 # Begin Program Actions
 def run_control_panel(ephemeral_config: EphemeralConfiguration):
     dialog = ephemeral_config.dialog or system.get_dialog()
@@ -139,7 +140,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
-        'toggle_media_support'
+        'toggle_media_support',
     ]
     if action.__name__ not in install_required:
         logging.info(f"Running function: {action.__name__}")
