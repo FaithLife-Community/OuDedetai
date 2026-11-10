@@ -5,6 +5,7 @@ import json
 import logging
 from math import ceil
 import os
+import re
 import time
 from typing import Callable, Optional
 import requests
@@ -310,7 +311,11 @@ class NetworkRequests:
 
         repo = "FaithLife-Community/wine-appimages"
         try:
-            release = self._repo_version(repo, tag="latest" if channel == "stable" else "prerelease", asset_suffix=".tar.xz")
+            release = self._repo_version(
+                repo,
+                tag="latest" if channel == "stable" else "prerelease",
+                asset_name=r".*\.tar\.xz",
+            )
         except (LookupError, ValueError):
             logging.info(
                 "No stable Wine tarball found; falling back to the recommended AppImage."
@@ -321,7 +326,7 @@ class NetworkRequests:
     def wine_appimage_recommended_release(self) -> SoftwareReleaseInfo:
         """Returns the latest stable recommended Wine AppImage release."""
         repo = "FaithLife-Community/wine-appimages"
-        return self._repo_version(repo, asset_suffix=".AppImage")
+        return self._repo_version(repo, asset_name=r".*\.AppImage")
 
     def wine_appimage_recommended_url(self) -> str:
         return self.wine_appimage_recommended_release().download_url
@@ -350,9 +355,9 @@ class NetworkRequests:
         self,
         repository: str,
         tag: str = "latest",
-        asset_suffix: str | None = None,
+        asset_name: str | None = None,
     ) -> SoftwareReleaseInfo:
-        cache_key = f"{repository}|{tag}|{asset_suffix or ''}"
+        cache_key = f"{repository}|{tag}|{asset_name or ''}"
 
         if (
                 cache_key not in self._cache.repository_latest_version
@@ -362,7 +367,7 @@ class NetworkRequests:
                 release = _get_release_data(
                     repository,
                     tag=tag,
-                    asset_suffix=asset_suffix,
+                    asset_name=asset_name,
                 )
             except LookupError:
                 self._cache.repository_latest_version[cache_key] = None
@@ -406,7 +411,7 @@ class NetworkRequests:
         return self._repo_version(
             repository,
             tag=tag,
-            asset_suffix=asset_names[architecture],
+            asset_name=asset_names[architecture],
         )
 
     def icu_latest_version(self) -> SoftwareReleaseInfo:
@@ -624,18 +629,19 @@ def _verify_downloaded_file(url: str, file_path: Path | str, app: App, status_me
     return True
 
 
-def _get_asset_url(release: dict, name: Optional[str] = None) -> str:
+def _get_asset_url(release: dict, asset_name: Optional[str] = None) -> str:
+    """asset_name is a regex that must match the full asset name."""
     assets = release.get("assets") or []
-    if name is not None:
-        matching_assets = [asset for asset in assets if asset.get("name") == name]
-        if not matching_assets and name in ("oudedetai-x86_64", "oudedetai-arm"):
-            logging.debug(f"Asset {name} not found; trying legacy asset 'oudedetai'.")
+    if asset_name is not None:
+        matching_assets = [asset for asset in assets if re.fullmatch(asset_name, asset.get("name") or "")]
+        if not matching_assets and asset_name in ("oudedetai-x86_64", "oudedetai-arm"):
+            logging.debug(f"Asset {asset_name} not found; trying legacy asset 'oudedetai'.")
             matching_assets = [
                 asset for asset in assets if asset.get("name") == "oudedetai"
             ]
         assets = matching_assets
     if not assets:
-        raise ValueError(f"Could not find asset {name!r} in release {release.get('tag_name')}")
+        raise ValueError(f"Could not find asset {asset_name!r} in release {release.get('tag_name')}")
     download_url = assets[0].get("browser_download_url")
     if download_url is None:
         raise ValueError(f"Missing download URL for asset in release {release.get('tag_name')}")
@@ -662,9 +668,8 @@ def _published_at(release: dict) -> datetime:
 
 def _get_release_data(
     repository: str,
-    name: Optional[str] = None,
     tag: str = "latest",
-    asset_suffix: str | None = None,
+    asset_name: str | None = None,
 ) -> SoftwareReleaseInfo:
     release_url = f"https://api.github.com/repos/{repository}/releases"
     if tag == "latest":
@@ -696,7 +701,7 @@ def _get_release_data(
             try:
                 return SoftwareReleaseInfo(
                     version=_get_version_name(release),
-                    download_url=_get_asset_url(release, asset_suffix or name),
+                    download_url=_get_asset_url(release, asset_name),
                 )
             except ValueError as e:
                 logging.warning(f"Skipping release {release.get('tag_name')}: {e}")
@@ -706,7 +711,7 @@ def _get_release_data(
         raise ValueError(f"Unexpected GitHub response for release {tag}")
     return SoftwareReleaseInfo(
         version=_get_version_name(json_data),
-        download_url=_get_asset_url(json_data, asset_suffix or name)
+        download_url=_get_asset_url(json_data, asset_name)
     )
 
 # FIXME: clean this up, this should ba handled by the install step

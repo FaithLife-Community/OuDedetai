@@ -378,7 +378,8 @@ def check_appimage(filestr):
 
 
 def find_appimage_files(app: App) -> list[str]:
-    release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release 
+    # Must not prompt; may run before the release default is set
+    release_version = app.conf.installed_faithlife_product_release or app.conf._raw.faithlife_product_release
     appimages = []
     directories = [
         app.conf.installer_binary_dir,

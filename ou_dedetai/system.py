@@ -18,7 +18,7 @@ from packaging.version import Version
 from pathlib import Path
 from typing import Optional, Tuple
 
-from ou_dedetai import constants, network, wine
+from ou_dedetai import constants, network
 from ou_dedetai.app import App
 
 
@@ -376,8 +376,7 @@ class OpenGLIncompatible(Exception):
 
 def check_opengl_version(app: App, required_version="3.2") -> tuple[bool, str]:
     try:
-        env = wine.get_wine_env(app, None)
-        result = run_command(['glxinfo'], env=fix_ld_library_path(env), capture_output=True, text=True, check=True)
+        result = run_command(['glxinfo'], env=fix_ld_library_path(None), capture_output=True, text=True, check=True)
     except FileNotFoundError:
         return False, "glxinfo command not found. Please install mesa-utils or equivalent."
     except subprocess.CalledProcessError as e:
@@ -970,11 +969,17 @@ def install_dependencies(app: App, target_version=10):
             run_command(command_str, shell=True)
         except subprocess.CalledProcessError as e:
             if e.returncode == 127:
-                logging.error("User cancelled dependency installation.")
+                logging.error("Superuser authentication failed or was cancelled.")
             else:
                 logging.error(f"An error occurred in install_dependencies(): {e}")
                 logging.error(f"Command output: {e.output}")
             install_deps_failed = True
+            app.info(
+                "Failed to install some dependencies: "
+                f"{' '.join(missing_packages + conflicting_packages)}. "
+                "Warning: the app may not function properly, please report this "
+                "and your OS using \"Get Support\"."
+            )
 
 
     if reboot_required:

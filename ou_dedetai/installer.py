@@ -128,9 +128,11 @@ def check_for_known_bugs(app: App):
 
             found: bool = False
 
-            for xdg_data_dir in xdg_data_dirs.split(":"):
+            # Empty when no default browser is registered
+            dirs = xdg_data_dirs.split(":") if desktop_file_name else []
+            for xdg_data_dir in dirs:
                 desktop_file_path = (Path(xdg_data_dir) / "applications" / desktop_file_name)
-                if desktop_file_path.exists():
+                if desktop_file_path.is_file():
                     found = True
                     lines = desktop_file_path.read_text().splitlines()
                     lines = list(filter(lambda line: line.lower().startswith("exec="), lines))
