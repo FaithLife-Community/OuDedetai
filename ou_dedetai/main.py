@@ -18,7 +18,6 @@ from .cli_parser import get_parser, od_parse_args
 from .config import EphemeralConfiguration, PersistentConfiguration, get_wine_prefix_path
 from .repair import detect_and_recover
 
-
 # Begin Program Actions
 def run_control_panel(ephemeral_config: EphemeralConfiguration):
     dialog = ephemeral_config.dialog or system.get_dialog()
@@ -58,8 +57,6 @@ def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration, limi
         for note in db.sample("Notes", limit):
             print(dict(note))
             print()
-
-
 # End Program Actions
 
 def parse_database_command(args):

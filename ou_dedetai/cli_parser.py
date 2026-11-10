@@ -217,7 +217,7 @@ def get_parser():
     return parser
 
 
-def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]:
+def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]:
     if args.config:
         ephemeral_config = EphemeralConfiguration.load_from_path(args.config)
     else:
