@@ -578,7 +578,7 @@ def untar_file(file_path, output_dir):
 
     try:
         with tarfile.open(file_path, 'r:gz') as tar:
-            tar.extractall(path=output_dir)
+            tar.extractall(path=output_dir, filter="data")
             logging.debug(f"Successfully extracted '{file_path}' to '{output_dir}'")
     except tarfile.TarError as e:
         logging.error(f"Error extracting '{file_path}': {e}")

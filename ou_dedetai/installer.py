@@ -329,6 +329,8 @@ def ensure_wineprefix_config(app: App):
     logging.debug("Configuring wineprefix for printing.")
     wine.configure_printing(app=app, wine64_binary=app.conf.wine64_binary)
 
+    system.ensure_akousousin(app=app)
+
 
 def ensure_fonts(app: App):
     """Ensure the arial font is installed"""
