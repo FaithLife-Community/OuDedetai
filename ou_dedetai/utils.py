@@ -25,6 +25,8 @@ from . import constants
 from . import network
 from . import system
 from . import wine
+from .config import EphemeralConfiguration
+from .database_cli import get_logos_paths
 
 
 # FIXME: This function isn't used and should probably be removed.
@@ -623,3 +625,7 @@ def get_timestamp():
 
 def parse_bool(string: str) -> bool:
     return string.lower() in ['true', '1', 'y', 'yes']
+
+
+def get_logos_databases(ephemeral_config: EphemeralConfiguration) -> list[Path]:
+    return get_logos_paths(ephemeral_config).databases

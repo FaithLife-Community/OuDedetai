@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .database import NotesDatabase, SQLiteDatabase, DatabaseInspector, LogosPaths
+from .database import NotesDatabase, DatabaseInspector, LogosPaths
 from .config import (
     EphemeralConfiguration,
     PersistentConfiguration,
@@ -9,6 +9,7 @@ from .config import (
     get_logos_appdata_dir,
     get_logos_user_id,
 )
+from .utils import get_logos_databases
 
 
 def add_database_parser(subparsers):
@@ -102,10 +103,6 @@ def get_logos_paths(
         documents=appdata / "Documents" / logos_user_id,
         user_id=logos_user_id
     )
-
-
-def get_logos_databases(ephemeral_config: EphemeralConfiguration) -> list[Path]:
-    return get_logos_paths(ephemeral_config).databases
 
 
 def database_operation(ephemeral_config: EphemeralConfiguration):
