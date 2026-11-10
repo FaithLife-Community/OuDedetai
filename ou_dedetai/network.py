@@ -674,7 +674,7 @@ def _get_release_data(
     release_url = f"https://api.github.com/repos/{repository}/releases"
     if tag == "latest":
         release_url += "/latest"
-    elif tag != "prerelease":
+    elif tag not in ("prerelease", "published"):
         release_url += f"/tags/{tag}"
 
     data = _net_get(release_url)
@@ -687,13 +687,13 @@ def _get_release_data(
         logging.error(f"Error decoding GitHub's JSON response: {e}")
         raise
 
-    if tag == "prerelease":
+    if tag in ("prerelease", "published"):
         if not isinstance(json_data, list):
             raise ValueError(f"Unexpected GitHub response for releases in {repository}")
         releases = sorted(
             (release for release in json_data
              if not release.get("draft", False)
-             and release.get("prerelease", False)),
+             and (tag == "published" or release.get("prerelease", False))),
             key=_published_at,
             reverse=True,
         )
@@ -705,7 +705,7 @@ def _get_release_data(
                 )
             except ValueError as e:
                 logging.warning(f"Skipping release {release.get('tag_name')}: {e}")
-        raise LookupError(f"No suitable prerelease found for {repository}")
+        raise LookupError(f"No suitable {tag} release found for {repository}")
 
     if not isinstance(json_data, dict):
         raise ValueError(f"Unexpected GitHub response for release {tag}")

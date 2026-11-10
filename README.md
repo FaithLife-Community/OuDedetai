@@ -23,8 +23,8 @@ The main program is a distributable executable binary and contains Python itself
 When running the program, it will attempt to determine your operating system and package manager.
 It will then attempt to install all needed system dependencies during the installation of Logos.
 The dependency setup also installs a Linux text-to-speech layer called
-[Akousousin](https://github.com/jg00dman/akousousin) and registers its voices while configuring the Logos/Verbum Wine prefix. The tar.gz bundle is the default; you can instead
-choose an AppImage that can install its own updates. The bundle's per-user
+[Akousousin](https://github.com/jg00dman/akousousin) and registers its voices while configuring the Logos/Verbum Wine prefix. OD installs the tar.gz bundle from the newest published release (including betas,
+excluding drafts), without a package-choice prompt. The bundle's per-user
 `install.sh --quiet` runs first, followed by `akousousin --wine-prefix … --wine … --install-only`.
 An existing shared installation is reused. Akousousin manages speech startup and
 idle unloading itself; Ou Dedetai adds no runtime service management. Open

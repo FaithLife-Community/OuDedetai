@@ -1055,37 +1055,26 @@ def ensure_akousousin(app: App):
     app.status("Ensuring Akousousin speech support is installed…")
 
     launcher = Path.home() / ".local/bin/akousousin"
-    image = Path(constants.XDG_DATA_HOME) / "Akousousin/Akousousin-x86_64.AppImage"
     # Akousousin is a separate frozen application, not a child OD worker.
-    env = dict(os.environ, APPIMAGE_EXTRACT_AND_RUN="1", PYINSTALLER_RESET_ENVIRONMENT="1")
+    env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
 
     try:
-        if not launcher.is_file() and not image.is_file():
-            bundle = "Tar.gz bundle (default)"
-            appimage = "AppImage (can install its own updates)"
-            choice = app.ask("Which Akousousin text-to-speech package should be installed?", [bundle, appimage])
-            filename = "Akousousin-x86_64.AppImage" if choice == appimage else "Akousousin-Linux-x86_64.tar.gz"
-            # Akousousin currently publishes beta packages as prereleases.
+        if not launcher.is_file():
+            filename = "Akousousin-Linux-x86_64.tar.gz"
             release = app.conf._network._repo_version(
-                "jg00dman/akousousin", tag="prerelease", asset_name=re.escape(filename),
+                "jg00dman/akousousin", tag="published", asset_name=re.escape(filename),
             )
             cached = f"{release.version.replace('/', '_')}-{filename}"
             network.logos_reuse_download(release.download_url, cached, app.conf.download_dir, app=app)
             downloaded = Path(app.conf.download_dir) / cached
-            if choice == appimage:
-                image.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(downloaded, image)
-                image.chmod(0o755)
-            else:
-                with tempfile.TemporaryDirectory() as directory:
-                    utils.untar_file(downloaded, directory)
-                    if run_command(["sh", str(Path(directory) / "Akousousin/install.sh"), "--quiet"],
-                                   env=env, timeout=180) is None:
-                        app.exit("Akousousin bundle installation failed. See the installation log.")
-                if not launcher.is_file():
-                    app.exit(f"Akousousin installer did not create {launcher}.")
-        executable = launcher if launcher.is_file() else image
-        if run_command([str(executable), "--wine-prefix", str(Path(app.conf.wine_prefix).resolve()),
+            with tempfile.TemporaryDirectory() as directory:
+                utils.untar_file(downloaded, directory)
+                if run_command(["sh", str(Path(directory) / "Akousousin/install.sh"), "--quiet"],
+                               env=env, timeout=180) is None:
+                    app.exit("Akousousin bundle installation failed. See the installation log.")
+            if not launcher.is_file():
+                app.exit(f"Akousousin installer did not create {launcher}.")
+        if run_command([str(launcher), "--wine-prefix", str(Path(app.conf.wine_prefix).resolve()),
                         "--wine", str(Path(app.conf.wine_binary).resolve()), "--install-only"],
                        env=env, timeout=180) is None:
             app.exit("Akousousin SAPI registration failed. See the installation log.")
