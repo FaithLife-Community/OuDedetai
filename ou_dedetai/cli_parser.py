@@ -392,7 +392,7 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
     
     # Avoid circular dependency
     from . import main
-    if main.install_app:
+    if args.install_app:
         run_action = main.install_app
 
     if run_action is None:
