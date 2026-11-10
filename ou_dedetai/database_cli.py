@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .database import NotesDatabase, DatabaseInspector, LogosPaths
+from .database import NotesDatabase, LogosPaths
 from .config import (
     EphemeralConfiguration,
     PersistentConfiguration,
@@ -29,17 +29,6 @@ def add_database_parser(subparsers):
         help="list Logos SQLite databases",
     )
 
-    inspect_parser = db_commands.add_parser(
-        "inspect",
-        help="inspect a SQLite database",
-    )
-
-    inspect_parser.add_argument(
-        "--path",
-        metavar="DATABASE",
-        help="Path to SQLite database. Defaults to installed Logos database.",
-    )
-
     notes_parser = db_commands.add_parser(
         "notes",
         help="inspect Logos Notes database",
@@ -54,11 +43,6 @@ def add_database_parser(subparsers):
     notes_commands.add_parser(
         "count",
         help="show note counts",
-    )
-
-    notes_commands.add_parser(
-        "info",
-        help="show Notes database information",
     )
 
     dump_parser = notes_commands.add_parser(
@@ -105,22 +89,6 @@ def get_logos_paths(
     )
 
 
-def database_operation(ephemeral_config: EphemeralConfiguration):
-    from .database import SQLiteDatabase, DatabaseInspector
-
-    if ephemeral_config.database_path:
-        databases = [Path(ephemeral_config.database_path)]
-    else:
-        databases = get_logos_databases(ephemeral_config)
-
-    for database_path in databases:
-        print(f"\n=== {database_path.name} ===")
-
-        with SQLiteDatabase(database_path) as db:
-            inspector = DatabaseInspector(db)
-            inspector.print_summary()
-
-
 def database_list_operation(ephemeral_config: EphemeralConfiguration):
     for database in get_logos_databases(ephemeral_config):
         print(database)
@@ -136,14 +104,6 @@ def database_notes_count_operation(ephemeral_config: EphemeralConfiguration):
         }
     for name, count in counts.items():
         print(f"{name}: {count}")
-
-
-def database_notes_info_operation(ephemeral_config: EphemeralConfiguration):
-    paths = get_logos_paths(ephemeral_config)
-
-    with NotesDatabase(paths.appdata, paths.user_id) as db:
-        inspector = DatabaseInspector(db)
-        inspector.print_summary()
 
 
 def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration):
@@ -164,17 +124,10 @@ def parse_database_command(args, ephemeral_config):
 
         if args.notes_command == "count":
             return database_notes_count_operation
-        
-        if args.notes_command == "info":
-            return database_notes_info_operation
 
         if args.notes_command == "dump":
             ephemeral_config.database_limit = args.limit
             return database_notes_dump_operation
-
-    if args.database_command == "inspect":
-        ephemeral_config.database_path = args.path
-        return database_operation
 
     raise RuntimeError(
         f"Unknown database command: {args.database_command}"
