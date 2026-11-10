@@ -435,6 +435,36 @@ def set_renderer(app: App, wine64_binary: str, value: str):
     wine_reg_install(app, name, reg_text, wine64_binary)
 
 
+def media_support_enabled(app: App) -> bool:
+    user_reg = Path(app.conf.wine_prefix) / "user.reg"
+    if not user_reg.is_file():
+        return False
+    media = re.search(
+        r'^\[Software\\\\Wine\\\\MediaFoundation\].*?(?=^\[|\Z)',
+        user_reg.read_text(), re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    )
+    return get_renderer(app) == "gl" and media is not None and re.search(
+        r'^"DisableGstByteStreamHandler"=dword:0*1\s*$', media.group(), re.MULTILINE | re.IGNORECASE,
+    ) is not None
+
+
+def toggle_media_support(app: App):
+    enabled = media_support_enabled(app)
+    renderer = "gdi" if enabled else "gl"
+    handler = "-" if enabled else "dword:00000001"
+    reg_text = rf'''REGEDIT4
+
+[HKEY_CURRENT_USER\Software\Wine\Direct3D]
+"renderer"="{renderer}"
+
+[HKEY_CURRENT_USER\Software\Wine\MediaFoundation]
+"DisableGstByteStreamHandler"={handler}
+'''
+    wine_reg_install(app, "toggle-media-support.reg", reg_text, app.conf.wine64_binary)
+    state = "disabled" if enabled else "enabled"
+    app.status(f"Experimental media support {state}. Restart {app.conf.faithlife_product}.", 100)
+
+
 def set_fontsmoothing_to_rgb(app: App, wine64_binary: str):
     # Possible registry values:
     # "disable":      FontSmoothing=0; FontSmoothingOrientation=1; FontSmoothingType=0

@@ -593,6 +593,9 @@ class TUI(App):
                 MenuModal("Choose Renderer", ["gdi", "gl", "dxvk", "vulkan", "Return to Main Menu"]),
                 callback=self.renderer_select,
             )
+        elif choice == "Toggle experimental media support":
+            self.start_thread(wine.toggle_media_support, self)
+            self.go_to_main_menu()
         elif choice == "Set Windows Version for Logos":
             self.ui.push_screen(MenuModal("Windows Version for Logos", constants.WINDOWS_VERSIONS),
                                 callback=self.win_ver_logos_select)
@@ -670,6 +673,7 @@ class TUI(App):
 
         return [
             f"Set Renderer (Current: {renderer_label})",
+            "Toggle experimental media support",
             f"Set Windows Version for Logos (Current: {logos_win_version})",
             f"Set Windows Version for Indexer (Current: {indexer_win_version})",
             "Return to Main Menu",

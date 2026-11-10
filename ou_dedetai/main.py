@@ -173,6 +173,10 @@ def get_parser():
         help='enable/disable app logs',
     )
     cmd.add_argument(
+        '--toggle-media-support', action='store_true',
+        help='enable/disable experimental media support',
+    )
+    cmd.add_argument(
         '--create-shortcuts', action='store_true',
         help='[re-]create app shortcuts',
     )
@@ -292,6 +296,7 @@ def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephemera
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
+        'toggle_media_support',
         'update_self',
         'update_latest_appimage',
         'wine',
@@ -412,6 +417,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
+        'toggle_media_support',
     ]
     if action.__name__ not in install_required:
         logging.info(f"Running function: {action.__name__}")
