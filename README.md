@@ -22,12 +22,15 @@ The main program is a distributable executable binary and contains Python itself
 
 When running the program, it will attempt to determine your operating system and package manager.
 It will then attempt to install all needed system dependencies during the installation of Logos.
-Installation also installs [Akousousin](https://github.com/jg00dman/akousousin) and
-registers its SAPI voices in the Wine prefix. Akousousin starts speech on demand
-and unloads idle models itself; Ou Dedetai has no speech enable switch or runtime
-service management. An existing shared installation is reused; otherwise the newest
-published Linux AppImage is downloaded, including beta releases. The engine must
-support on-demand SAPI startup.
+Installation also installs a Linux text-to-speech layer called
+[Akousousin](https://github.com/jg00dman/akousousin) and configures it for Logos/Verbum
+in the installed Wine prefix. The tar.gz bundle is the default; you can instead
+choose an AppImage that can install its own updates. The bundle's per-user
+`install.sh --quiet` runs first, followed by `akousousin --wine-prefix … --wine … --install-only`.
+An existing shared installation is reused. Akousousin manages speech startup and
+idle unloading itself; Ou Dedetai adds no runtime service management. Open
+Akousousin to choose or download a voice if none is installed. Current packages
+are x86-64 Linux betas and require glibc 2.35 or later.
 
 When the installation is finished, it will place two shortcuts on your computer: one will launch Logos directly; the other will launch the Control Panel.
 

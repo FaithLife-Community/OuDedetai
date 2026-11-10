@@ -1,8 +1,11 @@
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -394,32 +397,41 @@ def ensure_akousousin(app: App):
     app.installer_step += 1
     app.status("Ensuring Akousousin speech support is installed…")
 
-    filename = "Akousousin-x86_64.AppImage"
-    target = Path(constants.XDG_DATA_HOME) / "Akousousin" / filename
-    image = target
-    if not target.is_file():
-        release = network._get_release_data("jg00dman/akousousin", name=filename, tag="newest")
-        # A release-specific cache name prevents reusing another release's bytes.
+    launcher = Path.home() / ".local/bin/akousousin"
+    image = Path(constants.XDG_DATA_HOME) / "Akousousin/Akousousin-x86_64.AppImage"
+    # Akousousin is a separate frozen application, not a child OD worker.
+    env = dict(os.environ, APPIMAGE_EXTRACT_AND_RUN="1", PYINSTALLER_RESET_ENVIRONMENT="1")
+
+    def run(command):
+        result = system.run_command(command, env=env, timeout=180, check=False)
+        if result is None or result.returncode:
+            details = (result.stderr or result.stdout) if result else "See the installation log."
+            app.exit(f"Akousousin installation or SAPI registration failed. {details}")
+
+    if not launcher.is_file() and not image.is_file():
+        bundle = "Tar.gz bundle (default)"
+        appimage = "AppImage (can install its own updates)"
+        choice = app.ask("Which Akousousin text-to-speech package should be installed?", [bundle, appimage])
+        filename = "Akousousin-x86_64.AppImage" if choice == appimage else "Akousousin-Linux-x86_64.tar.gz"
+        # Akousousin currently publishes beta packages as prereleases.
+        release = network._get_release_data("jg00dman/akousousin", tag="prerelease", asset_name=re.escape(filename))
         cached = f"{release.version.replace('/', '_')}-{filename}"
         network.logos_reuse_download(release.download_url, cached, app.conf.download_dir, app=app)
-        image = Path(app.conf.download_dir) / cached
-    image.chmod(image.stat().st_mode | 0o100)
-    env = os.environ.copy()
-    env.update(APPIMAGE_EXTRACT_AND_RUN="1", PYINSTALLER_RESET_ENVIRONMENT="1")
-    help_result = system.run_command([str(image), "--help"], env=env, timeout=30, check=False)
-    if help_result is None or help_result.returncode or "--api-start" not in help_result.stdout:
-        app.exit("Akousousin needs a release with on-demand SAPI startup. "
-                 "Install an updated Akousousin release and retry installation.")
-    if image != target:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(image, target)
-    result = system.run_command(
-        [str(target), "--wine-prefix", str(app.conf.wine_prefix),
-         "--wine", str(app.conf.wine64_binary), "--install-only"],
-        env=env, timeout=180, check=False,
-    )
-    if result is None or result.returncode:
-        app.exit("Akousousin SAPI registration failed. " + (result.stderr if result else "See the installation log."))
+        downloaded = Path(app.conf.download_dir) / cached
+        if choice == appimage:
+            image.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(downloaded, image)
+            image.chmod(0o755)
+        else:
+            with tempfile.TemporaryDirectory() as directory:
+                with tarfile.open(downloaded, "r:gz") as archive:
+                    archive.extractall(directory, filter="data")
+                run(["sh", str(Path(directory) / "Akousousin/install.sh"), "--quiet"])
+            if not launcher.is_file():
+                app.exit(f"Akousousin installer did not create {launcher}.")
+    executable = launcher if launcher.is_file() else image
+    run([str(executable), "--wine-prefix", str(Path(app.conf.wine_prefix).resolve()),
+         "--wine", str(Path(app.conf.wine_binary).resolve()), "--install-only"])
 
 
 def ensure_config_file(app: App):
