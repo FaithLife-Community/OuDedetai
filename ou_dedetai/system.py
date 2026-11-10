@@ -1048,7 +1048,7 @@ def ensure_winetricks(
     logging.debug("Winetricks installed.")
 
 
-def ensure_akousousin(app: App):
+def ensure_akousousin(app: App, update: bool = False):
     """Install shared speech and register SAPI; Akousousin owns its lifecycle."""
     from . import utils
 
@@ -1059,11 +1059,11 @@ def ensure_akousousin(app: App):
     env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
 
     try:
-        if not launcher.is_file():
+        if update or not launcher.is_file():
             filename = "Akousousin-Linux-x86_64.tar.gz"
-            release = app.conf._network._repo_version(
-                "jg00dman/akousousin", tag="latest", asset_name=re.escape(filename),
-            )
+            # Explicit updates must bypass the cached release lookup.
+            lookup = network._get_release_data if update else app.conf._network._repo_version
+            release = lookup("jg00dman/akousousin", tag="latest", asset_name=re.escape(filename))
             cached = f"{release.version.replace('/', '_')}-{filename}"
             network.logos_reuse_download(release.download_url, cached, app.conf.download_dir, app=app)
             downloaded = Path(app.conf.download_dir) / cached
@@ -1080,6 +1080,21 @@ def ensure_akousousin(app: App):
             app.exit("Akousousin SAPI registration failed. See the installation log.")
     except subprocess.CalledProcessError as error:
         app.exit(f"Akousousin setup failed. {error.stderr or error.stdout or error}")
+
+
+def update_akousousin(app: App):
+    """Install the latest stable tar and register it with the current Wine runner."""
+    from .logos import State
+
+    if not app.is_installed():
+        app.status("Install Logos/Verbum before updating Akousousin.")
+        return
+    app.logos.monitor()
+    if app.logos.logos_state in (State.STARTING, State.RUNNING):
+        app.status("Close Logos/Verbum before updating Akousousin.")
+        return
+    ensure_akousousin(app, update=True)
+    app.status("Akousousin updated and Wine speech registration refreshed.", 100)
 
 
 def check_incompatibilities(app: App):

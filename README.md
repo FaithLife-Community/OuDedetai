@@ -26,7 +26,11 @@ The dependency setup also installs a Linux text-to-speech layer called
 [Akousousin](https://github.com/jg00dman/akousousin) and registers its voices while configuring the Logos/Verbum Wine prefix. OD installs the tar.gz bundle from the latest stable release (excluding betas and drafts), without a package-choice prompt. The bundle's per-user
 `install.sh --quiet` runs first, followed by `akousousin --wine-prefix … --wine … --install-only`.
 An existing shared installation is reused. Akousousin manages speech startup and
-idle unloading itself; Ou Dedetai adds no runtime service management. Open
+idle unloading itself; Ou Dedetai adds no runtime service management.
+AKS's installer creates its desktop launcher/menu entry, including in quiet mode.
+Update it through **Update Akousousin** in the GUI, **Utilities → Update Akousousin**
+in the TUI, or `--update-akousousin` on the command line. Close Logos first;
+updates reinstall the latest stable tar and refresh Wine registration. Open
 Akousousin to choose or download a voice if none is installed. Current packages
 are x86-64 Linux betas and require glibc 2.35 or later.
 

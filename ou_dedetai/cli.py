@@ -15,6 +15,7 @@ from ou_dedetai.logos import State as LogosRunningState
 
 from . import backup
 from . import control
+from . import system
 from . import installer
 from . import wine
 from . import utils
@@ -113,6 +114,9 @@ class CLI(App):
 
     def toggle_app_logging(self):
         self.logos.switch_logging()
+
+    def update_akousousin(self):
+        system.update_akousousin(self)
 
     def update_latest_appimage(self):
         installer.update_to_latest_wine(self)

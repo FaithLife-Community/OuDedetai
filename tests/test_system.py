@@ -101,3 +101,65 @@ class TestStableAkousousinRelease(unittest.TestCase):
         self.assertEqual(result.version, "1.0")
         self.assertEqual(result.download_url, "https://x/tar")
         get.assert_called_once_with("https://api.github.com/repos/jg00dman/akousousin/releases/latest")
+
+
+class TestAkousousinUpdate(unittest.TestCase):
+    setUp = TestAkousousinInstall.setUp
+    download = TestAkousousinInstall.download
+    run_command_stub = TestAkousousinInstall.run_command_stub
+    assert_registration = TestAkousousinInstall.assert_registration
+
+    def test_update_reinstalls_existing_bundle_using_fresh_stable_lookup(self):
+        self.launcher.parent.mkdir(parents=True)
+        self.launcher.touch()
+        self.run_command.side_effect = lambda command, **kwargs: subprocess.CompletedProcess(command, 0, '', '')
+        with patch.object(network, '_get_release_data', return_value=network.SoftwareReleaseInfo(
+            'v1', 'https://example/stable.tar.gz',
+        )) as lookup:
+            system.ensure_akousousin(self.app, update=True)
+        lookup.assert_called_once_with('jg00dman/akousousin', tag='latest',
+                                       asset_name=r'Akousousin\-Linux\-x86_64\.tar\.gz')
+        self.app.conf._network._repo_version.assert_not_called()
+        self.assertEqual(self.run_command.call_count, 2)
+        self.assert_registration(self.launcher)
+
+    def test_update_refuses_running_logos(self):
+        from ou_dedetai.logos import State
+        self.app.is_installed.return_value = True
+        self.app.logos.logos_state = State.RUNNING
+        with patch.object(system, 'ensure_akousousin') as install:
+            system.update_akousousin(self.app)
+        install.assert_not_called()
+
+    def test_update_refreshes_registration_after_install(self):
+        from ou_dedetai.logos import State
+        self.app.is_installed.return_value = True
+        self.app.logos.logos_state = State.STOPPED
+        with patch.object(system, 'ensure_akousousin') as install:
+            system.update_akousousin(self.app)
+        install.assert_called_once_with(self.app, update=True)
+
+
+class TestAkousousinActions(unittest.TestCase):
+    def test_cli_flag_dispatches_update(self):
+        from ou_dedetai import main, cli
+        parser = main.get_parser()
+        args = parser.parse_args(['--update-akousousin'])
+        with (patch.object(main.EphemeralConfiguration, 'load', return_value=Mock()),
+              patch.object(cli, 'CLI') as command):
+            config, action = main.parse_args(args, parser)
+            action(config)
+        command.return_value.update_akousousin.assert_called_once_with()
+        with patch.object(system, 'update_akousousin') as update:
+            cli.CLI.update_akousousin(config)
+        update.assert_called_once_with(config)
+
+    def test_gui_and_tui_dispatch_update_in_worker(self):
+        from ou_dedetai import gui_app, tui_app
+        gui = Mock()
+        gui_app.ControlWindow.update_akousousin(gui)
+        gui.start_thread.assert_called_once_with(system.update_akousousin, gui)
+        tui = Mock()
+        tui_app.TUI.utilities_menu_select(tui, 'Update Akousousin')
+        tui.start_thread.assert_called_once_with(system.update_akousousin, tui)
+        self.assertIn('Update Akousousin', tui_app.TUI.set_utilities_menu_options(tui))
