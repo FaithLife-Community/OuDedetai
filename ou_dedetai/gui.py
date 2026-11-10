@@ -34,6 +34,7 @@ class ChoiceGui(Frame):
         # drop-down menu
         self.answer_var = StringVar(value=self._default_prompt)
         self.answer_dropdown = Combobox(self, textvariable=self.answer_var)
+        self.answer_dropdown.config(postcommand=self._configure_dropdown)
         self.answer_dropdown['values'] = options
         if len(options) > 0:
             self.answer_dropdown.set(options[0])
@@ -45,10 +46,22 @@ class ChoiceGui(Frame):
         # Place widgets.
         row = 0
         self.question_label.grid(column=0, row=row, sticky='nws', pady=2, padx=8)
-        self.answer_dropdown.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
+        self.columnconfigure(1, weight=1)
+        self.answer_dropdown.grid(column=1, row=row, sticky='ew', pady=2, columnspan=2)
         row += 1
         self.cancel_button.grid(column=1, row=row, sticky='e', pady=2)
         self.okay_button.grid(column=2, row=row, sticky='e', pady=2)
+
+    def _configure_dropdown(self):
+        tk = self.answer_dropdown.tk
+        popdown = tk.call('ttk::combobox::PopdownWindow', self.answer_dropdown)
+        listbox = f'{popdown}.f.l'
+        scrollbar = f'{popdown}.f.xscroll'
+        if not tk.call('winfo', 'exists', scrollbar):
+            tk.call('ttk::scrollbar', scrollbar, '-orient', 'horizontal',
+                    '-command', (listbox, 'xview'))
+            tk.call('grid', scrollbar, '-row', 1, '-column', 0, '-sticky', 'ew')
+            tk.call(listbox, 'configure', '-xscrollcommand', (scrollbar, 'set'))
 
 
 class InfoGui(Frame):

@@ -1,8 +1,9 @@
+import os
 import queue
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 from packaging.version import InvalidVersion
@@ -70,9 +71,26 @@ class TestAppUtils(unittest.TestCase):
         self.app.conf.download_dir = TESTDATADIR
         self.assertEqual(len(utils.find_appimage_files(self.app)), 0)
 
-    @unittest.skip("Not practical.")
-    def test_find_wine_binary_files(self):
-        pass
+    def test_find_wine_binary_files_steam(self):
+        with tempfile.TemporaryDirectory() as home:
+            library = Path(home) / 'games'
+            root = Path(home) / '.steam/steam'
+            (root / 'steamapps').mkdir(parents=True)
+            (root / 'steamapps/libraryfolders.vdf').write_text(f'"0" {{ "path" "{library}" }}')
+            expected = [
+                root / 'compatibilitytools.d/GE-Proton/files/bin/wine64',
+                library / 'steamapps/common/Proton 9.0/dist/bin/wine64',
+            ]
+            for binary in expected:
+                binary.parent.mkdir(parents=True)
+                binary.touch(mode=0o755)
+            self.app.conf._overrides.custom_binary_path = None
+            with (
+                patch.dict(os.environ, {'HOME': home, 'PATH': ''}),
+                patch.object(utils.wine, 'check_wine_version_and_branch', return_value=(True, None)),
+            ):
+                found = utils.find_wine_binary_files(self.app, None)
+            self.assertCountEqual(found, [str(b) for b in expected])
 
     def test_get_wine_options(self):
         self.app.conf.wine_app_image_files = ['/home/user/wine-stable_10.0.AppImage']
@@ -87,6 +105,7 @@ class TestAppUtils(unittest.TestCase):
             constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL,
             *self.app.conf.wine_app_image_files,
             *self.app.conf.wine_binary_files,
+            constants.PROMPT_OPTION_FILE,
         ]
         self.assertEqual(utils.get_wine_options(self.app), options)
 
