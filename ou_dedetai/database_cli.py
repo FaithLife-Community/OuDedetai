@@ -94,18 +94,6 @@ def database_list_operation(ephemeral_config: EphemeralConfiguration):
         print(database)
 
 
-def database_notes_count_operation(ephemeral_config: EphemeralConfiguration):
-    paths = get_logos_paths(ephemeral_config)
-    with NotesDatabase(paths.appdata, paths.user_id) as db:
-        counts = {
-            "Notes": db.count("Notes"),
-            "Notebooks": db.count("Notebooks"),
-            "Tags": db.count("Tags"),
-        }
-    for name, count in counts.items():
-        print(f"{name}: {count}")
-
-
 def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration):
     paths = get_logos_paths(ephemeral_config)
     with NotesDatabase(paths.appdata, paths.user_id) as db:
@@ -121,9 +109,6 @@ def parse_database_command(args, ephemeral_config):
 
     if args.database_command == "notes":
         ephemeral_config.notes_command = args.notes_command
-
-        if args.notes_command == "count":
-            return database_notes_count_operation
 
         if args.notes_command == "dump":
             ephemeral_config.database_limit = args.limit
