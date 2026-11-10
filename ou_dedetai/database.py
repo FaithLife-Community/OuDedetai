@@ -1,11 +1,35 @@
 import contextlib
 import logging
 import sqlite3
+from dataclasses import dataclass
 
 import inotify.adapters # type: ignore
 from pathlib import Path
 from typing import Any, Optional
 from collections.abc import Sequence
+
+
+@dataclass(frozen=True)
+class LogosPaths:
+    """
+    Paths to the major Logos data locations for a user installation.
+    """
+    appdata: Path
+    data: Path
+    documents: Path
+    user_id: str
+
+    @property
+    def databases(self) -> list[Path]:
+        """
+        Return all SQLite databases in known Logos locations.
+        """
+        return sorted(
+            [
+                *self.data.rglob("*.db"),
+                *self.documents.rglob("*.db"),
+            ]
+        )
 
 
 class SQLiteDatabase(contextlib.AbstractContextManager):

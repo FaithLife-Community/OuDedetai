@@ -268,7 +268,7 @@ def add_database_parser(subparsers):
         help="export Logos notes as Markdown",
     )
     export_parser.add_argument(
-        "output_directory",
+        "export_dir",
         nargs="?",
         type=Path,
         help="directory for exported notes; defaults to <install_dir>/export",

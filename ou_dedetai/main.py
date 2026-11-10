@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from typing import Callable, Tuple
 
-from . import cli
+from . import cli, database_faithlife_notes, database_faithlife_catalog
 from . import database
 from . import constants
 from . import gui_app
@@ -57,29 +57,30 @@ def database_list_operation(ephemeral_config: EphemeralConfiguration):
 
 def database_notes_dump_operation(ephemeral_config: EphemeralConfiguration, limit: int):
     paths = utils.get_logos_paths(ephemeral_config)
-    with database.NotesDatabase(paths.appdata, paths.user_id) as db:
+    with database_faithlife_notes.NotesDatabase(paths.appdata, paths.user_id) as db:
         for note in db.sample("Notes", limit):
             print(dict(note))
             print()
 
+
 def database_notes_get_operation(ephemeral_config: EphemeralConfiguration, note_id):
     paths = utils.get_logos_paths(ephemeral_config)
-
-    with database.NotesDatabase(paths.appdata, paths.user_id) as db:
+    with database_faithlife_notes.NotesDatabase(paths.appdata, paths.user_id) as db:
         note = db.get_note(note_id)
-
     print(note)
+
 
 def database_notes_render_operation(ephemeral_config: EphemeralConfiguration, note_id):
     paths = utils.get_logos_paths(ephemeral_config)
     with (
-        database.NotesDatabase(paths.appdata, paths.user_id) as notes_db,
-        database.LibraryCatalogDatabase(paths.appdata, paths.user_id) as catalog_db
+        database_faithlife_notes.NotesDatabase(paths.appdata, paths.user_id) as notes_db,
+        database_faithlife_catalog.LibraryCatalogDatabase(paths.appdata, paths.user_id) as catalog_db
     ):
         note = notes_db.get_note(note_id)
-        resolver = database.NoteResourceResolver(notes_db, catalog_db)
+        resolver = database_faithlife_notes.NoteResourceResolver(notes_db, catalog_db)
         exporter = markdown.MarkdownNoteExporter(resolver)
         print(exporter.export_note(note))
+
 
 def database_notes_search_operation(
     ephemeral_config: EphemeralConfiguration,
@@ -87,7 +88,7 @@ def database_notes_search_operation(
     limit: int
 ):
     paths = utils.get_logos_paths(ephemeral_config)
-    with database.NotesDatabase(paths.appdata, paths.user_id) as db:
+    with database_faithlife_notes.NotesDatabase(paths.appdata, paths.user_id) as db:
         notes = db.search_notes(
             query,
             limit,
@@ -158,15 +159,10 @@ def _print_export_progress(current: int, total: int) -> None:
         print()
 
 
-def database_notes_export_operation(
-    ephemeral_config: EphemeralConfiguration,
-    export_dir
-):
-    persistent_config = PersistentConfiguration.load_from_path(
-        ephemeral_config.config_path
-    )
+def database_notes_export_operation(ephemeral_config: EphemeralConfiguration, export_dir):
+    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
     if export_dir is not None:
-        output_directory = Path(ephemeral_config.export_dir)
+        output_directory = Path(export_dir)
     else:
         if persistent_config.install_dir is None:
             raise RuntimeError("No Logos installation found")
@@ -174,14 +170,14 @@ def database_notes_export_operation(
     output_directory = output_directory.absolute()
     paths = utils.get_logos_paths(ephemeral_config)
     with (
-        database.NotesDatabase(paths.appdata, paths.user_id) as notes_db,
-        database.LibraryCatalogDatabase(
+        database_faithlife_notes.NotesDatabase(paths.appdata, paths.user_id) as notes_db,
+        database_faithlife_catalog.LibraryCatalogDatabase(
             paths.appdata,
             paths.user_id,
         ) as catalog_db,
     ):
         notes = notes_db.notes()
-        resolver = database.NoteResourceResolver(
+        resolver = database_faithlife_notes.NoteResourceResolver(
             notes_db,
             catalog_db,
         )
@@ -223,10 +219,10 @@ def parse_database_command(args):
                 return database_notes_export_operation(config, args.export_dir)
             database_notes_export_action.__name__ = "database_notes_export_operation"
             return database_notes_export_action
-    if args.notes_command == "search":
-        def database_notes_search_action(config):
-            return database_notes_search_operation(config, args.query, args.limit)
-        return database_notes_search_action
+        if args.notes_command == "search":
+            def database_notes_search_action(config):
+                return database_notes_search_operation(config, args.query, args.limit)
+            return database_notes_search_action
 
     raise RuntimeError(
         f"Unknown database command: {args.database_command}"

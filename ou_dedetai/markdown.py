@@ -5,8 +5,8 @@ from typing import Iterable, Callable
 
 import yaml
 
-from ou_dedetai.database_faithlife_notes import NoteResource, NoteResourceResolver
-from ou_dedetai.notes import LogosNote, LogosNotebook
+from .database_faithlife_notes import NoteResource, NoteResourceResolver
+from .notes import LogosNote, LogosNotebook
 
 
 class MarkdownNoteExporter:
@@ -196,8 +196,6 @@ class MarkdownNoteExporter:
                              if notebook_notes and notebook_notes[0].Notebook is not None)
         resource_count = len(resource_groups)
         total = len(notes) + notebook_count + resource_count
-        print("\n")
-        print(f"Found: {len(notes)} notes, {notebook_count} notebooks, and {resource_count} resources referenced.")
         note_id_width = max(1, len(str(max((note.NoteId for note in notes), default=1))))
         if status_callback is not None:
             status_callback("ready")
