@@ -1,11 +1,8 @@
 import logging
 import os
-import re
 import shutil
 import subprocess
 import sys
-import tarfile
-import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -332,6 +329,8 @@ def ensure_wineprefix_config(app: App):
     logging.debug("Configuring wineprefix for printing.")
     wine.configure_printing(app=app, wine64_binary=app.conf.wine64_binary)
 
+    system.ensure_akousousin(app=app)
+
 
 def ensure_fonts(app: App):
     """Ensure the arial font is installed"""
@@ -390,53 +389,9 @@ def ensure_product_installed(app: App):
     logging.debug(f"> {app.conf.logos_exe=}")
 
 
-def ensure_akousousin(app: App):
-    """Install shared speech and register SAPI; Akousousin owns its lifecycle."""
-    app.installer_step_count += 1
-    ensure_product_installed(app=app)
-    app.installer_step += 1
-    app.status("Ensuring Akousousin speech support is installed…")
-
-    launcher = Path.home() / ".local/bin/akousousin"
-    image = Path(constants.XDG_DATA_HOME) / "Akousousin/Akousousin-x86_64.AppImage"
-    # Akousousin is a separate frozen application, not a child OD worker.
-    env = dict(os.environ, APPIMAGE_EXTRACT_AND_RUN="1", PYINSTALLER_RESET_ENVIRONMENT="1")
-
-    def run(command):
-        result = system.run_command(command, env=env, timeout=180, check=False)
-        if result is None or result.returncode:
-            details = (result.stderr or result.stdout) if result else "See the installation log."
-            app.exit(f"Akousousin installation or SAPI registration failed. {details}")
-
-    if not launcher.is_file() and not image.is_file():
-        bundle = "Tar.gz bundle (default)"
-        appimage = "AppImage (can install its own updates)"
-        choice = app.ask("Which Akousousin text-to-speech package should be installed?", [bundle, appimage])
-        filename = "Akousousin-x86_64.AppImage" if choice == appimage else "Akousousin-Linux-x86_64.tar.gz"
-        # Akousousin currently publishes beta packages as prereleases.
-        release = network._get_release_data("jg00dman/akousousin", tag="prerelease", asset_name=re.escape(filename))
-        cached = f"{release.version.replace('/', '_')}-{filename}"
-        network.logos_reuse_download(release.download_url, cached, app.conf.download_dir, app=app)
-        downloaded = Path(app.conf.download_dir) / cached
-        if choice == appimage:
-            image.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(downloaded, image)
-            image.chmod(0o755)
-        else:
-            with tempfile.TemporaryDirectory() as directory:
-                with tarfile.open(downloaded, "r:gz") as archive:
-                    archive.extractall(directory, filter="data")
-                run(["sh", str(Path(directory) / "Akousousin/install.sh"), "--quiet"])
-            if not launcher.is_file():
-                app.exit(f"Akousousin installer did not create {launcher}.")
-    executable = launcher if launcher.is_file() else image
-    run([str(executable), "--wine-prefix", str(Path(app.conf.wine_prefix).resolve()),
-         "--wine", str(Path(app.conf.wine_binary).resolve()), "--install-only"])
-
-
 def ensure_config_file(app: App):
     app.installer_step_count += 1
-    ensure_akousousin(app=app)
+    ensure_product_installed(app=app)
     app.installer_step += 1
     app.status("Ensuring config file is up-to-date…")
 
