@@ -1,8 +1,9 @@
 import argparse
+import logging
 import os
 from typing import Tuple, Callable
 
-from . import constants, database_cli, msg, cli, utils, actions
+from . import constants, database_cli, msg, cli, utils
 from .config import EphemeralConfiguration
 
 
@@ -216,7 +217,7 @@ def get_parser():
     return parser
 
 
-def parse_args(logging, args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]:
+def parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]:
     if args.config:
         ephemeral_config = EphemeralConfiguration.load_from_path(args.config)
     else:
@@ -333,10 +334,13 @@ def parse_args(logging, args, parser) -> Tuple[EphemeralConfiguration, Callable[
                 ephemeral_config.wine_args = getattr(args, arg)
             run_action = cli_operation(arg)
             break
-    if args.install_app:
-        run_action = actions.install_app
+    
+    # Avoid circular dependency
+    from . import main
+    if main.install_app:
+        run_action = main.install_app
 
     if run_action is None:
-        run_action = actions.run_control_panel
+        run_action = main.run_control_panel
 
     return ephemeral_config, run_action
