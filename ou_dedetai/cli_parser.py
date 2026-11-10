@@ -304,13 +304,9 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
     if args.command == "database":
         return (
             ephemeral_config,
-<<<<<<< HEAD
             main.parse_database_command(
                 args
             ),
-=======
-            cli_parser_database.parse_database_command(args, ephemeral_config)
->>>>>>> cede693 (fix: clean up formatting)
         )
 
     if args.quiet:
