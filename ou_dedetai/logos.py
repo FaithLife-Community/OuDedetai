@@ -157,7 +157,12 @@ class LogosManager:
         wine_release, _ = wine.get_wine_release(self.app.conf.wine_binary)
 
         def run_logos():
-            self.prevent_logos_updates()
+            if wine.wine_supports_logos_updates(wine_release):
+                # This Wine can apply Logos's own updates without losing data.
+                logging.info("Wine build supports Logos updates; leaving application updates in place.")
+                wine.allow_logos_updates(self.app, self.app.conf.wine_binary)
+            else:
+                self.prevent_logos_updates()
             self.set_auto_updates(False)
             if not self.app.conf.logos_exe:
                 raise ValueError("Could not find installed Logos EXE to run")
