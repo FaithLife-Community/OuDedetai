@@ -75,18 +75,24 @@ class TestAkousousinInstall(unittest.TestCase):
 
     def test_bundle_install_failure_prevents_registration(self):
         self.run_command.side_effect = subprocess.CalledProcessError(1, ['sh'], stderr='install failed')
-        with self.assertRaises(RuntimeError):
-            system.ensure_akousousin(self.app)
+        self.assertFalse(system.ensure_akousousin(self.app))
         self.assertEqual(self.run_command.call_count, 1)
-        self.app.exit.assert_called_once()
+        self.app.exit.assert_not_called()  # reported, never fatal
 
     def test_registration_failure_is_reported(self):
         self.launcher.parent.mkdir(parents=True)
         self.launcher.touch()
         self.run_command.side_effect = subprocess.CalledProcessError(1, ['akousousin'], stderr='registration failed')
-        with self.assertRaises(RuntimeError):
-            system.ensure_akousousin(self.app)
-        self.app.exit.assert_called_once()
+        self.assertFalse(system.ensure_akousousin(self.app))
+        self.app.exit.assert_not_called()
+
+    def test_no_stable_release_is_reported_not_fatal(self):
+        self.app.conf._network._repo_version.side_effect = RuntimeError(
+            "Could not retrieve releases from GitHub: jg00dman/akousousin")
+        self.assertFalse(system.ensure_akousousin(self.app))
+        self.app.exit.assert_not_called()
+        self.run_command.assert_not_called()
+        self.assertIn("stable Akousousin release", self.app.status.call_args.args[0])
 
 
 class TestStableAkousousinRelease(unittest.TestCase):
