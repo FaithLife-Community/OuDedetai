@@ -519,6 +519,7 @@ class ControlWindow(GuiApp):
 
         self.gui.config_button.config(command=self.edit_config)
         self.gui.deps_button.config(command=self.install_deps)
+        self.gui.wine_config_button.config(command=self.update_wine_config)
         self.gui.backup_button.config(command=self.run_backup)
         self.gui.restore_button.config(command=self.run_restore)
         self.gui.update_product_button.config(command=self.update_faithlife_product)
@@ -624,6 +625,9 @@ class ControlWindow(GuiApp):
 
     def install_deps(self, evt=None):
         self.start_thread(utils.install_dependencies, self)
+
+    def update_wine_config(self, evt=None):
+        self.start_thread(installer.update_wine_config, self)
 
     def open_file_dialog(self, filetype_name, filetype_extension):
         file_path = fd.askopenfilename(
@@ -735,6 +739,13 @@ class ControlWindow(GuiApp):
                 self.gui.app_button.state(['disabled'])
                 self.gui.app_install_advanced.state(['disabled'])
 
+    def update_wine_config_button(self, evt=None):
+        if self.is_installed():
+            self.gui.wine_config_button.state(['!disabled'])
+        else:
+            gui.ToolTip(self.gui.wine_config_button, "This button is disabled. Please install first.")
+            self.gui.wine_config_button.state(['disabled'])
+
     def update_product_button(self, evt=None):
         msg = None
         if not self.is_installed():
@@ -824,6 +835,7 @@ class ControlWindow(GuiApp):
             self.update_product_button()
         except Exception:
             logging.exception("Failed to update product button")
+        self.update_wine_config_button()
         product = self.conf._raw.faithlife_product
         if product:
             self.gui.update_product_labelvar.set(f"Update {product}")
