@@ -519,6 +519,7 @@ class ControlWindow(GuiApp):
 
         self.gui.config_button.config(command=self.edit_config)
         self.gui.deps_button.config(command=self.install_deps)
+        self.gui.akousousin_button.config(command=self.update_akousousin)
         self.gui.backup_button.config(command=self.run_backup)
         self.gui.restore_button.config(command=self.run_restore)
         self.gui.update_product_button.config(command=self.update_faithlife_product)
@@ -621,6 +622,9 @@ class ControlWindow(GuiApp):
         # FIXME: Allow user to choose restore source?
         # Start restore thread.
         self.start_thread(backup.restore, app=self)
+
+    def update_akousousin(self, evt=None):
+        self.start_thread(system.update_akousousin, self)
 
     def install_deps(self, evt=None):
         self.start_thread(utils.install_dependencies, self)

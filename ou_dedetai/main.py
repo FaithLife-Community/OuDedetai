@@ -289,6 +289,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         'run_indexing',
         'run_installed_app',
         'update_installed_app',
+        'update_akousousin',
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
