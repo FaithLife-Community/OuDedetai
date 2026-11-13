@@ -267,6 +267,8 @@ class ControlGui(StatusGui):
         # Update Wine configuration button
         self.wine_config_label = Label(self, text="Update Wine configuration")
         self.wine_config_button = Button(self, text="Update")
+        self.akousousin_label = Label(self, text="Update Akousousin")
+        self.akousousin_button = Button(self, text="Update")
         # Update Faithlife product button
         self.update_product_labelvar = StringVar(value="Update Faithlife Product")
         self.update_product_label = Label(self, textvariable=self.update_product_labelvar)
@@ -330,6 +332,9 @@ class ControlGui(StatusGui):
         row += 1
         self.wine_config_label.grid(column=0, row=row, sticky='w', pady=2)
         self.wine_config_button.grid(column=1, row=row, sticky='w', pady=2)
+        row += 1
+        self.akousousin_label.grid(column=0, row=row, sticky='w', pady=2)
+        self.akousousin_button.grid(column=1, row=row, sticky='w', pady=2)
         row += 1
         self.update_product_label.grid(column=0, row=row, sticky='w', pady=2)
         self.update_product_button.grid(column=1, row=row, sticky='w', pady=2)
