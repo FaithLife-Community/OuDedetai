@@ -163,3 +163,13 @@ class TestAkousousinActions(unittest.TestCase):
         tui_app.TUI.utilities_menu_select(tui, 'Update Akousousin')
         tui.start_thread.assert_called_once_with(system.update_akousousin, tui)
         self.assertIn('Update Akousousin', tui_app.TUI.set_utilities_menu_options(tui))
+
+
+class TestAkousousinInstalled(unittest.TestCase):
+    def test_reports_whether_the_launcher_exists(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as home, patch.object(system.Path, "home", return_value=Path(home)):
+            self.assertFalse(system.akousousin_installed())
+            (Path(home) / ".local/bin").mkdir(parents=True)
+            (Path(home) / ".local/bin/akousousin").write_text("#!/bin/sh\n")
+            self.assertTrue(system.akousousin_installed())

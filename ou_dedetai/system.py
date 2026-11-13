@@ -1048,13 +1048,21 @@ def ensure_winetricks(
     logging.debug("Winetricks installed.")
 
 
+def akousousin_launcher() -> Path:
+    return Path.home() / ".local/bin/akousousin"
+
+
+def akousousin_installed() -> bool:
+    return akousousin_launcher().is_file()
+
+
 def ensure_akousousin(app: App, update: bool = False):
     """Install shared speech and register SAPI; Akousousin owns its lifecycle."""
     from . import utils
 
     app.status("Ensuring Akousousin speech support is installed…")
 
-    launcher = Path.home() / ".local/bin/akousousin"
+    launcher = akousousin_launcher()
     # Akousousin is a separate frozen application, not a child OD worker.
     env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
 
