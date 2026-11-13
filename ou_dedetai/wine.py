@@ -917,32 +917,51 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     return system.fix_ld_library_path(wine_env)
 
 
+WINE_TARBALL_SUFFIXES = (".tar.gz", ".tgz", ".tar.xz")
+
+
+def is_wine_tarball(path: Optional[Path]) -> bool:
+    return path is not None and path.is_file() and path.name.lower().endswith(WINE_TARBALL_SUFFIXES)
+
+
+def extract_wine_tarball(tarball: Path, distribution_root: Path) -> Path:
+    """Extracts a Wine distribution tarball and returns its bin/wine.
+
+    The tarball must hold exactly one top-level directory; an older copy of
+    that directory is replaced. Other distributions already extracted are left alone."""
+    distribution_root.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(tarball, "r:*") as archive:
+        top_level_dirs = {
+            member.name.removeprefix("./").split("/", 1)[0]
+            for member in archive.getmembers()
+            if "/" in member.name.removeprefix("./")
+        }
+        if len(top_level_dirs) != 1:
+            raise RuntimeError("Wine tarball must contain exactly one top-level directory")
+        distribution_dir = distribution_root / next(iter(top_level_dirs))
+        if distribution_dir.exists():
+            shutil.rmtree(distribution_dir)
+        archive.extractall(distribution_root, filter="data")
+    wine_path = distribution_dir / "bin" / "wine"
+    if not wine_path.is_file():
+        raise RuntimeError(f"Wine tarball {tarball.name} doesn't contain bin/wine")
+    return wine_path
+
+
 def setup_wine(app: App):
     from .installer import download_wine, create_wine_symlinks
     downloaded_file = download_wine(app)
+    if downloaded_file is None:
+        # A tarball the user chose with "Choose File" is extracted just like a downloaded one
+        chosen = Path(app.conf.wine_binary)
+        if is_wine_tarball(chosen):
+            downloaded_file = chosen
 
     if downloaded_file is not None and downloaded_file.name.lower().endswith(".appimage"):
         # Retain compatibility with existing AppImage-based installations.
         app.conf.wine_binary = str(downloaded_file.absolute())
-    elif downloaded_file is not None and downloaded_file.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz")):
-        distribution_root = Path(app.conf.wine_distribution_dir)
-        distribution_root.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(downloaded_file, "r:*") as tarball:
-            members = tarball.getmembers()
-            top_level_dirs = {
-                member.name.split("/", 1)[0]
-                for member in members
-                if "/" in member.name
-            }
-            if len(top_level_dirs) != 1:
-                raise RuntimeError("Wine tarball must contain exactly one top-level directory")
-            distribution_dir = distribution_root / next(iter(top_level_dirs))
-            if distribution_dir.exists():
-                shutil.rmtree(distribution_dir)
-            tarball.extractall(distribution_root, filter="data")
-        wine_path = Path(app.conf.wine_path_in_distribution)
-        if not wine_path.is_file():
-            raise RuntimeError("Downloaded tarball didn't contain the needed Wine binary")
+    elif downloaded_file is not None and downloaded_file.name.lower().endswith(WINE_TARBALL_SUFFIXES):
+        wine_path = extract_wine_tarball(downloaded_file, Path(app.conf.wine_distribution_dir))
         app.conf.wine_binary = str(wine_path.absolute())
         app.conf.wine_appimage_path = None
 

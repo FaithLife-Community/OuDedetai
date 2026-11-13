@@ -945,7 +945,23 @@ class Config:
 
     @property
     def wine_path_in_distribution(self) -> str:
-        return str(next(Path(self.wine_distribution_dir).glob("*/bin/wine")).absolute())
+        """bin/wine of the distribution in use.
+
+        That's the configured one; failing that, the most recently extracted one, since
+        older releases may still be extracted alongside it."""
+        if self.is_wine_binary_in_distribution:
+            configured = Path(self.wine_binary)
+            if not configured.is_absolute():
+                configured = Path(self.install_dir) / configured
+            if configured.is_file():
+                return str(configured.absolute())
+        candidates = sorted(
+            Path(self.wine_distribution_dir).glob("*/bin/wine"),
+            key=lambda path: path.stat().st_mtime,
+        )
+        if not candidates:
+            raise FileNotFoundError(f"No Wine distribution found in {self.wine_distribution_dir}")
+        return str(candidates[-1].absolute())
 
     @property
     def is_wine_binary_in_distribution(self) -> bool:
