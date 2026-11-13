@@ -13,6 +13,7 @@ dependencies = [
     "psutil",
     "pythondialog",
     "requests",
+    "pyyaml", # Notes exporter (markdown front matter)
     "inotify", # Required for watching when the auto-update setting changes
 #    "tkinter",  # actually provided by a system package, not a python package
 #    "urllib3",
