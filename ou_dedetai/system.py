@@ -460,6 +460,7 @@ def get_package_manager() -> PackageManager | None:
             "cabextract " # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
             "mesa-utils "  # verify opengl version
+            "mesa-va-drivers intel-media-va-driver "  # hardware video decoding (FFmpeg/VA-API)
         )
 
         # p7zip-full was replaced by 7zip
@@ -517,7 +518,10 @@ def get_package_manager() -> PackageManager | None:
             "mod_auth_ntlm_winbind samba-winbind samba-winbind-clients "  # wine
             "cabextract " # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
-            "glx-utils"  # verify opengl version
+            "glx-utils "  # verify opengl version
+            # hardware video decoding (FFmpeg/VA-API); Fedora's build leaves out H.264,
+            # RPM Fusion's mesa-va-drivers-freeworld has it
+            "mesa-va-drivers"
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('zypper') is not None:  # OpenSUSE
@@ -596,8 +600,8 @@ def get_package_manager() -> PackageManager | None:
                 "7zip cabextract " # winetricks (7zip used to be called pzip then p7zip)
                 "openjpeg2 libxcomposite libxinerama "  # display
                 "ocl-icd vulkan-icd-loader "  # hardware
-                "alsa-plugins gst-plugins-base-libs libpulse openal "  # audio
-                "libva mpg123 v4l-utils "  # video
+                "alsa-plugins libpulse openal "  # audio
+                "libva intel-media-driver mpg123 v4l-utils "  # video (VA-API decoding; mesa has AMD's)
                 "libxslt sqlite "  # misc
                 "xdg-utils " # For xdg-mime needed for custom url scheme registration
                 "mesa-utils "  # verify opengl version
