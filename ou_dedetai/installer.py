@@ -9,6 +9,7 @@ from typing import Optional
 from ou_dedetai.app import App, UserExitedFromAsk
 
 from . import constants
+from . import desktop_integrations
 from . import network
 from . import system
 from . import utils
@@ -446,6 +447,7 @@ def install(app: App):
     app.status("Install Complete!", 100)
     # Trigger a config update event to refresh the UIs
     app._config_updated_event.set()
+    desktop_integrations.offer(app)
 
 
 def get_progress_pct(current, total):

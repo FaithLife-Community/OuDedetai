@@ -165,6 +165,10 @@ def get_parser():
         help='[re-]create app shortcuts',
     )
     cmd.add_argument(
+        '--install-desktop-integrations', action='store_true',
+        help='install or update the Logos desktop integrations (KDE Plasma)',
+    )
+    cmd.add_argument(
         '--uninstall', action='store_true',
         help='Completely delete the faithlife software from your system',
     )
@@ -375,6 +379,7 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
         'backup',
         'create_shortcuts',
         'edit_config',
+        'install_desktop_integrations',
         'install_dependencies',
         'install_icu',
         'remove_index_files',
