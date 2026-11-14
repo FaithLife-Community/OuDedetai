@@ -341,6 +341,10 @@ def apply_wine_config(app: App):
     logging.debug("Configuring wineprefix for printing.")
     wine.configure_printing(app=app, wine64_binary=app.conf.wine64_binary)
 
+    # Fonts Logos documents use (sermon print preview crashes without them).
+    wine.install_open_fonts(app)
+    wine.set_font_replacements(app, app.conf.wine64_binary)
+
 
 def update_wine_config(app: App):
     """Re-apply the install's Wine settings to an existing install."""
@@ -370,11 +374,7 @@ def ensure_fonts(app: App):
     app.installer_step += 1
 
     wine.install_fonts(app)
-    wine.install_open_fonts(app)
-
-    # Open stand-ins for Windows fonts Logos needs (print preview crashes without them).
-    app.status("Configuring font replacements…")
-    wine.set_font_replacements(app, app.conf.wine64_binary)
+    # The open stand-ins and font replacements are applied by apply_wine_config.
 
 
 def ensure_icu_data_files(app: App):
