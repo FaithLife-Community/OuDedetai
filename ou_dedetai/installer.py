@@ -319,6 +319,9 @@ def ensure_wineprefix_config(app: App):
 
     apply_wine_config(app)
 
+    # Speech: install Akousousin if needed and register it with this new prefix.
+    system.ensure_akousousin(app=app)
+
 
 def apply_wine_config(app: App):
     """Registry settings every install should have.
@@ -338,8 +341,6 @@ def apply_wine_config(app: App):
     logging.debug("Configuring wineprefix for printing.")
     wine.configure_printing(app=app, wine64_binary=app.conf.wine64_binary)
 
-    system.ensure_akousousin(app=app)
-
 
 def update_wine_config(app: App):
     """Re-apply the install's Wine settings to an existing install."""
@@ -355,6 +356,10 @@ def update_wine_config(app: App):
         return
     app.status("Updating Wine configuration…")
     apply_wine_config(app)
+    # Speech: install and register Akousousin if it's missing. An installed one is
+    # left alone; "Update Akousousin" updates and re-registers it.
+    if not system.akousousin_installed():
+        system.ensure_akousousin(app=app)
     app.status("Wine configuration updated.")
 
 

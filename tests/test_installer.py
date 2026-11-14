@@ -63,10 +63,20 @@ class TestUpdateWineConfig(unittest.TestCase):
         renderer.assert_not_called()
 
     def test_update_applies_config_when_logos_is_closed(self):
-        with mock.patch.object(installer, "apply_wine_config") as apply:
+        with mock.patch.object(installer, "apply_wine_config") as apply, \
+                mock.patch.object(installer.system, "akousousin_installed", return_value=True), \
+                mock.patch.object(installer.system, "ensure_akousousin") as akousousin:
             installer.update_wine_config(self.app)
         self.app.logos.monitor.assert_called_once()
         apply.assert_called_once_with(self.app)
+        akousousin.assert_not_called()  # installed: left to "Update Akousousin"
+
+    def test_update_installs_akousousin_when_missing(self):
+        with mock.patch.object(installer, "apply_wine_config"), \
+                mock.patch.object(installer.system, "akousousin_installed", return_value=False), \
+                mock.patch.object(installer.system, "ensure_akousousin") as akousousin:
+            installer.update_wine_config(self.app)
+        akousousin.assert_called_once_with(app=self.app)
 
     def test_update_refuses_while_logos_runs(self):
         for state in (State.STARTING, State.RUNNING):
