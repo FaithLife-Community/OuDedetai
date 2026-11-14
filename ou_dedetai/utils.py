@@ -284,6 +284,40 @@ def compare_logos_linux_installer_version(app: App) -> Optional[VersionCompariso
 
 # FIXME: This actually compares any wine binary with recommended version. Maybe
 # the function should be renamed to 'check_recommended_wine_version'?
+WINE_BUILD_SUFFIXES = (".appimage", ".tar.xz", ".tar.gz", ".tgz")
+
+
+def wine_build_name(file_name: str) -> str:
+    """The build's name without the AppImage/tarball extension, so both forms compare equal."""
+    for suffix in WINE_BUILD_SUFFIXES:
+        if file_name.lower().endswith(suffix):
+            return file_name[:-len(suffix)]
+    return file_name
+
+
+def installed_wine_build_name(app: App) -> Optional[str]:
+    """Name of the Wine build in use (AppImage file or unpacked tarball folder), if OuDedetai manages it."""
+    if app.conf.wine_appimage_path is not None:
+        return wine_build_name(Path(app.conf.wine_appimage_path).name)
+    if app.conf.is_wine_binary_in_distribution:
+        # <wine distribution dir>/<build>/bin/wine
+        return Path(app.conf.wine_binary).parent.parent.name
+    return None
+
+
+def recommended_wine_build_name(app: App) -> Optional[str]:
+    """Name of the build "Update to Latest" would install for this kind of install."""
+    try:
+        if app.conf.is_wine_binary_in_distribution:
+            url = app.conf._wine_tarball_release.download_url
+        else:
+            url = app.conf.wine_download_url
+    except Exception as e:
+        logging.debug(f"Couldn't get the recommended Wine build: {e}")
+        return None
+    return wine_build_name(os.path.basename(url))
+
+
 def compare_recommended_wine_version(app: App):
     status = None
     message = None
@@ -300,9 +334,17 @@ def compare_recommended_wine_version(app: App):
             status = 0
             message = "yes"
         elif current_version == recommended_version:
-            # Current release is latest.
-            status = 1
-            message = "uptodate"
+            # Same Wine version; a different build of it (our builds are rebuilt with fixes
+            # on the same upstream version) is still an update.
+            installed, recommended = installed_wine_build_name(app), recommended_wine_build_name(app)
+            if installed and recommended and installed != recommended:
+                logging.debug(f"Installed build {installed}, recommended build {recommended}")
+                status = 0
+                message = "yes"
+            else:
+                # Current release is latest.
+                status = 1
+                message = "uptodate"
         elif current_version > recommended_version:
             # Installed version is custom
             status = 2
