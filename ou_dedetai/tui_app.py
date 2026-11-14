@@ -593,9 +593,9 @@ class TUI(App):
                 MenuModal("Choose Renderer", ["gdi", "gl", "dxvk", "vulkan", "Return to Main Menu"]),
                 callback=self.renderer_select,
             )
-        elif choice == "Set Wine (AppImage or tarball)":
+        elif choice == "Set Runner (AppImage or tarball)":
             def set_wine():
-                path = self.ask("Which Wine AppImage or tarball should be used?", [constants.PROMPT_OPTION_FILE])
+                path = self.ask("Which runner (Wine AppImage or tarball) should be used?", [constants.PROMPT_OPTION_FILE])
                 self.conf.wine_appimage_path = path
                 utils.set_appimage_symlink(self)
                 self.status(f"Now using {Path(path).name}")
@@ -684,7 +684,7 @@ class TUI(App):
 
         return [
             f"Set Renderer (Current: {renderer_label})",
-            "Set Wine (AppImage or tarball)",
+            "Set Runner (AppImage or tarball)",
             "Update to Latest Wine",
             "Toggle experimental media support",
             f"Set Windows Version for Logos (Current: {logos_win_version})",

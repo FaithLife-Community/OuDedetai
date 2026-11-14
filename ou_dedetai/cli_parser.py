@@ -145,8 +145,9 @@ def get_parser():
         help='Update the to the latest AppImage.',
     )
     cmd.add_argument(
-        '--set-appimage', nargs=1, metavar=('APPIMAGE_FILE_PATH'),
-        help='Switch to another Wine build: an AppImage, or a Wine tarball (.tar.xz, .tar.gz). Requires a path.',
+        '--set-runner', '--set-appimage', dest='set_appimage', nargs=1, metavar=('RUNNER_FILE_PATH'),
+        help='Switch to another Wine runner: an AppImage or a Wine tarball (.tar.xz, .tar.gz). '
+             'Requires a path. --set-appimage is the old name (deprecated).',
     )
     cmd.add_argument(
         '--install-icu', action='store_true',
