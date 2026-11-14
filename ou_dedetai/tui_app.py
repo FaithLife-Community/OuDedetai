@@ -637,6 +637,10 @@ class TUI(App):
                 self.conf.toggle_wine_release_channel()
             elif choice == "Install Dependencies":
                 utils.install_dependencies(self)
+            elif choice == "Update Wine Configuration":
+                installer.update_wine_config(self)
+            elif choice == "Update Akousousin":
+                self.start_thread(system.update_akousousin, self)
             elif choice == "Install ICU":
                 wine.enforce_icu_data_files(self)
             elif choice == "Create Desktop Shortcuts":
@@ -694,14 +698,17 @@ class TUI(App):
     def set_utilities_menu_options(self) -> list[str]:
         labels: list[str] = []
         if self.is_installed():
-            labels.extend(["Remove Library Catalog", "Remove All Index Files", "Install ICU"])
+            labels.extend(["Remove Library Catalog", "Remove All Index Files", "Install ICU", "Update Akousousin"])
         if (
             self.is_installed()
             or Path(self.conf.config_file_path).exists()
             or (getattr(self.conf._raw, "install_dir", None) and Path(self.conf._raw.install_dir).exists())
         ):
             labels.append("Uninstall")
-        labels.extend([f"Check for {constants.APP_NAME} Updates", "Install Dependencies", "Edit Config", "Reload Config"])
+        labels.extend([f"Check for {constants.APP_NAME} Updates", "Install Dependencies"])
+        if self.is_installed():
+            labels.append("Update Wine Configuration")
+        labels.extend(["Edit Config", "Reload Config"])
         if self.is_installed():
             labels.extend([
                 "Change Logos Release Channel",

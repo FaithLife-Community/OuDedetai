@@ -313,12 +313,24 @@ def ensure_wineprefix_config(app: App):
     app.installer_step += 1
     app.status("Ensuring wineprefix configuration…")
 
+    # renderer: DXVK or gl with our oinos Wine builds, gdi with others.
+    wine.set_default_renderer(app)
+
+    apply_wine_config(app)
+
+    # Speech: install Akousousin if needed and register it with this new prefix.
+    system.ensure_akousousin(app=app)
+
+
+def apply_wine_config(app: App):
+    """Registry settings every install should have.
+
+    Run on install, and again from "Update Wine configuration" so existing
+    installs get settings added in newer versions. Leaves the renderer alone,
+    because users can change that themselves (Wine Config → Set Renderer)."""
     # Force winemenubuilder.exe='' in registry.
     logging.debug("Setting wineprefix registry to ignore winemenubuilder.exe.")
     wine.disable_winemenubuilder(app=app, wine64_binary=app.conf.wine64_binary)
-
-    # renderer: DXVK or gl with our oinos Wine builds, gdi with others.
-    wine.set_default_renderer(app)
 
     # Force fontsmooth=rgb in registry.
     logging.debug("Setting fontsmoothing=rgb in wineprefix registry.")
@@ -327,6 +339,27 @@ def ensure_wineprefix_config(app: App):
     # Printing: GDI print path instead of the unimplemented XPS one.
     logging.debug("Configuring wineprefix for printing.")
     wine.configure_printing(app=app, wine64_binary=app.conf.wine64_binary)
+
+
+def update_wine_config(app: App):
+    """Re-apply the install's Wine settings to an existing install."""
+    from ou_dedetai.logos import State  # local import to avoid circular dependency
+
+    if not app.is_installed():
+        app.status(f"{app.conf.faithlife_product} isn't installed yet: nothing to update.")
+        return
+    # Registry changes wait for every Wine process in the prefix to exit.
+    app.logos.monitor()
+    if app.logos.logos_state in (State.STARTING, State.RUNNING):
+        app.status(f"Close {app.conf.faithlife_product} first, then update the Wine configuration.")
+        return
+    app.status("Updating Wine configuration…")
+    apply_wine_config(app)
+    # Speech: install and register Akousousin if it's missing. An installed one is
+    # left alone; "Update Akousousin" updates and re-registers it.
+    if not system.akousousin_installed():
+        system.ensure_akousousin(app=app)
+    app.status("Wine configuration updated.")
 
 
 def ensure_fonts(app: App):

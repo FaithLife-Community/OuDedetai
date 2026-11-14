@@ -15,6 +15,7 @@ from ou_dedetai.logos import State as LogosRunningState
 
 from . import backup
 from . import control
+from . import system
 from . import installer
 from . import wine
 from . import utils
@@ -49,6 +50,9 @@ class CLI(App):
 
     def install_dependencies(self):
         utils.install_dependencies(app=self)
+
+    def update_wine_config(self):
+        installer.update_wine_config(self)
 
     def install_icu(self):
         wine.enforce_icu_data_files(self)
@@ -116,6 +120,9 @@ class CLI(App):
 
     def toggle_media_support(self):
         wine.toggle_media_support(self)
+
+    def update_akousousin(self):
+        system.update_akousousin(self)
 
     def update_latest_appimage(self):
         installer.update_to_latest_wine(self)

@@ -10,6 +10,7 @@ import struct
 import subprocess
 import sys
 import time
+import tempfile
 import zipfile
 
 from collections.abc import MutableMapping
@@ -1049,6 +1050,81 @@ def ensure_winetricks(
                 break
     os.chmod(winetricks_path, 0o755)
     logging.debug("Winetricks installed.")
+
+
+def akousousin_launcher() -> Path:
+    return Path.home() / ".local/bin/akousousin"
+
+
+def akousousin_installed() -> bool:
+    return akousousin_launcher().is_file()
+
+
+def ensure_akousousin(app: App, update: bool = False) -> bool:
+    """Install shared speech and register SAPI; Akousousin owns its lifecycle.
+
+    Returns True when Akousousin is installed and registered with this prefix. Any
+    failure (no stable release, no network, installer or registration error) is
+    reported and logged but never stops OuDedetai: Logos works without it, and
+    "Update Akousousin" can be tried again later."""
+    from . import utils
+
+    app.status("Ensuring Akousousin speech support is installed…")
+
+    launcher = akousousin_launcher()
+    # Akousousin is a separate frozen application, not a child OD worker.
+    env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
+
+    def failed(reason: str) -> bool:
+        logging.warning(f"Akousousin: {reason}")
+        app.status(f"Akousousin speech support wasn't set up: {reason} "
+                   "Logos works without it; try \"Update Akousousin\" later.")
+        return False
+
+    try:
+        if update or not launcher.is_file():
+            filename = "Akousousin-Linux-x86_64.tar.gz"
+            # Explicit updates must bypass the cached release lookup.
+            lookup = network._get_release_data if update else app.conf._network._repo_version
+            try:
+                release = lookup("jg00dman/akousousin", tag="latest", asset_name=re.escape(filename))
+            except Exception as error:
+                return failed(f"couldn't find a stable Akousousin release with {filename} ({error}).")
+            cached = f"{release.version.replace('/', '_')}-{filename}"
+            network.logos_reuse_download(release.download_url, cached, app.conf.download_dir, app=app)
+            downloaded = Path(app.conf.download_dir) / cached
+            with tempfile.TemporaryDirectory() as directory:
+                utils.untar_file(downloaded, directory)
+                if run_command(["sh", str(Path(directory) / "Akousousin/install.sh"), "--quiet"],
+                               env=env, timeout=180) is None:
+                    return failed("the bundle's installer failed. See the installation log.")
+            if not launcher.is_file():
+                return failed(f"its installer did not create {launcher}.")
+        if run_command([str(launcher), "--wine-prefix", str(Path(app.conf.wine_prefix).resolve()),
+                        "--wine", str(Path(app.conf.wine_binary).resolve()), "--install-only"],
+                       env=env, timeout=180) is None:
+            return failed("SAPI registration failed. See the installation log.")
+    except subprocess.CalledProcessError as error:
+        return failed(f"{error.stderr or error.stdout or error}")
+    except Exception as error:
+        logging.exception("Akousousin setup failed")
+        return failed(f"{error}")
+    return True
+
+
+def update_akousousin(app: App):
+    """Install the latest stable tar and register it with the current Wine runner."""
+    from .logos import State
+
+    if not app.is_installed():
+        app.status("Install Logos/Verbum before updating Akousousin.")
+        return
+    app.logos.monitor()
+    if app.logos.logos_state in (State.STARTING, State.RUNNING):
+        app.status("Close Logos/Verbum before updating Akousousin.")
+        return
+    if ensure_akousousin(app, update=True):
+        app.status("Akousousin updated and Wine speech registration refreshed.", 100)
 
 
 def check_incompatibilities(app: App):
