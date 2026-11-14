@@ -282,6 +282,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
     install_required = [
         'backup',
         'create_shortcuts',
+        'install_desktop_integrations',
         'install_icu',
         'remove_index_files',
         'remove_library_catalog',

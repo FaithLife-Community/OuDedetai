@@ -336,6 +336,8 @@ class PersistentConfiguration:
     faithlife_product_release_channel: str = "stable"
     # The Installer's release channel. Either "stable" or "dev"
     app_release_channel: str = "stable"
+    # Whether we've offered to install the KDE Plasma desktop integrations (asked once)
+    desktop_integrations_offered: bool = False
 
     _legacy: Optional[LegacyConfiguration] = None
     """A Copy of the legacy configuration.
@@ -754,6 +756,17 @@ class Config:
     @property
     def faithlife_product_icon_path(self) -> str:
         return str(constants.APP_IMAGE_DIR / f"{self.faithlife_product}-128-icon.png")
+
+    @property
+    def desktop_integrations_offered(self) -> bool:
+        """Whether the user has been offered the desktop integrations (we only ask once)"""
+        return self._raw.desktop_integrations_offered
+
+    @desktop_integrations_offered.setter
+    def desktop_integrations_offered(self, value: bool) -> None:
+        if self._raw.desktop_integrations_offered != value:
+            self._raw.desktop_integrations_offered = value
+            self._write()
 
     @property
     def faithlife_product_logging(self) -> bool:

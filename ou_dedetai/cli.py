@@ -15,6 +15,7 @@ from ou_dedetai.logos import State as LogosRunningState
 
 from . import backup
 from . import control
+from . import desktop_integrations
 from . import system
 from . import installer
 from . import wine
@@ -36,6 +37,9 @@ class CLI(App):
 
     def create_shortcuts(self):
         installer.create_launcher_shortcuts(self)
+
+    def install_desktop_integrations(self):
+        desktop_integrations.install(self)
 
     def edit_config(self):
         control.edit_file(self.conf.config_file_path)
