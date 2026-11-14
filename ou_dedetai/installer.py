@@ -370,6 +370,7 @@ def ensure_fonts(app: App):
     app.installer_step += 1
 
     wine.install_fonts(app)
+    wine.install_open_fonts(app)
 
     # Open stand-ins for Windows fonts Logos needs (print preview crashes without them).
     app.status("Configuring font replacements…")
