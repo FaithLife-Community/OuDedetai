@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Tuple, Callable
 
-from . import constants, msg, cli, utils
+from . import constants, msg, cli, utils, wine
 from .config import EphemeralConfiguration
 
 
@@ -146,7 +146,7 @@ def get_parser():
     )
     cmd.add_argument(
         '--set-appimage', nargs=1, metavar=('APPIMAGE_FILE_PATH'),
-        help='Update the AppImage symlink. Requires a path.',
+        help='Switch to another Wine build: an AppImage, or a Wine tarball (.tar.xz, .tar.gz). Requires a path.',
     )
     cmd.add_argument(
         '--install-icu', action='store_true',
@@ -403,8 +403,9 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
                 if not utils.file_exists(ephemeral_config.wine_appimage_path):
                     e = f"Invalid file path: '{ephemeral_config.wine_appimage_path}'. File does not exist."
                     raise argparse.ArgumentTypeError(e)
-                if not utils.check_appimage(ephemeral_config.wine_appimage_path):
-                    e = f"{ephemeral_config.wine_appimage_path} is not an AppImage."
+                if not (wine.is_wine_tarball(Path(ephemeral_config.wine_appimage_path))
+                        or utils.check_appimage(ephemeral_config.wine_appimage_path)):
+                    e = f"{ephemeral_config.wine_appimage_path} is neither an AppImage nor a Wine tarball."
                     raise argparse.ArgumentTypeError(e)
             # Re-use this variable for either wine or winetricks execution
             elif arg == 'wine' or arg == 'winetricks':
