@@ -629,7 +629,7 @@ class ControlWindow(GuiApp):
         file_path = fd.askopenfilename(
             title=f"Select {filetype_name}",
             filetypes=[
-                (filetype_name, f"*.{filetype_extension}"),
+                (filetype_name, " ".join(f"*.{ext}" for ext in filetype_extension.split())),
                 ("All Files", "*.*")
             ],
         )
@@ -660,7 +660,7 @@ class ControlWindow(GuiApp):
 
     def set_appimage(self, evt=None):
         # TODO: Separate as advanced feature.
-        appimage_filename = self.open_file_dialog("AppImage", "AppImage")
+        appimage_filename = self.open_file_dialog("Wine AppImage or tarball", "AppImage tar.xz tar.gz tgz")
         if not appimage_filename:
             return
         self.conf.wine_appimage_path = appimage_filename
@@ -775,19 +775,10 @@ class ControlWindow(GuiApp):
         if not self.is_installed():
             state = "disabled"
             msg = "Please install first"
-        elif self.conf.wine_binary not in (
-            constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,
-            constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL,
-            constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL,
-            constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL,
-        ):
+        elif self.conf.wine_appimage_path is None and not self.conf.is_wine_binary_in_distribution:
+            # wine_binary is always a resolved path once installed, so ask how Wine is managed
             state = 'disabled'
-            msg = "This button is disabled. The configured install was not created using an AppImage."
-            self.gui.set_appimage_button.state(['disabled'])
-            gui.ToolTip(
-                self.gui.set_appimage_button,
-                "This button is disabled. The configured install was not created using an AppImage."
-            )
+            msg = "This button is disabled. The install uses a Wine that OuDedetai doesn't manage."
         elif self.conf._raw.wine_binary is not None:
             status, _ = utils.compare_recommended_wine_version(self)
             if status == 0:

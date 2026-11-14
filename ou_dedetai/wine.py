@@ -1040,9 +1040,16 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     return system.fix_ld_library_path(wine_env)
 
 
+def is_wine_tarball(path: Path) -> bool:
+    return path.is_file() and path.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz"))
+
+
 def setup_wine(app: App):
     from .installer import download_wine, create_wine_symlinks
     downloaded_file = download_wine(app)
+    if downloaded_file is None and is_wine_tarball(Path(app.conf.wine_binary)):
+        # A tarball chosen with "Choose File" is unpacked like a downloaded one.
+        downloaded_file = Path(app.conf.wine_binary)
 
     if downloaded_file is not None and downloaded_file.name.lower().endswith(".appimage"):
         # Retain compatibility with existing AppImage-based installations.
@@ -1063,7 +1070,8 @@ def setup_wine(app: App):
             if distribution_dir.exists():
                 shutil.rmtree(distribution_dir)
             tarball.extractall(distribution_root, filter="data")
-        wine_path = Path(app.conf.wine_path_in_distribution)
+        # The folder just unpacked, not whichever unpacked build glob finds first.
+        wine_path = distribution_dir / "bin" / "wine"
         if not wine_path.is_file():
             raise RuntimeError("Downloaded tarball didn't contain the needed Wine binary")
         app.conf.wine_binary = str(wine_path.absolute())
