@@ -121,7 +121,9 @@ class LogosManager:
 
         time_logos_started = time.time()
 
-        while True:
+        # Stop with Logos: this thread isn't a daemon, so looping forever would keep
+        # the CLI's process alive after Logos has closed.
+        while self.logos_state in (State.STARTING, State.RUNNING):
             # Now we wait...
             time.sleep(10)
 
