@@ -472,6 +472,109 @@ def set_renderer(app: App, wine64_binary: str, value: str):
     wine_reg_install(app, name, reg_text, wine64_binary)
 
 
+# DXVK in our oinos builds: they ship FaithLife-Community/dxvk (Logos fixes) together with
+# two scripts, run with WINEPREFIX set:
+#   dxvk-install    installs DXVK if the GPU has the Vulkan 1.4 DXVK needs and exits 0;
+#                   otherwise takes out any DXVK it installed, sets Wine's OpenGL renderer
+#                   (renderer=gl) and exits 3
+#   dxvk-uninstall  goes back to Wine's own Direct3D
+# The AppImage runs them as "<AppImage> dxvk-install"; the tarball has them in bin/ next to wine.
+# Wine itself never falls back between renderers: with renderer=vulkan (or DXVK) on a GPU that
+# can't do it, Direct3D fails and Logos draws everything in software, with no video picture.
+DXVK_DLLS = ("d3d8", "d3d9", "d3d10core", "d3d11", "dxgi")
+
+
+def dxvk_tool_command(app: App, tool: str) -> Optional[list[str]]:
+    """Command running the Wine build's dxvk-install or dxvk-uninstall, or None without one."""
+    appimage = app.conf.wine_appimage_path
+    if appimage is not None:
+        return [str(appimage), tool]
+    script = Path(app.conf.wine_binary).parent / tool
+    if script.is_file():
+        return [str(script)]
+    return None
+
+
+def run_dxvk_tool(app: App, tool: str) -> Optional[int]:
+    """Runs dxvk-install or dxvk-uninstall; returns its exit code, or None if this Wine has none."""
+    command = dxvk_tool_command(app, tool)
+    if command is None:
+        return None
+    try:
+        result = subprocess.run(command, env=get_wine_env(app), capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.SubprocessError) as e:
+        logging.warning(f"Failed to run {tool}: {e}")
+        return None
+    logging.debug(f"{tool} exited with {result.returncode}: {result.stdout.strip()} {result.stderr.strip()}")
+    # An AppImage without the tool hands the name to Wine, which fails with another code.
+    if tool == "dxvk-install" and result.returncode not in (0, 3):
+        return None
+    return result.returncode
+
+
+def dxvk_enabled(app: App) -> bool:
+    """Whether the prefix has DXVK's DLLs set to native (as dxvk-install does)."""
+    user_reg = Path(app.conf.wine_prefix) / "user.reg"
+    if not user_reg.is_file():
+        return False
+    section = re.search(
+        r'^\[Software\\\\Wine\\\\DllOverrides\].*?(?=^\[|\Z)',
+        user_reg.read_text(), re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    )
+    return section is not None and re.search(
+        r'^"\*?d3d9"="native"\s*$', section.group(), re.MULTILINE | re.IGNORECASE
+    ) is not None
+
+
+def get_effective_renderer(app: App) -> Optional[str]:
+    """"dxvk" when DXVK is installed in the prefix, otherwise Wine's renderer setting."""
+    return "dxvk" if dxvk_enabled(app) else get_renderer(app)
+
+
+def set_dxvk_or_gl(app: App) -> Optional[str]:
+    """DXVK where the GPU supports it, otherwise Wine's OpenGL renderer.
+
+    Returns "dxvk" or "gl", or None if this Wine build doesn't ship dxvk-install."""
+    code = run_dxvk_tool(app, "dxvk-install")
+    if code is None:
+        return None
+    wineserver_wait(app)
+    return "dxvk" if code == 0 else "gl"
+
+
+def set_default_renderer(app: App):
+    """The renderer a new or repaired prefix gets.
+
+    Our oinos builds fix the menu glitches and popup crashes that Wine's Direct3D renderers
+    have with Logos, so with them use DXVK, or OpenGL where the GPU can't run DXVK. Any other
+    Wine keeps renderer=gdi (see toggle_media_support for switching to gl)."""
+    wine_release, _ = get_wine_release(app.conf.wine_binary)
+    if wine_supports_logos_updates(wine_release):
+        result = set_dxvk_or_gl(app)
+        if result is None:
+            result = "gl"
+            set_renderer(app, app.conf.wine64_binary, "gl")
+        logging.info(f"oinos Wine: renderer set to {result}.")
+        return
+    logging.debug("Setting renderer=gdi in wineprefix registry.")
+    set_renderer(app, app.conf.wine64_binary, "gdi")
+
+
+def select_renderer(app: App, choice: str) -> str:
+    """Switches the prefix to gdi, gl, vulkan or dxvk; returns a message for the user."""
+    if choice == "dxvk":
+        result = set_dxvk_or_gl(app)
+        if result is None:
+            return "This Wine build doesn't include DXVK; renderer unchanged."
+        if result == "gl":
+            return "This GPU can't run DXVK (it needs Vulkan 1.4); using Wine's OpenGL renderer instead."
+        return "Renderer set to DXVK."
+    if dxvk_enabled(app) and run_dxvk_tool(app, "dxvk-uninstall") is not None:
+        wineserver_wait(app)
+    set_renderer(app, app.conf.wine64_binary, choice)
+    return f"Renderer set to {choice}"
+
+
 def media_support_enabled(app: App) -> bool:
     user_reg = Path(app.conf.wine_prefix) / "user.reg"
     if not user_reg.is_file():
@@ -480,7 +583,7 @@ def media_support_enabled(app: App) -> bool:
         r'^\[Software\\\\Wine\\\\MediaFoundation\].*?(?=^\[|\Z)',
         user_reg.read_text(), re.MULTILINE | re.DOTALL | re.IGNORECASE,
     )
-    return get_renderer(app) == "gl" and media is not None and re.search(
+    return get_effective_renderer(app) in ("gl", "dxvk") and media is not None and re.search(
         r'^"DisableGstByteStreamHandler"=dword:0*1\s*$', media.group(), re.MULTILINE | re.IGNORECASE,
     ) is not None
 
@@ -489,11 +592,13 @@ def toggle_media_support(app: App):
     enabled = media_support_enabled(app)
     renderer = "gdi" if enabled else "gl"
     handler = "-" if enabled else "dword:00000001"
-    reg_text = rf'''REGEDIT4
-
+    # With DXVK installed Wine's renderer setting isn't used; leave it and DXVK alone.
+    renderer_section = "" if dxvk_enabled(app) else rf'''
 [HKEY_CURRENT_USER\Software\Wine\Direct3D]
 "renderer"="{renderer}"
-
+'''
+    reg_text = rf'''REGEDIT4
+{renderer_section}
 [HKEY_CURRENT_USER\Software\Wine\MediaFoundation]
 "DisableGstByteStreamHandler"={handler}
 '''

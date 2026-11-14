@@ -317,9 +317,8 @@ def ensure_wineprefix_config(app: App):
     logging.debug("Setting wineprefix registry to ignore winemenubuilder.exe.")
     wine.disable_winemenubuilder(app=app, wine64_binary=app.conf.wine64_binary)
 
-    # Force renderer=gdi in registry.
-    logging.debug("Setting renderer=gdi in wineprefix registry.")
-    wine.set_renderer(app=app, wine64_binary=app.conf.wine64_binary, value="gdi")
+    # renderer: DXVK or gl with our oinos Wine builds, gdi with others.
+    wine.set_default_renderer(app)
 
     # Force fontsmooth=rgb in registry.
     logging.debug("Setting fontsmoothing=rgb in wineprefix registry.")

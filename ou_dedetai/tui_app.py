@@ -647,8 +647,7 @@ class TUI(App):
     def renderer_select(self, choice: str | None) -> None:
         if choice in ("gdi", "gl", "dxvk", "vulkan"):
             self.status(f"Changing renderer to {choice}…")
-            wine.set_renderer(self, self.conf.wine64_binary, choice)
-            self.status(f"Renderer set to {choice}")
+            self.status(wine.select_renderer(self, choice))
         self.go_to_main_menu()
 
     def win_ver_logos_select(self, choice: str | None) -> None:
@@ -666,7 +665,7 @@ class TUI(App):
         self.go_to_main_menu()
 
     def set_wineconfig_menu_options(self) -> list[str]:
-        renderer = wine.get_renderer(self)
+        renderer = wine.get_effective_renderer(self)
         renderer_label = renderer or "Unknown"
         logos_win_version = wine.get_win_version(self, "logos") or "Unknown"
         indexer_win_version = wine.get_win_version(self, "indexer") or "Default"
