@@ -115,6 +115,43 @@ def get_wine_release(binary: str) -> tuple[Optional[WineRelease], str]:
         return None, f"Error: {e}"
 
 
+# Our own Wine builds (FaithLife-Community/wine, "oinos") say so in `wine --version`,
+# e.g. "wine-11.21 (oinos)". Every such build carries the fixes that make Logos's own
+# application updates safe and possible under Wine:
+#   - msi sets UPGRADINGPRODUCTCODE while an upgrade removes the old version, so Logos's
+#     uninstall clean-up action doesn't delete the user's Data folder (Wine bug 49767);
+#   - msi can treat custom actions named in HKCU\Software\Wine\MSI\IgnoreFailedActions
+#     as "continue on error", so the MSIX registration Wine can't do doesn't roll the
+#     update back.
+OINOS_WINE_BRANCH = "oinos"
+# Custom actions in Logos's installer that fail under Wine and are safe to skip.
+LOGOS_IGNORED_MSI_ACTIONS = ["RegisterStubMsixPackage"]
+
+
+def wine_supports_logos_updates(wine_release: Optional[WineRelease]) -> bool:
+    """Whether Logos may update itself under this Wine (see OINOS_WINE_BRANCH)."""
+    return wine_release is not None and wine_release.release == OINOS_WINE_BRANCH
+
+
+def allow_logos_updates(app: App, wine_binary: str):
+    """Lets Logos's own updates finish under an oinos Wine build."""
+    process = run_wine_during_install(
+        app,
+        wine_binary,
+        exe='reg',
+        exe_args=[
+            'add', 'HKCU\\Software\\Wine\\MSI',
+            '/v', 'IgnoreFailedActions',
+            '/t', 'REG_MULTI_SZ',
+            # wine's reg.exe splits REG_MULTI_SZ data on a literal "\0"
+            '/d', "\\0".join(LOGOS_IGNORED_MSI_ACTIONS),
+            '/f',
+        ]
+    )
+    if process is not None:
+        process.wait()
+
+
 @dataclass
 class WineRule:
     major: int
