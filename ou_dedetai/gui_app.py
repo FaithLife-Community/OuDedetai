@@ -28,6 +28,7 @@ from ou_dedetai.config import EphemeralConfiguration
 import ou_dedetai.logos
 
 from . import backup
+from . import desktop_integrations
 from . import constants
 from . import control
 from . import gui
@@ -490,6 +491,8 @@ class ControlWindow(GuiApp):
                     self.update_app_button()
                 last_state = copy.copy(self.logos.logos_state)
         self.start_thread(_monitor_faithlife_product_pids)
+        # Once, on KDE Plasma: offer the Logos desktop integrations
+        self.start_thread(desktop_integrations.offer, app=self)
         self.gui.update_lli_label.config(text=text)
         self.gui.run_indexing_radio.config(
             command=self.on_action_radio_clicked
