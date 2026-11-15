@@ -55,11 +55,9 @@ class TestUpdateWineConfig(unittest.TestCase):
         with mock.patch.object(installer.wine, "disable_winemenubuilder") as menu, \
                 mock.patch.object(installer.wine, "set_fontsmoothing_to_rgb") as smoothing, \
                 mock.patch.object(installer.wine, "configure_printing") as printing, \
-                mock.patch.object(installer.wine, "install_open_fonts") as fonts, \
                 mock.patch.object(installer.wine, "set_font_replacements") as replacements, \
                 mock.patch.object(installer.wine, "set_renderer") as renderer:
             installer.apply_wine_config(self.app)
-        fonts.assert_called_once_with(self.app)
         replacements.assert_called_once_with(self.app, "/fake/wine64")
         printing.assert_called_once_with(app=self.app, wine64_binary="/fake/wine64")
         menu.assert_called_once_with(app=self.app, wine64_binary="/fake/wine64")

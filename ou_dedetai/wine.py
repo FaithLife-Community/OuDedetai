@@ -622,42 +622,11 @@ FONT_REPLACEMENTS: dict[str, list[str]] = {
     "Courier New": ["Liberation Mono", "Cousine", "Nimbus Mono PS"],
     "Microsoft Sans Serif": ["Liberation Sans", "Arimo", "Nimbus Sans"],
     "Calibri": ["Carlito", "Liberation Sans", "Arimo"],
-    # Logos's sermon templates use Georgia and Source Sans Pro.
+    # Logos's sermon templates use Georgia and Source Sans Pro. Gelasio and
+    # Source Sans 3 are bundled with our Wine builds.
     "Georgia": ["Gelasio", "Liberation Serif", "DejaVu Serif"],
     "Source Sans Pro": ["Source Sans 3"],
 }
-
-# Open (SIL OFL) fonts installed into the prefix as stand-ins: Gelasio is
-# metric-compatible with Georgia, and Source Sans 3 is Source Sans Pro renamed.
-# Pinned to commits so the files don't change under us.
-_GELASIO = "https://raw.githubusercontent.com/SorkinType/Gelasio/7ab20e7e5c42791e603b9ee3201a0b49849cfdb2/fonts/ttf"
-_SOURCE_SANS = "https://raw.githubusercontent.com/adobe-fonts/source-sans/87b37a2daaed80fcb8e8ccb0085c4d72ddade12e/TTF"
-OPEN_FONTS: dict[str, str] = {  # registry name -> URL
-    "Gelasio (TrueType)": f"{_GELASIO}/Gelasio-Regular.ttf",
-    "Gelasio Bold (TrueType)": f"{_GELASIO}/Gelasio-Bold.ttf",
-    "Gelasio Italic (TrueType)": f"{_GELASIO}/Gelasio-Italic.ttf",
-    "Gelasio Bold Italic (TrueType)": f"{_GELASIO}/Gelasio-BoldItalic.ttf",
-    "Source Sans 3 (TrueType)": f"{_SOURCE_SANS}/SourceSans3-Regular.ttf",
-    "Source Sans 3 Bold (TrueType)": f"{_SOURCE_SANS}/SourceSans3-Bold.ttf",
-    "Source Sans 3 Italic (TrueType)": f"{_SOURCE_SANS}/SourceSans3-It.ttf",
-    "Source Sans 3 Bold Italic (TrueType)": f"{_SOURCE_SANS}/SourceSans3-BoldIt.ttf",
-}
-
-
-def install_open_fonts(app: App):
-    """Copy the OPEN_FONTS files into the prefix's Fonts folder and register them,
-    as winetricks does for its fonts (DirectWrite finds fonts through the registry)."""
-    fonts_dir = Path(app.conf.wine_prefix) / "drive_c" / "windows" / "Fonts"
-    fonts_dir.mkdir(parents=True, exist_ok=True)
-    reg_text = "REGEDIT4\n\n[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts]\n"
-    for name, url in OPEN_FONTS.items():
-        filename = os.path.basename(url)
-        if not (fonts_dir / filename).exists():
-            network.logos_reuse_download(url, filename, app.conf.download_dir, app=app)
-            shutil.copy(Path(app.conf.download_dir) / filename, fonts_dir / filename)
-        reg_text += f'"{name}"="{filename}"\n'
-    wine_reg_install(app, "open-fonts.reg", reg_text, app.conf.wine64_binary)
-
 
 def set_font_replacements(app: App, wine64_binary: str):
     key = "HKCU\\Software\\Wine\\Fonts\\Replacements"
