@@ -459,6 +459,7 @@ def get_package_manager() -> PackageManager | None:
             "binutils wget winbind libfreetype6 "  # wine tarball
             "cabextract " # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
+            "wl-clipboard "  # Wayland clipboard: lets the desktop integrations read highlighted text
             "mesa-utils "  # verify opengl version
         )
 
@@ -517,6 +518,7 @@ def get_package_manager() -> PackageManager | None:
             "mod_auth_ntlm_winbind samba-winbind samba-winbind-clients "  # wine
             "cabextract " # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
+            "wl-clipboard "  # Wayland clipboard: lets the desktop integrations read highlighted text
             "glx-utils"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
@@ -533,6 +535,7 @@ def get_package_manager() -> PackageManager | None:
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
+            "wl-clipboard "  # Wayland clipboard: lets the desktop integrations read highlighted text
             "Mesa-demo-x"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
@@ -550,6 +553,7 @@ def get_package_manager() -> PackageManager | None:
             "7zip cabextract " # winetricks
             "samba sed grep gawk bash bash-completion "  # other
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
+            "wl-clipboard "  # Wayland clipboard: lets the desktop integrations read highlighted text
             "mesa-demos"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
@@ -565,6 +569,7 @@ def get_package_manager() -> PackageManager | None:
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks (7zip used to be called p7zip)
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
+            "wl-clipboard "  # Wayland clipboard: lets the desktop integrations read highlighted text
             "mesa-utils "  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
@@ -587,6 +592,7 @@ def get_package_manager() -> PackageManager | None:
                 "lib32-ncurses ocl-icd lib32-ocl-icd libxslt lib32-libxslt libva lib32-libva gtk3 lib32-gtk3 "
                 "gst-plugins-base-libs lib32-gst-plugins-base-libs vulkan-icd-loader lib32-vulkan-icd-loader "
                 "xdg-utils " # For xdg-mime needed for custom url scheme registration
+                "wl-clipboard "  # Wayland clipboard: lets the desktop integrations read highlighted text
                 "mesa-utils "  # verify opengl version
             )
         else:  # arch
@@ -600,6 +606,7 @@ def get_package_manager() -> PackageManager | None:
                 "libva mpg123 v4l-utils "  # video
                 "libxslt sqlite "  # misc
                 "xdg-utils " # For xdg-mime needed for custom url scheme registration
+                "wl-clipboard "  # Wayland clipboard: lets the desktop integrations read highlighted text
                 "mesa-utils "  # verify opengl version
             )
         incompatible_packages = ""  # appimagelauncher handled separately
