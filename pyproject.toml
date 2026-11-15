@@ -8,6 +8,7 @@ dependencies = [
 #    "certifi",
 #    "charset-normalizer",
     "distro",
+    "PySide6",
 #    "idna",
     "packaging",
     "psutil",

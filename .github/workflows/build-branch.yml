@@ -35,7 +35,7 @@ jobs:
         include:
           - runner: ubuntu-22.04
             arch: x86_64
-          - runner: ubuntu-22.04-arm
+          - runner: ubuntu-24.04-arm
             arch: arm
     outputs:
       bin_name_x86_64: ${{ steps.pyinstaller.outputs.bin_name_x86_64 }}
@@ -73,6 +73,11 @@ jobs:
         BIN_NAME="oudedetai-${ARCH}"
         echo "bin_name_${ARCH}=$BIN_NAME" >> $GITHUB_OUTPUT
         mv dist/oudedetai "dist/$BIN_NAME"
+
+    - name: Smoke test packaged Qt imports
+      env:
+        QT_QPA_PLATFORM: offscreen
+      run: dist/${{ steps.pyinstaller.outputs.bin_name_x86_64 || steps.pyinstaller.outputs.bin_name_arm }} --help
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4

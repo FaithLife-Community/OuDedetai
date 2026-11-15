@@ -109,9 +109,25 @@ class TestAppUtils(unittest.TestCase):
         ]
         self.assertEqual(utils.get_wine_options(self.app), options)
 
-    @unittest.skip("Test not feasible.")
     def test_set_appimage_symlink(self):
-        pass
+        import shutil
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'download.AppImage'
+            shutil.copy(TESTDATADIR / 'wine_tiny_v2.AppImage', source)
+            source.chmod(0o640)
+            bindir = root / 'bin'
+            bindir.mkdir()
+            self.app.conf.wine_appimage_path = source
+            self.app.conf.installer_binary_dir = str(bindir)
+            self.app.conf.wine_appimage_link_file_name = 'selected_wine.AppImage'
+            self.app.conf.wine_download_file_name = 'recommended.AppImage'
+            utils.set_appimage_symlink(self.app)
+            destination = bindir / source.name
+            self.app.exit.assert_not_called()
+            self.assertEqual(destination.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(self.app.conf.wine_binary, str(destination))
+            self.assertEqual((bindir / 'wine').resolve(), destination)
 
     @unittest.skip("Test not feasible.")
     def test_update_to_latest_recommended_appimage(self):

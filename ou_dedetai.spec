@@ -7,11 +7,11 @@ a = Analysis(
     #binaries=[('/usr/bin/tclsh8.6', '.')],
     binaries=[],
     datas=[('ou_dedetai/img', 'img'),('ou_dedetai/assets', 'assets')],
-    hiddenimports=["tkinter"],
+    hiddenimports=["PySide6.QtWidgets"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=["tkinter"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)
