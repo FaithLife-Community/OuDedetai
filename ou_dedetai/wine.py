@@ -528,6 +528,9 @@ def set_fontsmoothing_to_rgb(app: App, wine64_binary: str):
 # missing family, adds one under that name backed by the first listed font that is
 # installed. Real fonts with these names (e.g. from ttf-mscorefonts-installer) win.
 FONT_REPLACEMENTS: dict[str, list[str]] = {
+    # WPF falls back to Arial for any family it can't find, and fails fast
+    # ("Unrecoverable system error") if Arial is missing too.
+    "Arial": ["Liberation Sans", "Arimo", "DejaVu Sans"],
     "Segoe UI": ["Selawik", "Noto Sans", "Liberation Sans", "DejaVu Sans"],
     "Times New Roman": ["Liberation Serif", "Tinos", "Nimbus Roman"],
     "Courier New": ["Liberation Mono", "Cousine", "Nimbus Mono PS"],
