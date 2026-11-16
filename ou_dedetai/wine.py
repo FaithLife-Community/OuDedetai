@@ -941,7 +941,30 @@ def run_wine_application(
         )
 
 
+# Registry writes are safe to repeat. A rare Wine start-up crash (a new process jumping
+# to a bad entry address before it has run anything; seen once on Bazzite with
+# reg.exe, exit code 5) shouldn't stop an install, so these get one retry.
+_IDEMPOTENT_TOOLS = ("reg", "regedit.exe")
+
+
 def run_wine_during_install(
+    app: App,
+    wine_binary: str | Path,
+    exe=None,
+    exe_args=list(),
+    init=False,
+    additional_wine_dll_overrides: Optional[str] = None,
+) -> Optional[subprocess.Popen[bytes]]:
+    try:
+        return _run_wine_during_install_once(app, wine_binary, exe, exe_args, init, additional_wine_dll_overrides)
+    except subprocess.CalledProcessError as error:
+        if exe not in _IDEMPOTENT_TOOLS:
+            raise
+        logging.warning(f"{exe} failed ({error.returncode}); trying once more.")
+        return _run_wine_during_install_once(app, wine_binary, exe, exe_args, init, additional_wine_dll_overrides)
+
+
+def _run_wine_during_install_once(
     app: App,
     wine_binary: str | Path,
     exe=None,

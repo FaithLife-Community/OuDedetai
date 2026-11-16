@@ -201,3 +201,20 @@ class TestLicenceBeforeInstall(unittest.TestCase):
                 wine.install_msi(app)
         app.agree_to_licence.assert_called_once_with("Logos", "EULA text")
         run.assert_not_called()
+
+
+class TestRegistryRetry(unittest.TestCase):
+    def test_reg_is_retried_once(self):
+        from ou_dedetai import wine
+        fail = subprocess.CalledProcessError(5, "reg add")
+        with mock.patch.object(wine, "_run_wine_during_install_once", side_effect=[fail, "ok"]) as run:
+            self.assertEqual(wine.run_wine_during_install(mock.Mock(), "/w", exe="reg", exe_args=["add"]), "ok")
+        self.assertEqual(run.call_count, 2)
+
+    def test_other_programs_are_not_retried(self):
+        from ou_dedetai import wine
+        fail = subprocess.CalledProcessError(1, "msiexec")
+        with mock.patch.object(wine, "_run_wine_during_install_once", side_effect=fail) as run:
+            with self.assertRaises(subprocess.CalledProcessError):
+                wine.run_wine_during_install(mock.Mock(), "/w", exe="msiexec", exe_args=["/i"])
+        self.assertEqual(run.call_count, 1)
