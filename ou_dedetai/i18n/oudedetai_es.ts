@@ -16,8 +16,8 @@
       <translation>Comprobando su equipo</translation>
     </message>
     <message>
-      <source>Graphics and the system packages Wine needs</source>
-      <translation>Los gráficos y los paquetes del sistema que necesita Wine</translation>
+      <source>Folders and graphics; nothing is installed system-wide</source>
+      <translation>Carpetas y gráficos; no se instala nada en el sistema</translation>
     </message>
     <message>
       <source>Getting Wine</source>

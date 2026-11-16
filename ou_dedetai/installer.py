@@ -71,7 +71,10 @@ def ensure_sys_deps(app: App):
     app.installer_step += 1
     app.status("Ensuring system dependencies are met…")
 
-    if not app.conf.skip_install_system_dependencies:
+    if not constants.INSTALL_SYSTEM_PACKAGES:
+        # FIXME: remove the package lists once testing confirms they aren't needed.
+        logging.info("System packages not installed (set OUDEDETAI_INSTALL_DEPS=1 to install them).")
+    elif not app.conf.skip_install_system_dependencies:
         utils.install_dependencies(app)
         logging.debug("> Done.")
     else:

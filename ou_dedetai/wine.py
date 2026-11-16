@@ -777,6 +777,11 @@ def install_fonts(app: App):
         if registry_key == f"{f}.ttf" and (fonts_dir / f"{f}.ttf").exists():
             logging.debug(f"Found font {f} already in fonts dir, no need to install.")
             continue
+        if shutil.which("cabextract") is None:
+            # winetricks needs cabextract to unpack the font. The font replacements
+            # (Arial → Liberation Sans) cover Arial, so carry on without it.
+            logging.warning(f"cabextract not found: not installing {f}; the font replacements cover it.")
+            continue
         # Font isn't installed, continue to install with winetricks.
         app.status(f"Configuring font: {f}…", i / len(fonts))
         args = [f]

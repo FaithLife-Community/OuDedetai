@@ -98,3 +98,22 @@ class TestUpdateWineConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSystemPackagesOff(unittest.TestCase):
+    def test_install_doesnt_install_system_packages_by_default(self):
+        from unittest import mock
+        from ou_dedetai import constants, installer
+        app = mock.Mock()
+        app.installer_step_count = app.installer_step = 0
+        app.conf.skip_install_system_dependencies = False
+        with mock.patch.object(constants, "INSTALL_SYSTEM_PACKAGES", False), \
+                mock.patch.object(installer, "ensure_install_dirs"), \
+                mock.patch.object(installer.utils, "install_dependencies") as deps:
+            installer.ensure_sys_deps(app)
+        deps.assert_not_called()
+        with mock.patch.object(constants, "INSTALL_SYSTEM_PACKAGES", True), \
+                mock.patch.object(installer, "ensure_install_dirs"), \
+                mock.patch.object(installer.utils, "install_dependencies") as deps:
+            installer.ensure_sys_deps(app)
+        deps.assert_called_once_with(app)

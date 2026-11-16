@@ -97,6 +97,12 @@ LOGOS_WHITE = '#FCFCFC'
 PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 
 WINE_BETA_SIGIL = "Experimental (AKA Beta)"
+# System packages during install: off while we test whether the bundled Wine tarball
+# needs any (it ran fine on Bazzite without them). OUDEDETAI_INSTALL_DEPS=1 brings the
+# old behaviour back; "Install dependencies" in Troubleshooting / --install-dependencies
+# still installs them on request.
+INSTALL_SYSTEM_PACKAGES = os.getenv("OUDEDETAI_INSTALL_DEPS") == "1"
+
 WINE_RECOMMENDED_SIGIL = "Recommended"
 WINE_RECOMMENDED_APPIMAGE_SIGIL= "Recommended Appimage"
 WINE_RECOMMENDED_TARBALL_SIGIL= "Recommended Bundled"

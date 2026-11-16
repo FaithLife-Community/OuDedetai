@@ -162,7 +162,7 @@ INSTALL_STEPS: list[tuple[tuple[str, ...], str, str]] = [
     (("Asking questions", "Install is running", "Ensuring installation directories"),
      "Preparing", "Choosing where Logos goes"),
     (("Ensuring system dependencies", "Checking available OpenGL"),
-     "Checking your computer", "Graphics and the system packages Wine needs"),
+     "Checking your computer", "Folders and graphics; nothing is installed system-wide"),
     (("Ensuring Wine is downloaded", "Ensuring wine executables", "Creating wine symlinks"),
      "Getting Wine", "Wine runs Windows programs. It's kept in Ou Dedetai's folder, not system-wide"),
     (("Ensuring winetricks",),
