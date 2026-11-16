@@ -876,6 +876,56 @@ def is_image_based_os() -> bool:
         return False
 
 
+# Programs winetricks uses to unpack most of what it downloads, and their package
+# names per package manager (the first word of its install command).
+WINETRICKS_TOOLS = {
+    "cabextract": {"apt": "cabextract", "dnf": "cabextract", "zypper": "cabextract",
+                   "pacman": "cabextract", "pamac": "cabextract", "apk": "cabextract"},
+    "7z": {"apt": "7zip", "dnf": "p7zip-plugins", "zypper": "7zip", "pacman": "7zip",
+           "pamac": "7zip", "apk": "7zip"},
+    "unzip": {"apt": "unzip", "dnf": "unzip", "zypper": "unzip", "pacman": "unzip",
+              "pamac": "unzip", "apk": "unzip"},
+}
+
+
+def missing_winetricks_tools() -> list[str]:
+    return [tool for tool in WINETRICKS_TOOLS
+            if not (shutil.which(tool) or (tool == "7z" and shutil.which("7zz")))]
+
+
+def offer_winetricks_tools(app: App) -> None:
+    """Before running winetricks: offer to install what it needs to unpack downloads.
+
+    Ou Dedetai no longer installs system packages during install, and Logos doesn't
+    need these; winetricks often does. Never fatal: winetricks still runs."""
+    missing = missing_winetricks_tools()
+    if not missing:
+        return
+    context = (f"winetricks uses {', '.join(missing)} to unpack many of the things it downloads; "
+               "without them some of its options will fail.")
+    if is_image_based_os():
+        app.info(context + "\n\nThis system is image-based, so Ou Dedetai can't install them "
+                 "system-wide. You can install them in a container (e.g. distrobox) or with your "
+                 "system's own tools.")
+        return
+    package_manager = get_package_manager()
+    manager = Path(package_manager.install[0]).name if package_manager else None
+    packages = [WINETRICKS_TOOLS[tool].get(manager or "", tool) for tool in missing]
+    if package_manager is None:
+        app.info(context)
+        return
+    # Just these packages: pacman's usual install command also upgrades the whole system.
+    install = ["pacman", "-S", "--needed", "--noconfirm"] if manager == "pacman" else package_manager.install
+    if not app.approve("Install them now?", context + "\n\nThis runs: " + " ".join(install + packages)):
+        return
+    try:
+        run_command([app.superuser_command, *install, *packages])
+        app.status(f"Installed {', '.join(packages)}.", 100)
+    except (OSError, subprocess.CalledProcessError) as error:
+        logging.warning(f"Installing {packages} failed: {error}")
+        app.status(f"Couldn't install {', '.join(packages)}; winetricks may not manage everything.", 0)
+
+
 def install_dependencies(app: App, target_version=10):
     if app.conf.skip_install_system_dependencies:
         return

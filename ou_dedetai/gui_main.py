@@ -1422,6 +1422,7 @@ class MainWindow(GuiApp):
             if not Path(binary).exists():
                 self.status(tr("winetricks isn't available with this Wine build."))
                 return
+            system.offer_winetricks_tools(self)
             subprocess.Popen([binary], env=wine.get_wine_env(self), start_new_session=True,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.start_thread(run)

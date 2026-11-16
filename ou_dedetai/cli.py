@@ -107,6 +107,7 @@ class CLI(App):
         self.logos.stop()
 
     def winetricks(self):
+        system.offer_winetricks_tools(self)
         process = wine.run_wine_process(
             self,
             self.conf.winetricks_binary,

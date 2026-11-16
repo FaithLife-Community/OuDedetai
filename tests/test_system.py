@@ -233,3 +233,34 @@ class TestGetOsWithoutUname(unittest.TestCase):
                 patch('subprocess.check_output', side_effect=subprocess.CalledProcessError(1, ['uname', '-rs'])):
             name, _ = system.get_os()
         self.assertTrue(name)
+
+
+class TestWinetricksTools(unittest.TestCase):
+    def setUp(self):
+        self.app = Mock()
+        self.app.superuser_command = "pkexec"
+        apt = system.PackageManager(install=["apt", "install", "-y"], download=[], remove=[], query=[],
+                                    query_prefix="", packages="", incompatible_packages="")
+        for target, value in (("is_image_based_os", False), ("get_package_manager", apt)):
+            p = patch.object(system, target, return_value=value)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_nothing_asked_when_tools_present(self):
+        with patch.object(system, "missing_winetricks_tools", return_value=[]):
+            system.offer_winetricks_tools(self.app)
+        self.app.approve.assert_not_called()
+
+    def test_offers_only_the_missing_packages(self):
+        self.app.approve.return_value = True
+        with patch.object(system, "missing_winetricks_tools", return_value=["cabextract", "7z"]), \
+                patch.object(system, "run_command") as run:
+            system.offer_winetricks_tools(self.app)
+        run.assert_called_once_with(["pkexec", "apt", "install", "-y", "cabextract", "7zip"])
+
+    def test_declining_installs_nothing(self):
+        self.app.approve.return_value = False
+        with patch.object(system, "missing_winetricks_tools", return_value=["unzip"]), \
+                patch.object(system, "run_command") as run:
+            system.offer_winetricks_tools(self.app)
+        run.assert_not_called()
