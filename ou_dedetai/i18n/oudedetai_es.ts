@@ -160,6 +160,14 @@
       <translation>Mostrar opciones de desarrollo y pruebas</translation>
     </message>
     <message>
+      <source>Prerelease (newest oinos build)</source>
+      <translation>Preliminar (la versión oinos más reciente)</translation>
+    </message>
+    <message>
+      <source>Stable (newest full release)</source>
+      <translation>Estable (la versión completa más reciente)</translation>
+    </message>
+    <message>
       <source>Experimental media support (video and audiobooks)</source>
       <translation>Compatibilidad multimedia experimental (vídeo y audiolibros)</translation>
     </message>
@@ -246,6 +254,14 @@
     <message>
       <source>Troubleshooting…</source>
       <translation>Solución de problemas…</translation>
+    </message>
+    <message>
+      <source>Wine default</source>
+      <translation>La de Wine</translation>
+    </message>
+    <message>
+      <source>Unknown</source>
+      <translation>Desconocido</translation>
     </message>
     <message>
       <source>What's happening</source>
@@ -376,16 +392,20 @@
       <translation>Aplicar</translation>
     </message>
     <message>
+      <source>Wine builds to use</source>
+      <translation>Versiones de Wine que usar</translation>
+    </message>
+    <message>
+      <source>Then use Update ▸ Wine, or install again.</source>
+      <translation>Después use Actualizar ▸ Wine, o vuelva a instalar.</translation>
+    </message>
+    <message>
       <source>Windows version for Logos</source>
       <translation>Versión de Windows para Logos</translation>
     </message>
     <message>
       <source>Windows version for the indexer</source>
       <translation>Versión de Windows para el indexador</translation>
-    </message>
-    <message>
-      <source>Wine default</source>
-      <translation>La de Wine</translation>
     </message>
     <message>
       <source>Command line: oudedetai --show-wine-config, oudedetai --wine winecfg</source>
@@ -666,10 +686,6 @@
     <message>
       <source>Not set</source>
       <translation>Sin configurar</translation>
-    </message>
-    <message>
-      <source>Unknown</source>
-      <translation>Desconocido</translation>
     </message>
     <message>
       <source>Not needed with this Wine</source>

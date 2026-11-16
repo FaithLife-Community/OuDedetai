@@ -644,6 +644,13 @@ class MainWindow(GuiApp):
         grid.addWidget(button(tr("Apply"), None, self.apply_renderer), 0, 2)
         self.renderer_now = label("", "muted")
         grid.addWidget(self.renderer_now, 0, 3)
+        grid.addWidget(label(tr("Wine builds to use")), 3, 0)
+        self.channel = QtWidgets.QComboBox()
+        self.channel.addItem(tr("Prerelease (newest oinos build)"), "dev")
+        self.channel.addItem(tr("Stable (newest full release)"), "stable")
+        grid.addWidget(self.channel, 3, 1)
+        grid.addWidget(button(tr("Apply"), None, self.apply_channel), 3, 2)
+        grid.addWidget(label(tr("Then use Update ▸ Wine, or install again."), "muted"), 3, 3)
         grid.addWidget(label(tr("Windows version for Logos")), 1, 0)
         self.winver_logos = QtWidgets.QComboBox()
         grid.addWidget(self.winver_logos, 1, 1)
@@ -678,6 +685,7 @@ class MainWindow(GuiApp):
         dl.addWidget(label(tr("Command line: oudedetai --show-wine-config, oudedetai --wine winecfg"), "muted"))
         self.dev.setVisible(False)
         self.dev_toggle.toggled.connect(self.dev.setVisible)
+        self._show_channel()
         v.addWidget(self.dev)
         v.addStretch(1)
         return page
@@ -922,6 +930,7 @@ class MainWindow(GuiApp):
         if index >= 0:
             self.renderer.setCurrentIndex(index)
         self.media.setChecked(wine.media_support_enabled(self))
+        self._show_channel()
 
         def load_winver():
             versions = (wine.get_win_version(self, "logos") or "", wine.get_win_version(self, "indexer") or "")
@@ -1228,6 +1237,15 @@ class MainWindow(GuiApp):
         version = combo.currentData()
         if version:
             self.start_thread(wine.set_win_version, self, exe, version)
+
+    def _show_channel(self) -> None:
+        i = self.channel.findData(self.conf.wine_release_channel)
+        self.channel.setCurrentIndex(i if i >= 0 else 0)
+
+    def apply_channel(self) -> None:
+        self.conf.wine_release_channel = self.channel.currentData()
+        self._updates = {}
+        self.start_thread(self._check_updates)
 
     def set_offline(self, on: bool) -> None:
         self.conf.offline_mode = on
