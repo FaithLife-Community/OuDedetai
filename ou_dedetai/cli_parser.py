@@ -166,7 +166,7 @@ def get_parser():
     )
     cmd.add_argument(
         '--install-desktop-integrations', action='store_true',
-        help='install or update the Logos desktop integrations (KDE Plasma)',
+        help='install or update the Logos desktop integrations (KDE Plasma or GNOME)',
     )
     cmd.add_argument(
         '--uninstall', action='store_true',

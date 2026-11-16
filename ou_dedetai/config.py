@@ -336,7 +336,7 @@ class PersistentConfiguration:
     faithlife_product_release_channel: str = "stable"
     # The Installer's release channel. Either "stable" or "dev"
     app_release_channel: str = "stable"
-    # Whether we've offered to install the KDE Plasma desktop integrations (asked once)
+    # Whether we've offered to install the desktop integrations for KDE Plasma or GNOME (asked once)
     desktop_integrations_offered: bool = False
 
     _legacy: Optional[LegacyConfiguration] = None
