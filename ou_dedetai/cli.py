@@ -83,6 +83,17 @@ class CLI(App):
     def purge(self):
         control.purge(self)
 
+    def set_wine_channel(self):
+        self.conf.wine_release_channel = self.conf._overrides.cli_choice or "stable"
+        print(f"Wine builds: {self.conf.wine_release_channel} ('Recommended' and Update Wine use this).")
+
+    def set_offline(self):
+        self.conf.offline_mode = self.conf._overrides.cli_choice == "on"
+        print("Offline: no update checks or downloads." if self.conf.offline_mode else "Online again.")
+
+    def set_renderer(self):
+        print(wine.select_renderer(self, self.conf._overrides.cli_choice or "dxvk"))
+
     def remove_library_catalog(self):
         control.remove_library_catalog(self)
 
@@ -141,8 +152,6 @@ class CLI(App):
     def toggle_app_logging(self):
         self.logos.switch_logging()
 
-    def toggle_media_support(self):
-        wine.toggle_media_support(self)
 
     def update_akousousin(self):
         system.update_akousousin(self)

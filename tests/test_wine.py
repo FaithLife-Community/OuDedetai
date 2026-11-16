@@ -168,17 +168,6 @@ class TestRenderer(unittest.TestCase):
         tool.assert_called_once_with(self.app, "dxvk-uninstall")
         self.assertEqual(set_renderer.call_args.args[2], "gl")
 
-    def test_media_toggle_leaves_renderer_alone_with_dxvk(self):
-        self.write_user_reg(USER_REG_DXVK)
-        with mock.patch.object(wine, "wine_reg_install") as install:
-            wine.toggle_media_support(self.app)
-        reg_text = install.call_args.args[2]
-        self.assertNotIn("Direct3D", reg_text)
-        self.assertIn('"DisableGstByteStreamHandler"=dword:00000001', reg_text)
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestMonoGeckoOnlyForWineboot(unittest.TestCase):

@@ -242,6 +242,8 @@ class EphemeralConfiguration:
     app_run_as_root_permitted: bool = False
     offline: bool = False
     """Work offline for this run (--offline or OUDEDETAI_OFFLINE=1), whatever the saved setting."""
+    cli_choice: Optional[str] = None
+    """The value given to --set-wine-channel, --set-offline or --set-renderer."""
     logos_link: Optional[str] = None
     """A logos4:/libronixdls: link to open (--run-installed-app LINK, used by the link handler)."""
 

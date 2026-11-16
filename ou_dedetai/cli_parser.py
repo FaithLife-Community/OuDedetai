@@ -180,10 +180,6 @@ def get_parser():
         help='enable/disable app logs',
     )
     cmd.add_argument(
-        '--toggle-media-support', action='store_true',
-        help='enable/disable experimental media support',
-    )
-    cmd.add_argument(
         '--create-shortcuts', action='store_true',
         help='[re-]create app shortcuts',
     )
@@ -194,6 +190,18 @@ def get_parser():
     cmd.add_argument(
         '--uninstall', action='store_true',
         help='Completely delete the faithlife software from your system',
+    )
+    cmd.add_argument(
+        '--set-wine-channel', choices=['stable', 'dev'],
+        help='which Wine builds "Recommended" means: stable (current release) or dev (newest prerelease)',
+    )
+    cmd.add_argument(
+        '--set-offline', choices=['on', 'off'],
+        help='work offline from now on (no update checks or downloads), or go back online',
+    )
+    cmd.add_argument(
+        '--set-renderer', choices=['dxvk', 'gl', 'vulkan', 'gdi'],
+        help="switch Wine's graphics renderer for Logos (dxvk falls back to gl where the GPU can't run it)",
     )
     cmd.add_argument(
         '--purge', action='store_true',
@@ -442,6 +450,9 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
         'remove_index_files',
         'uninstall',
         'purge',
+        'set_wine_channel',
+        'set_offline',
+        'set_renderer',
         'remove_library_catalog',
         'restore',
         'run_indexing',
@@ -454,7 +465,6 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
-        'toggle_media_support',
         'update_self',
         'update_latest_appimage',
         'wine',
@@ -465,6 +475,8 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
     run_action = None
     for arg in action_names:
         if getattr(args, arg) or getattr(args, arg) == []:
+            if arg in ("set_wine_channel", "set_offline", "set_renderer"):
+                ephemeral_config.cli_choice = getattr(args, arg)
             if arg == "run_installed_app" and isinstance(getattr(args, arg), str):
                 ephemeral_config.logos_link = getattr(args, arg)
             if arg == "set_appimage":

@@ -302,12 +302,12 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         'update_installed_app',
         'update_wine_config',
         'show_wine_config',
+        'set_renderer',
         'open_todays_reading',
         'update_akousousin',
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
-        'toggle_media_support',
     ]
     needs_internet = [
         'install_app',
@@ -322,7 +322,8 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
     if action.__name__ in needs_internet and _offline_mode(ephemeral_config):
         print(
             f"Offline mode is on, so {constants.APP_NAME} won't connect to the internet. "
-            "Turn it off in the GUI's Settings, or remove --offline / OUDEDETAI_OFFLINE, to do this.",
+            "Turn it off (Settings in the window, the TUI's Utilities, or --set-offline off), "
+            "or remove --offline / OUDEDETAI_OFFLINE, to do this.",
             file=sys.stderr,
         )
         sys.exit(1)

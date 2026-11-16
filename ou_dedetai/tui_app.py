@@ -607,9 +607,6 @@ class TUI(App):
         elif choice == "Update to Latest Wine":
             self.start_thread(installer.update_to_latest_wine, self)
             self.go_to_main_menu()
-        elif choice == "Toggle experimental media support":
-            self.start_thread(wine.toggle_media_support, self)
-            self.go_to_main_menu()
         elif choice == "Set Windows Version for Logos":
             self.ui.push_screen(MenuModal("Windows Version for Logos", constants.WINDOWS_VERSIONS),
                                 callback=self.win_ver_logos_select)
@@ -632,12 +629,26 @@ class TUI(App):
                 self.conf.reload()
             elif choice == f"Check for {constants.APP_NAME} Updates":
                 utils.check_for_updates(self, force=True)
-            elif choice == "Change FaithLife Release Channel":
+            elif choice.startswith(("Change FaithLife Release Channel", "Change Logos Release Channel",
+                                    "Change Verbum Release Channel")):
                 self.conf.toggle_faithlife_product_release_channel()
-            elif choice == f"Change {constants.APP_NAME} Release Channel":
+            elif choice.startswith(f"Change {constants.APP_NAME} Release Channel"):
                 self.conf.toggle_installer_release_channel()
-            elif choice == "Change Wine Release Channel":
+            elif choice.startswith("Wine Builds"):
                 self.conf.toggle_wine_release_channel()
+                self.status(f"Wine builds: {WINE_CHANNELS.get(self.conf.wine_release_channel)}")
+            elif choice.startswith("Work Offline"):
+                self.conf.offline_mode = not self.conf.offline_mode
+                self.status("Offline: no update checks or downloads." if self.conf.offline_mode
+                            else "Online again.")
+            elif choice == "Show Wine Settings":
+                from ou_dedetai import wine_settings
+                self.info(wine_settings.format_report(
+                    wine_settings.report_for_app(self), wine_settings.renderer_summary(self)))
+            elif choice == "Install Desktop Integrations":
+                self.start_thread(desktop_integrations.install, self)
+            elif choice == "Remove Everything":
+                self.start_thread(control.purge, self)
             elif choice == "Install Dependencies":
                 utils.install_dependencies(self)
             elif choice == "Update Wine Configuration":
@@ -654,8 +665,6 @@ class TUI(App):
             elif choice == "Check OpenGL":
                 _, reason = system.check_opengl_version(self)
                 self.status(reason)
-            elif choice == "Uninstall":
-                control.uninstall(self)
             elif choice == "Update to Latest AppImage":
                 installer.update_to_latest_wine(self)
         except UserExitedFromAsk:
@@ -692,7 +701,6 @@ class TUI(App):
             f"Set Renderer (Current: {renderer_label})",
             "Set Runner (AppImage or tarball)",
             "Update to Latest Wine",
-            "Toggle experimental media support",
             f"Set Windows Version for Logos (Current: {logos_win_version})",
             f"Set Windows Version for Indexer (Current: {indexer_win_version})",
             "Return to Main Menu",
@@ -707,10 +715,15 @@ class TUI(App):
             or Path(self.conf.config_file_path).exists()
             or (getattr(self.conf._raw, "install_dir", None) and Path(self.conf._raw.install_dir).exists())
         ):
-            labels.append("Uninstall")
+            labels.append("Remove Everything")
         labels.extend([f"Check for {constants.APP_NAME} Updates", "Install Dependencies"])
         if self.is_installed():
-            labels.append("Update Wine Configuration")
+            labels.extend(["Update Wine Configuration", "Show Wine Settings"])
+            if desktop_integrations.desktop() and not desktop_integrations.is_installed():
+                labels.append("Install Desktop Integrations")
+        channel = self.conf.wine_release_channel
+        labels.append(f"Wine Builds (Current: {WINE_CHANNELS.get(channel, channel)})")
+        labels.append(f"Work Offline (Current: {'On' if self.conf.offline_mode else 'Off'})")
         labels.extend(["Edit Config", "Reload Config"])
         if self.is_installed():
             labels.extend([
@@ -725,6 +738,10 @@ class TUI(App):
         labels.append("Check OpenGL")
         labels.append("Return to Main Menu")
         return labels
+
+
+# Wine release channels, as Settings names them in the window.
+WINE_CHANNELS = {"stable": "Current release", "dev": "Prerelease (newest oinos)"}
 
 
 def control_panel_app(ephemeral_config: EphemeralConfiguration) -> None:

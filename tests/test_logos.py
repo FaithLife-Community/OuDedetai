@@ -85,3 +85,24 @@ class TestRunInstalledAppLink(unittest.TestCase):
                 config, action = cli_parser.od_parse_args(args, parser)
             self.assertEqual(action.__name__, "run_installed_app")
             self.assertEqual(config.logos_link, link)
+
+
+class TestSettingFlags(unittest.TestCase):
+    def test_set_flags_reach_the_cli(self):
+        from unittest import mock
+        from ou_dedetai import cli_parser
+        parser = cli_parser.get_parser()
+        for argv, action, value in ((["--set-wine-channel", "dev"], "set_wine_channel", "dev"),
+                                    (["--set-offline", "on"], "set_offline", "on"),
+                                    (["--set-renderer", "dxvk"], "set_renderer", "dxvk")):
+            args = parser.parse_args(argv)
+            with mock.patch.object(cli_parser.EphemeralConfiguration, "load",
+                                   return_value=cli_parser.EphemeralConfiguration.load_from_path("/nonexistent")):
+                config, run = cli_parser.od_parse_args(args, parser)
+            self.assertEqual(run.__name__, action)
+            self.assertEqual(config.cli_choice, value)
+
+    def test_media_toggle_is_gone(self):
+        from ou_dedetai import cli_parser
+        with self.assertRaises(SystemExit):
+            cli_parser.get_parser().parse_args(["--toggle-media-support"])

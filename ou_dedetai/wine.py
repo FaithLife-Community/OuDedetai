@@ -578,7 +578,7 @@ def set_default_renderer(app: App):
 
     Our oinos builds fix the menu glitches and popup crashes that Wine's Direct3D renderers
     have with Logos, so with them use DXVK, or OpenGL where the GPU can't run DXVK. Any other
-    Wine keeps renderer=gdi (see toggle_media_support for switching to gl)."""
+    Wine keeps renderer=gdi."""
     wine_release, _ = get_wine_release(app.conf.wine_binary)
     if wine_supports_logos_updates(wine_release):
         result = set_dxvk_or_gl(app)
@@ -604,38 +604,6 @@ def select_renderer(app: App, choice: str) -> str:
         wineserver_wait(app)
     set_renderer(app, app.conf.wine64_binary, choice)
     return f"Renderer set to {choice}"
-
-
-def media_support_enabled(app: App) -> bool:
-    user_reg = Path(app.conf.wine_prefix) / "user.reg"
-    if not user_reg.is_file():
-        return False
-    media = re.search(
-        r'^\[Software\\\\Wine\\\\MediaFoundation\].*?(?=^\[|\Z)',
-        user_reg.read_text(), re.MULTILINE | re.DOTALL | re.IGNORECASE,
-    )
-    return get_effective_renderer(app) in ("gl", "dxvk") and media is not None and re.search(
-        r'^"DisableGstByteStreamHandler"=dword:0*1\s*$', media.group(), re.MULTILINE | re.IGNORECASE,
-    ) is not None
-
-
-def toggle_media_support(app: App):
-    enabled = media_support_enabled(app)
-    renderer = "gdi" if enabled else "gl"
-    handler = "-" if enabled else "dword:00000001"
-    # With DXVK installed Wine's renderer setting isn't used; leave it and DXVK alone.
-    renderer_section = "" if dxvk_enabled(app) else rf'''
-[HKEY_CURRENT_USER\Software\Wine\Direct3D]
-"renderer"="{renderer}"
-'''
-    reg_text = rf'''REGEDIT4
-{renderer_section}
-[HKEY_CURRENT_USER\Software\Wine\MediaFoundation]
-"DisableGstByteStreamHandler"={handler}
-'''
-    wine_reg_install(app, "toggle-media-support.reg", reg_text, app.conf.wine64_binary)
-    state = "disabled" if enabled else "enabled"
-    app.status(f"Experimental media support {state}. Restart {app.conf.faithlife_product}.", 100)
 
 
 def set_fontsmoothing_to_rgb(app: App, wine64_binary: str):
