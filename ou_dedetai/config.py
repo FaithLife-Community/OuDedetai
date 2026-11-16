@@ -1007,6 +1007,9 @@ class Config:
     def wine_binary(self) -> str:
         """Returns absolute path to the wine binary"""
         output = self._raw.wine_binary
+        if output == constants.WINE_RECOMMENDED_SIGIL:
+            # Saved by older builds before the setter resolved it.
+            output = constants.WINE_RECOMMENDED_TARBALL_SIGIL
         if output is None:
             question = (
                 f"Which Wine AppImage or binary should the script use to install {self.faithlife_product} "
@@ -1041,8 +1044,6 @@ class Config:
     @wine_binary.setter
     def wine_binary(self, value: str):
         """Takes in a path to the wine binary and stores it as relative for storage"""
-        # Make the path absolute for comparison
-        relative = self._relative_from_install_dir(value)
         # FIXME: consider this, it doesn't work at present as the wine_binary may be an
         # appimage that hasn't been downloaded yet
         # aboslute = self._absolute_from_install_dir(value)
@@ -1057,6 +1058,9 @@ class Config:
             else:
                 logging.info("Failed to find any beta-specific appimage, falling back to latest release.")
                 value = self.wine_appimage_recommended_file_name
+        # Store the resolved choice (this mapping used to be computed and then
+        # ignored, so a bare "Recommended" was saved and later run as a program).
+        relative = self._relative_from_install_dir(value)
 
         if self._raw.wine_binary != relative:
             self._raw.wine_binary = relative

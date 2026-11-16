@@ -1259,7 +1259,7 @@ class MainWindow(GuiApp):
                 # One-click install always uses the recommended Wine (the chosen channel's
                 # newest build), not one left in the config by an earlier attempt.
                 # "Choose options…" keeps a manual choice.
-                self.conf.wine_binary = constants.WINE_RECOMMENDED_SIGIL
+                self.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL
                 installer.install(self)
             finally:  # errors are reported by start_thread
                 self._installing = False

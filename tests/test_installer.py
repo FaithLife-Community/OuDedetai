@@ -128,3 +128,20 @@ class TestKnownBug435(unittest.TestCase):
         with mock.patch.object(installer.system, "run_command", return_value=result):
             installer.check_for_known_bugs(app)
         self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_SIGIL)
+
+
+class TestRecommendedWineIsResolved(unittest.TestCase):
+    def test_recommended_sigil_means_the_bundled_tarball(self):
+        import json
+        from ou_dedetai import constants
+        from ou_dedetai.config import Config, EphemeralConfiguration
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "c.json"
+            path.write_text(json.dumps({"install_dir": tmp, "wine_binary": "Recommended"}))
+            with mock.patch.object(Config, "_write"):
+                conf = Config(EphemeralConfiguration.load_from_path(str(path)), mock.Mock())
+                conf.wine_binary = constants.WINE_RECOMMENDED_SIGIL
+            self.assertEqual(conf._raw.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
+            conf._raw.wine_binary = "Recommended"
+            with mock.patch.object(Config, "_write"):
+                self.assertEqual(conf.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
