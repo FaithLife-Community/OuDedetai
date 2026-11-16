@@ -158,15 +158,14 @@ class TestAkousousinUpdate(unittest.TestCase):
         self.launcher.parent.mkdir(parents=True, exist_ok=True)
         self.launcher.touch()
         latest = network.SoftwareReleaseInfo('v0.9.0', 'u')
+        self.app.conf._network._repo_version.return_value = latest
         with patch.object(system, 'akousousin_version', return_value='0.8.2'), \
                 patch.object(network, 'is_offline', return_value=False), \
-                patch.object(network, '_get_release_data', return_value=latest) as fresh:
+                patch.object(network, '_get_release_data') as fresh:
             self.assertEqual(system.akousousin_update(self.app), '0.9.0')
-        fresh.assert_called_once()  # not the 12-hour cache
-        self.app.conf._network._repo_version.assert_not_called()
+        fresh.assert_not_called()  # the shared cache: no request each time the window opens
         with patch.object(system, 'akousousin_version', return_value='0.9.0'), \
-                patch.object(network, 'is_offline', return_value=False), \
-                patch.object(network, '_get_release_data', return_value=latest):
+                patch.object(network, 'is_offline', return_value=False):
             self.assertIsNone(system.akousousin_update(self.app))
 
     def test_update_refreshes_registration_after_install(self):

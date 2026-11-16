@@ -132,6 +132,32 @@ class TestBackgroundWork(GuiTestCase):
         self.assertEqual(self.window._layouts, ["Study"])
         self.assertFalse(self.window.reading_card.isHidden())
 
+    def test_starting_logos_from_the_window_shows_the_tray(self):
+        with mock.patch.object(gui_main, "TrayController") as tray, \
+                mock.patch.object(self.window, "start_thread"):
+            self.window.run_logos()
+            tray.return_value.timer.isActive.return_value = True
+            self.window.run_logos()  # one tray, however often Logos is started
+        tray.assert_called_once_with(self.window, self.qt)
+        self.assertFalse(self.qt.quitOnLastWindowClosed())
+        self.qt.setQuitOnLastWindowClosed(True)
+
+    def test_check_for_updates_now_clears_the_cache(self):
+        with mock.patch.object(network, "is_offline", return_value=False), \
+                mock.patch.object(self.window.conf._network, "clear_cache") as clear, \
+                mock.patch.object(self.window, "_check_updates") as check:
+            self.window._updates = {"aks": (True, "Update Akousousin to 0.9.0")}
+            self.window.start_thread = lambda f: f()  # type: ignore[method-assign]
+            self.window.check_updates_now()
+        clear.assert_called_once()
+        check.assert_called_once()
+        self.assertIn("0.9.0", self.window.status_gui.message_label.text())
+
+    def test_check_for_updates_now_does_nothing_offline(self):
+        with mock.patch.object(self.window.conf._network, "clear_cache") as clear:
+            self.window.check_updates_now()
+        clear.assert_not_called()
+
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:
             self.window._logos_state_changed(gui_main.State.RUNNING)

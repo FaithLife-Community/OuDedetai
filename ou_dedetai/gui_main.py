@@ -292,6 +292,7 @@ class Signals(QtCore.QObject):
     install_finished = QtCore.Signal()
     failed = QtCore.Signal(str)                 # an unexpected error in a background task
     task_done = QtCore.Signal()                 # a background task returned
+    tray = QtCore.Signal()                      # Logos is being started: show the tray
 HOME, SETTINGS, TROUBLE = 0, 1, 2
 
 
@@ -306,6 +307,7 @@ class MainWindow(GuiApp):
         self._plans: list[dict] = []
         self._layouts: list[str] = []
         self._updates: dict[str, tuple[bool, str]] = {}
+        self._tray: Optional["TrayController"] = None
         self._installing = False
         self._last_state: Optional[State] = None
         self._polling = False
@@ -344,6 +346,7 @@ class MainWindow(GuiApp):
         sig.install_finished.connect(self._install_finished)
         sig.failed.connect(self._task_failed)
         sig.task_done.connect(self._task_done)
+        sig.tray.connect(self.show_tray)
 
         self.config_updated_hooks.append(self._refresh_later)
         self.refresh()
@@ -863,6 +866,7 @@ class MainWindow(GuiApp):
         ], 3, columns=2)
         section(tr("More"), [
             button(tr("Choose a Wine build (AppImage or tarball)…"), None, self.set_appimage),
+            button(tr("Check for updates now"), None, self.check_updates_now),
             button(tr("Edit the config file…"), None, self.edit_config),
             button(tr("Remove everything…"), "danger", self.purge),
         ], 4)
@@ -1227,6 +1231,7 @@ class MainWindow(GuiApp):
         """Start Logos if needed, then do something in it (open a link or layout)."""
         def run():
             if self.logos.logos_state not in (State.RUNNING, State.STARTING):
+                self.signals.tray.emit()
                 self.logos.start()
             deadline = time.monotonic() + 240
             while self.logos.logos_state != State.RUNNING and time.monotonic() < deadline:
@@ -1305,8 +1310,34 @@ class MainWindow(GuiApp):
         self.guide.set_product(self.conf.faithlife_product, self.conf.faithlife_product_icon_path)
         self.show_view(INSTALLING)
 
+    def check_updates_now(self) -> None:
+        """Ou Dedetai, Wine, Logos and Akousousin, ignoring the half-day cache."""
+        if network.is_offline():
+            self.status(tr("Offline mode is on, so Ou Dedetai won't check for updates."), 0)
+            return
+
+        def run():
+            self.status(tr("Checking for updates…"))
+            self.conf._network.clear_cache()
+            self._check_updates()
+            available = [text for can, text in self._updates.values() if can]
+            self.status(tr("Updates available: {names}").format(names="; ".join(available)) if available
+                        else tr("Everything is up to date."), 0)
+        self.start_thread(run)
+
     def run_logos(self) -> None:
+        self.show_tray()
         self.start_thread(self.logos.start)
+
+    def show_tray(self) -> None:
+        """Ou Dedetai in the tray while Logos runs, however Logos was started: closing this
+        window then leaves it running there, as when Logos is started from its shortcut."""
+        if self._tray is not None and self._tray.timer.isActive():
+            return
+        app = QtWidgets.QApplication.instance()
+        if isinstance(app, QtWidgets.QApplication):
+            app.setQuitOnLastWindowClosed(False)
+            self._tray = TrayController(self, app)
 
     def stop_logos(self) -> None:
         self.start_thread(self.logos.stop)
@@ -1586,8 +1617,7 @@ def run_with_tray(ephemeral_config: EphemeralConfiguration) -> int:
     if window.logos.hand_off_link():
         return 0  # a link for the Logos that's already running: nothing more to do
     window.start_thread(window.logos.start)
-    tray = TrayController(window, app)  # noqa: F841 (kept alive by the event loop)
-    app._od_tray = tray  # type: ignore[attr-defined]
+    window._tray = TrayController(window, app)
     return app.exec()
 
 

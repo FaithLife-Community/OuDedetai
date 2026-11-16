@@ -460,6 +460,10 @@
       <translation>Actualizado</translation>
     </message>
     <message>
+      <source>Offline mode is on, so Ou Dedetai won't check for updates.</source>
+      <translation>El modo sin conexión está activado, así que Ou Dedetai no buscará actualizaciones.</translation>
+    </message>
+    <message>
       <source>Logos is running</source>
       <translation>Logos está abierto</translation>
     </message>
@@ -552,6 +556,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Elegir una versión de Wine (AppImage o tarball)…</translation>
     </message>
     <message>
+      <source>Check for updates now</source>
+      <translation>Buscar actualizaciones ahora</translation>
+    </message>
+    <message>
       <source>Edit the config file…</source>
       <translation>Editar el archivo de configuración…</translation>
     </message>
@@ -638,6 +646,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Akousousin is up to date</source>
       <translation>Akousousin está actualizado</translation>
+    </message>
+    <message>
+      <source>Everything is up to date.</source>
+      <translation>Todo está al día.</translation>
     </message>
     <message>
       <source>winetricks isn't available with this Wine build.</source>
@@ -734,6 +746,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Update Akousousin to {version}</source>
       <translation>Actualizar Akousousin a {version}</translation>
+    </message>
+    <message>
+      <source>Updates available: {names}</source>
+      <translation>Actualizaciones disponibles: {names}</translation>
     </message>
     <message>
       <source>Today's reading: {reading}</source>

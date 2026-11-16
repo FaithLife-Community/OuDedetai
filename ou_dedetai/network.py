@@ -276,6 +276,12 @@ class NetworkRequests:
         self._cache = CachedRequests.load().ensure_fresh(force=force_clean or False)
         self._cache._update_hook = hook
 
+    def clear_cache(self) -> None:
+        """Forget every cached lookup, so the next ones ask the servers ("Check for updates now")."""
+        hook = self._cache._update_hook
+        self._cache = self._cache.ensure_fresh(force=True)
+        self._cache._update_hook = hook
+
     def _faithlife_product_releases(
         self,
         product: Optional[str],

@@ -1315,13 +1315,13 @@ def akousousin_version() -> Optional[str]:
 def akousousin_update(app: App) -> Optional[str]:
     """The latest release's version if it's newer than the installed one, else None.
 
-    Asks GitHub each time (one request, from the background update check): the shared
-    release cache lasts 12 hours, so a new Akousousin release went unnoticed for that long."""
+    Uses the shared release cache (renewed every 12 hours), so it doesn't ask GitHub each
+    time the window opens. Troubleshooting → Check for updates now renews it at once."""
     if not akousousin_installed() or network.is_offline():
         return None
     try:
-        release = network._get_release_data("jg00dman/akousousin", tag="latest",
-                                            asset_name=re.escape(AKOUSOUSIN_TARBALL))
+        release = app.conf._network._repo_version("jg00dman/akousousin", tag="latest",
+                                                  asset_name=re.escape(AKOUSOUSIN_TARBALL))
     except (requests.RequestException, OSError, ValueError, LookupError) as error:
         logging.debug(f"Akousousin update check failed: {error}")
         return None
