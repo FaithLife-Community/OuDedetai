@@ -195,6 +195,11 @@ def get_parser():
         help='Completely delete the faithlife software from your system',
     )
     cmd.add_argument(
+        '--purge', action='store_true',
+        help='remove everything Ou Dedetai installed: Logos/Verbum and its data, settings, logs, '
+             'cache and shortcuts; asks about Akousousin and the desktop integrations (-y says yes to all)',
+    )
+    cmd.add_argument(
         '--dirlink', action='store_true',
         # help='create directory link',
         help=argparse.SUPPRESS,
@@ -333,7 +338,7 @@ def _tray_wanted(config: EphemeralConfiguration) -> bool:
         return False
     try:
         import PySide6.QtWidgets  # noqa: F401
-    except Exception:
+    except ImportError:
         return False
     return True
 
@@ -418,7 +423,7 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
                 try:
                     gui_main.run_with_tray(config)
                     return
-                except Exception:
+                except (ImportError, RuntimeError, OSError):
                     logging.exception("Couldn't start the tray; running Logos from the command line instead")
             getattr(cli.CLI(config), action)()
         output = _run
@@ -435,6 +440,7 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
         'install_icu',
         'remove_index_files',
         'uninstall',
+        'purge',
         'remove_library_catalog',
         'restore',
         'run_indexing',

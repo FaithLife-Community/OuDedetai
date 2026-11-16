@@ -84,8 +84,8 @@
       <translation>Puede seguir usando su equipo mientras tanto.</translation>
     </message>
     <message>
-      <source>Install progress</source>
-      <translation>Progreso de la instalación</translation>
+      <source>Something went wrong</source>
+      <translation>Algo salió mal</translation>
     </message>
     <message>
       <source>Install</source>
@@ -166,10 +166,6 @@
     <message>
       <source>Stable (newest full release)</source>
       <translation>Estable (la versión completa más reciente)</translation>
-    </message>
-    <message>
-      <source>Experimental media support (video and audiobooks)</source>
-      <translation>Compatibilidad multimedia experimental (vídeo y audiolibros)</translation>
     </message>
     <message>
       <source>Getting help</source>
@@ -492,6 +488,18 @@
       <translation>Hecho</translation>
     </message>
     <message>
+      <source>Something went wrong: {error}</source>
+      <translation>Algo salió mal: {error}</translation>
+    </message>
+    <message>
+      <source>{error}
+
+The log has the details; Troubleshooting → Save a support report collects it.</source>
+      <translation>{error}
+
+El registro tiene los detalles; Solución de problemas → Guardar un informe para el soporte lo recopila.</translation>
+    </message>
+    <message>
       <source>Recreate</source>
       <translation>Volver a crear</translation>
     </message>
@@ -556,8 +564,8 @@
       <translation>Editar el archivo de configuración…</translation>
     </message>
     <message>
-      <source>Uninstall Logos…</source>
-      <translation>Desinstalar Logos…</translation>
+      <source>Remove everything…</source>
+      <translation>Quitarlo todo…</translation>
     </message>
     <message>
       <source>None found (needs the desktop integrations)</source>
@@ -600,6 +608,22 @@
       <translation>Logos está instalado</translation>
     </message>
     <message>
+      <source>OK</source>
+      <translation>Bien</translation>
+    </message>
+    <message>
+      <source>Check</source>
+      <translation>Revisar</translation>
+    </message>
+    <message>
+      <source>No Wine left running</source>
+      <translation>No queda Wine en ejecución</translation>
+    </message>
+    <message>
+      <source>End them</source>
+      <translation>Cerrarlos</translation>
+    </message>
+    <message>
       <source>Update Wine to the recommended build</source>
       <translation>Actualizar Wine a la versión recomendada</translation>
     </message>
@@ -636,10 +660,6 @@
       <translation>En revisión</translation>
     </message>
     <message>
-      <source>No Wine left running</source>
-      <translation>No queda Wine en ejecución</translation>
-    </message>
-    <message>
       <source>Wine settings</source>
       <translation>Configuración de Wine</translation>
     </message>
@@ -650,18 +670,6 @@
     <message>
       <source>Not installed</source>
       <translation>No instalado</translation>
-    </message>
-    <message>
-      <source>OK</source>
-      <translation>Bien</translation>
-    </message>
-    <message>
-      <source>Check</source>
-      <translation>Revisar</translation>
-    </message>
-    <message>
-      <source>End them</source>
-      <translation>Cerrarlos</translation>
     </message>
     <message>
       <source>Update Logos</source>
@@ -702,6 +710,10 @@
     <message>
       <source>Nothing left over</source>
       <translation>No queda nada</translation>
+    </message>
+    <message>
+      <source>OpenGL 3.2 or newer is needed</source>
+      <translation>Se necesita OpenGL 3.2 o posterior</translation>
     </message>
     <message>
       <source>Update Ou Dedetai to {version}</source>

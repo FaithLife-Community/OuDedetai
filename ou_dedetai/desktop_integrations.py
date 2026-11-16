@@ -7,10 +7,13 @@ install them (once, and only on KDE Plasma) and runs their installer on request.
 import json
 import logging
 import os
+import subprocess
 import tarfile
 import tempfile
 from pathlib import Path
 from typing import Mapping, Optional
+
+import requests
 
 from ou_dedetai import constants, network, system
 from ou_dedetai.app import App
@@ -94,7 +97,7 @@ def install(app: App) -> bool:
             app.status("Installing Logos desktop integrations…")
             result = system.run_command(["sh", str(installers[0])], check=False, timeout=600,
                                         cwd=str(installers[0].parent))
-    except Exception as e:
+    except (requests.RequestException, OSError, tarfile.TarError, subprocess.SubprocessError, RuntimeError) as e:
         logging.error(f"Installing desktop integrations failed: {e}")
         app.info(f"Couldn't install the Logos desktop integrations: {e}\n\nSee {PROJECT_URL}")
         return False
@@ -134,10 +137,9 @@ def _run_backend(*args: str, timeout: int = 60) -> Optional[str]:
     # The backend runs on the system's Python, not the one bundled in our binary.
     env = system.fix_ld_library_path(dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1"))
     try:
-        import subprocess
         result = subprocess.run([python, str(backend), *args], capture_output=True, text=True,
                                 timeout=timeout, env=env)
-    except Exception as error:
+    except (OSError, subprocess.SubprocessError) as error:
         logging.debug(f"Desktop integrations {args}: {error}")
         return None
     if result.returncode != 0:

@@ -19,9 +19,12 @@ import logging
 import os
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
+import requests
+import psutil  # type: ignore[import-untyped]
 from PySide6 import QtCore, QtGui, QtWidgets
 
 import ou_dedetai.logos
@@ -120,24 +123,7 @@ def scrolled(widget: QtWidgets.QWidget) -> QtWidgets.QScrollArea:
     return area
 
 
-def leftover_wine(prefix: Optional[str]) -> list[int]:
-    """PIDs of Wine processes still running in this prefix."""
-    import psutil  # type: ignore[import-untyped]
-    if not prefix:
-        return []
-    want = str(Path(prefix).resolve())
-    pids = []
-    for process in psutil.process_iter(["pid", "name"]):
-        try:
-            name = (process.info["name"] or "").lower()
-            if not (name.startswith("wine") or name.endswith(".exe")):
-                continue
-            env_prefix = process.environ().get("WINEPREFIX")
-            if env_prefix and str(Path(env_prefix).resolve()) == want:
-                pids.append(process.info["pid"])
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
-            pass
-    return pids
+leftover_wine = control.leftover_wine
 
 
 def clear_layout(layout: QtWidgets.QLayout) -> None:
@@ -201,11 +187,6 @@ class InstallGuide(QtWidgets.QWidget):
         titles.addWidget(self.subtitle)
         head.addLayout(titles, 1)
         v.addLayout(head)
-        self.progress = QtWidgets.QProgressBar()
-        self.progress.setTextVisible(False)
-        self.progress.setRange(0, 100)
-        self.progress.setAccessibleName(tr("Install progress"))
-        v.addWidget(self.progress)
 
         frame, steps = card()
         steps.addWidget(label(tr("What's happening"), "h2"))
@@ -238,19 +219,14 @@ class InstallGuide(QtWidgets.QWidget):
         settings_detail.setVisible(True)
         self.area = scrolled_frame(frame)
         v.addWidget(self.area, 1)
-
-        self.detail = label("", "muted")
-        v.addWidget(self.detail)
         self.current = -1
 
     def set_product(self, product: str, icon_path) -> None:
         self.title.setText(tr("Installing {product}").format(product=product))
         self.icon.setPixmap(gui_style.pixmap(icon_path, 44))
 
-    def update_status(self, message: str, percent: Optional[int]) -> None:
-        if percent is not None:
-            self.progress.setValue(int(percent))
-        self.detail.setText(message.strip())
+    def update_status(self, message: str) -> None:
+        """Tick off the steps; the window's own status bar shows the message and progress."""
         for i, (prefixes, _, _) in enumerate(INSTALL_STEPS):
             if any(message.startswith(p) for p in prefixes):
                 if i >= self.current:
@@ -281,6 +257,27 @@ def scrolled_frame(frame: QtWidgets.QWidget) -> QtWidgets.QScrollArea:
 # ── The window ───────────────────────────────────────────────────────────────
 
 SIMPLE, INSTALLING, FULL = 0, 1, 2
+
+
+# An update check that fails this way (no network, an odd version string) just leaves
+# that update out of the menu; anything else is a bug and is reported.
+UPDATE_CHECK_ERRORS = (requests.RequestException, OSError, ValueError, TypeError)
+
+
+class Signals(QtCore.QObject):
+    """What background work reports back. Emitted from worker threads; Qt queues each
+    emission onto the GUI thread, where the connected MainWindow slot runs."""
+    status = QtCore.Signal(str, object)         # message, percent or None
+    refresh = QtCore.Signal()                   # config or state changed: redraw
+    settings_changed = QtCore.Signal()          # a Wine setting changed: redraw Settings too
+    logos_state = QtCore.Signal(object)         # ou_dedetai.logos.State
+    integrations = QtCore.Signal(list, list)    # reading plans, saved layouts
+    updates = QtCore.Signal(dict)               # what can be updated
+    health = QtCore.Signal(list)                # (ok, title, detail) results
+    recheck = QtCore.Signal()                   # run the health checks again
+    winver = QtCore.Signal(str, str)            # Windows version for Logos, indexer
+    install_finished = QtCore.Signal()
+    failed = QtCore.Signal(str)                 # an unexpected error in a background task
 HOME, SETTINGS, TROUBLE = 0, 1, 2
 
 
@@ -296,6 +293,10 @@ class MainWindow(GuiApp):
         self._layouts: list[str] = []
         self._updates: dict[str, tuple[bool, str]] = {}
         self._installing = False
+        self._last_state: Optional[State] = None
+        self._polling = False
+        self._poller = ThreadPoolExecutor(max_workers=1, thread_name_prefix="logos-monitor")
+        self.signals = Signals()
 
         central = QtWidgets.QWidget()
         central.setObjectName("od-root")
@@ -316,9 +317,26 @@ class MainWindow(GuiApp):
         self.stack.addWidget(self.guide)
         self.stack.addWidget(self._build_full())
 
+        sig = self.signals
+        sig.status.connect(self._show_status)
+        sig.refresh.connect(self.refresh)
+        sig.settings_changed.connect(self._after_change)
+        sig.logos_state.connect(self._logos_state_changed)
+        sig.integrations.connect(self._integrations_loaded)
+        sig.updates.connect(self._updates_checked)
+        sig.health.connect(self._show_health)
+        sig.recheck.connect(self.run_health_checks)
+        sig.winver.connect(self._show_winver)
+        sig.install_finished.connect(self._install_finished)
+        sig.failed.connect(self._task_failed)
+
         self.config_updated_hooks.append(self._refresh_later)
         self.refresh()
-        self.start_thread(self._monitor)
+        # Check on Logos every second (every 10 s until it's installed).
+        self.monitor_timer = QtCore.QTimer(self.root)
+        self.monitor_timer.timeout.connect(self._poll_logos)
+        self.monitor_timer.start(1000)
+        self._poll_logos()
         self.start_thread(self._load_integrations)
         self.start_thread(self._check_updates)
         self.start_thread(desktop_integrations.offer, app=self)
@@ -328,20 +346,40 @@ class MainWindow(GuiApp):
 
     # ── App interface ──
     def _status(self, message, percent=None):
-        def update():
-            self.status_gui.set_status(message, percent)
-            if self._installing:
-                self.guide.update_status(message, percent)
-        self._dispatch(update, wait=False)
+        self.signals.status.emit(message, percent)
 
     def clear_status(self):
-        self._dispatch(lambda: self.status_gui.set_status("", 0), wait=False)
+        self.signals.status.emit("", 0)
+
+    def start_thread(self, task, *args, daemon_bool: bool = True, **kwargs):
+        """Run a task in the background. An error nothing else handled is logged and shown
+        to the user instead of vanishing with the thread."""
+        def guarded():
+            try:
+                task(*args, **kwargs)
+            except Exception as error:  # top of the thread: nothing above us to handle it
+                logging.exception(f"Background task {name} failed")
+                self.signals.failed.emit(str(error) or type(error).__name__)
+        name = getattr(task, "__name__", str(task))
+        guarded.__name__ = name
+        return super().start_thread(guarded, daemon_bool=daemon_bool)
+
+    # ── Slots for background results ──
+    def _show_status(self, message: str, percent: Optional[int]) -> None:
+        self.status_gui.set_status(message, percent)
+        if self._installing:
+            self.guide.update_status(message)
+
+    def _task_failed(self, error: str) -> None:
+        self.status_gui.set_status(tr("Something went wrong: {error}").format(error=error), None)
+        QtWidgets.QMessageBox.warning(
+            self.root, tr("Something went wrong"),
+            tr("{error}\n\nThe log has the details; Troubleshooting → Save a support report collects it.").format(
+                error=error))
 
     # ── Views ──
     def show_view(self, view: int) -> None:
         self.stack.setCurrentIndex(view)
-        # The install guide has its own progress bar and status line.
-        self.status_gui.setVisible(view != INSTALLING)
         if view == FULL:
             self.root.resize(max(self.root.width(), 1040), max(self.root.height(), 700))
         elif view == SIMPLE:
@@ -680,9 +718,6 @@ class MainWindow(GuiApp):
                 combo.addItem(version, version)
         grid.setColumnStretch(3, 1)
         dl.addLayout(grid)
-        self.media = QtWidgets.QCheckBox(tr("Experimental media support (video and audiobooks)"))
-        self.media.clicked.connect(lambda _=False: self.toggle_media_support())
-        dl.addWidget(self.media)
         tools = QtWidgets.QGridLayout()
         for i, (text, slot) in enumerate((
             ("winecfg", lambda: self.run_wine_tool("winecfg")),
@@ -697,6 +732,7 @@ class MainWindow(GuiApp):
         dl.addWidget(label(tr("Command line: oudedetai --show-wine-config, oudedetai --wine winecfg"), "muted"))
         self.dev.setVisible(False)
         self.dev_toggle.toggled.connect(self.dev.setVisible)
+        self.dev_toggle.toggled.connect(self._dev_toggled)
         self._show_channel()
         v.addWidget(self.dev)
         v.addStretch(1)
@@ -752,7 +788,7 @@ class MainWindow(GuiApp):
         section(tr("More"), [
             button(tr("Choose a Wine build (AppImage or tarball)…"), None, self.set_appimage),
             button(tr("Edit the config file…"), None, self.edit_config),
-            button(tr("Uninstall Logos…"), "danger", self.uninstall),
+            button(tr("Remove everything…"), "danger", self.purge),
         ], 4)
         grid.setColumnStretch(0, 3)
         grid.setColumnStretch(1, 2)
@@ -814,7 +850,7 @@ class MainWindow(GuiApp):
 
     # ── Refresh ──
     def _refresh_later(self, *_):
-        self._dispatch(self.refresh, wait=False)
+        self.signals.refresh.emit()
 
     def refresh(self) -> None:
         self._refresh()
@@ -946,27 +982,29 @@ class MainWindow(GuiApp):
         index = self.renderer.findData(renderer)
         if index >= 0:
             self.renderer.setCurrentIndex(index)
-        self.media.setChecked(wine.media_support_enabled(self))
         self._show_channel()
 
-        def load_winver():
-            versions = (wine.get_win_version(self, "logos") or "", wine.get_win_version(self, "indexer") or "")
-
-            def show():
-                for combo, value in zip((self.winver_logos, self.winver_indexer), versions):
-                    i = combo.findData(value)
-                    combo.setCurrentIndex(i if i >= 0 else 0)
-            self._dispatch(show, wait=False)
         if self.dev_toggle.isChecked():
-            self.start_thread(load_winver)
-        else:
-            self.dev_toggle.toggled.connect(lambda on: on and self.start_thread(load_winver))
+            self.start_thread(self._load_winver)
+
+    def _dev_toggled(self, on: bool) -> None:
+        if on:
+            self.start_thread(self._load_winver)
+
+    def _load_winver(self) -> None:
+        self.signals.winver.emit(wine.get_win_version(self, "logos") or "",
+                                 wine.get_win_version(self, "indexer") or "")
+
+    def _show_winver(self, logos: str, indexer: str) -> None:
+        for combo, value in zip((self.winver_logos, self.winver_indexer), (logos, indexer)):
+            i = combo.findData(value)
+            combo.setCurrentIndex(i if i >= 0 else 0)
 
     def run_health_checks(self) -> None:
         clear_layout(self.checks_box)
         self.checks_box.addWidget(label(tr("Checking…"), "muted"))
 
-        def check() -> list[tuple[bool, str, str]]:
+        def check() -> None:
             results: list[tuple[bool, str, str]] = []
             installed = self.is_installed()
             results.append((installed, tr("Logos is installed"),
@@ -987,26 +1025,26 @@ class MainWindow(GuiApp):
             try:
                 ok, message = system.check_opengl_version(self)
                 results.append((ok, tr("Graphics (OpenGL)"), message))
-            except Exception as error:
-                results.append((False, tr("Graphics (OpenGL)"), str(error)))
+            except system.OpenGLIncompatible:
+                results.append((False, tr("Graphics (OpenGL)"), tr("OpenGL 3.2 or newer is needed")))
             results.append((True, tr("Internet"), tr("Offline mode is on") if network.is_offline()
                             else tr("Online")))
             results.append((desktop_integrations.is_installed(), tr("Desktop integrations"),
                             tr("Installed") if desktop_integrations.is_installed() else tr("Not installed")))
-            return results
+            self.signals.health.emit(results)
 
-        def show(results):
-            clear_layout(self.checks_box)
-            for ok, title, detail in results:
-                left = pill(tr("OK") if ok else tr("Check"), "ok" if ok else "warn")
-                left.setMinimumWidth(56)
-                left.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-                right = None
-                if not ok and title == tr("No Wine left running"):
-                    right = button(tr("End them"), None, self.end_leftover_wine)
-                self.checks_box.addWidget(row(title, str(detail), right, left))
+        self.start_thread(check)
 
-        self.start_thread(lambda: (lambda r: self._dispatch(lambda: show(r), wait=False))(check()))
+    def _show_health(self, results: list) -> None:
+        clear_layout(self.checks_box)
+        for ok, title, detail in results:
+            left = pill(tr("OK") if ok else tr("Check"), "ok" if ok else "warn")
+            left.setMinimumWidth(56)
+            left.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            right = None
+            if not ok and title == tr("No Wine left running"):
+                right = button(tr("End them"), None, self.end_leftover_wine)
+            self.checks_box.addWidget(row(title, str(detail), right, left))
 
     def _render_reading(self) -> None:
         clear_layout(self.reading_body)
@@ -1032,27 +1070,38 @@ class MainWindow(GuiApp):
         self.reading_body.addWidget(label(tr("Mark readings done in Logos."), "muted"))
 
     # ── Background work ──
-    def _monitor(self) -> None:
-        last = None
-        while True:
+    def _poll_logos(self) -> None:
+        """Timer tick. Looking for Logos's processes scans every process on the system, too
+        slow for the GUI thread, so it runs on one worker; the state comes back as a signal."""
+        if self._polling:
+            return
+        self._polling = True
+        self._poller.submit(self._check_logos)
+
+    def _check_logos(self) -> None:
+        try:
             if self.is_installed():
                 self.logos.monitor()
-            state = self.logos.logos_state
-            if state != last:
-                last = state
-                self._refresh_later()
-            time.sleep(1 if self.is_installed() else 10)
+            self.signals.logos_state.emit(self.logos.logos_state)
+        except (OSError, psutil.Error) as error:
+            logging.warning(f"Couldn't check on Logos: {error}")
+        finally:
+            self._polling = False
+
+    def _logos_state_changed(self, state: State) -> None:
+        self.monitor_timer.setInterval(1000 if self.is_installed() else 10000)
+        if state != self._last_state:
+            self._last_state = state
+            self.refresh()
 
     def _load_integrations(self) -> None:
         if not desktop_integrations.is_installed():
             return
-        plans = desktop_integrations.reading_plans()
-        layouts = desktop_integrations.saved_layouts()
+        self.signals.integrations.emit(desktop_integrations.reading_plans(), desktop_integrations.saved_layouts())
 
-        def show():
-            self._plans, self._layouts = plans, layouts
-            self._render_reading()
-        self._dispatch(show, wait=False)
+    def _integrations_loaded(self, plans: list, layouts: list) -> None:
+        self._plans, self._layouts = plans, layouts
+        self._render_reading()
 
     def _check_updates(self) -> None:
         if network.is_offline() or not self.is_installed():
@@ -1062,14 +1111,14 @@ class MainWindow(GuiApp):
             status, _ = utils.compare_recommended_wine_version(self)
             updates["wine"] = (status == 0, tr("Update Wine to the recommended build") if status == 0
                                else tr("Wine is up to date"))
-        except Exception:
+        except UPDATE_CHECK_ERRORS:
             logging.debug("Wine update check failed", exc_info=True)
         try:
             result = utils.compare_logos_linux_installer_version(self)
             can = constants.RUNMODE == "binary" and result == utils.VersionComparison.OUT_OF_DATE
             updates["app"] = (can, tr("Update Ou Dedetai to {version}").format(version=self.conf.app_latest_version)
                               if can else tr("Ou Dedetai is up to date"))
-        except Exception:
+        except UPDATE_CHECK_ERRORS:
             logging.debug("Ou Dedetai update check failed", exc_info=True)
         if self._oinos():
             updates["logos"] = (False, tr("Logos updates itself"))
@@ -1077,8 +1126,11 @@ class MainWindow(GuiApp):
             try:
                 latest = self.conf.is_installed_faithlife_product_release_latest
                 updates["logos"] = (not latest, tr("Update Logos") if not latest else tr("Logos is up to date"))
-            except Exception:
+            except UPDATE_CHECK_ERRORS:
                 logging.debug("Logos update check failed", exc_info=True)
+        self.signals.updates.emit(updates)
+
+    def _updates_checked(self, updates: dict) -> None:
         self._updates = updates
 
     def open_in_logos(self, action: Callable[[], object], wait_for_com: bool = False) -> None:
@@ -1129,11 +1181,9 @@ class MainWindow(GuiApp):
                 # "Choose options…" keeps a manual choice.
                 self.conf.wine_binary = constants.WINE_RECOMMENDED_SIGIL
                 installer.install(self)
-            except Exception:
-                logging.exception("Install failed")
-            finally:
+            finally:  # errors are reported by start_thread
                 self._installing = False
-                self._dispatch(self._install_finished, wait=False)
+                self.signals.install_finished.emit()
         self.start_thread(install)
 
     def _install_finished(self) -> None:
@@ -1144,10 +1194,10 @@ class MainWindow(GuiApp):
         dialog = Toplevel(self.root)
         window = InstallerWindow(dialog, self.root, self)
         # The options dialog closes itself and starts installer.install; show the guide too.
-        window.gui.okay_button.clicked.connect(lambda: self._dispatch(self._begin_guide, wait=False))
+        window.gui.okay_button.clicked.connect(self._begin_guide)
         dialog.exec()
 
-    def _begin_guide(self) -> None:
+    def _begin_guide(self, *_) -> None:
         self._installing = True
         self.guide.set_product(self.conf.faithlife_product, self.conf.faithlife_product_icon_path)
         self.show_view(INSTALLING)
@@ -1162,7 +1212,10 @@ class MainWindow(GuiApp):
         self.start_thread(self.logos.index)
 
     def end_leftover_wine(self) -> None:
-        self.start_thread(lambda: (wine.wineserver_kill(self), self._dispatch(self.run_health_checks, wait=False)))
+        def run():
+            wine.wineserver_kill(self)
+            self.signals.recheck.emit()
+        self.start_thread(run)
 
     def remove_library_catalog(self) -> None:
         self.start_thread(control.remove_library_catalog, self)
@@ -1176,9 +1229,9 @@ class MainWindow(GuiApp):
     def install_deps(self) -> None:
         self.start_thread(utils.install_dependencies, self)
 
-    def uninstall(self) -> None:
+    def purge(self) -> None:
         def run():
-            control.uninstall(self)
+            control.purge(self)
             self.clear_status()
             self.populate_defaults()
             self._refresh_later()
@@ -1196,7 +1249,7 @@ class MainWindow(GuiApp):
     def update_wine_config(self) -> None:
         def run():
             installer.update_wine_config(self)
-            self._dispatch(self._after_change, wait=False)
+            self.signals.settings_changed.emit()
         self.start_thread(run)
 
     def recreate_shortcuts(self) -> None:
@@ -1239,19 +1292,13 @@ class MainWindow(GuiApp):
         action = "enable" if self.logging.isChecked() else "disable"
         self.start_thread(self.logos.switch_logging, action=action)
 
-    def toggle_media_support(self) -> None:
-        def run():
-            wine.toggle_media_support(self)
-            self._dispatch(self.refresh_settings, wait=False)
-        self.start_thread(run)
-
     def apply_renderer(self) -> None:
         choice = self.renderer.currentData()
 
         def run():
             message = wine.select_renderer(self, choice)
             self.status(message)
-            self._dispatch(self._after_change, wait=False)
+            self.signals.settings_changed.emit()
         self.start_thread(run)
 
     def apply_winver(self, exe: str, combo: QtWidgets.QComboBox) -> None:
@@ -1285,7 +1332,7 @@ class MainWindow(GuiApp):
         def run():
             try:
                 binary = self.conf.winetricks_binary  # fetched once if missing (not in offline mode)
-            except Exception as error:
+            except (requests.RequestException, OSError) as error:
                 self.status(tr("winetricks isn't available: {error}").format(error=error))
                 return
             if not Path(binary).exists():

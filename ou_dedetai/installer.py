@@ -631,12 +631,10 @@ def create_launcher_shortcuts(app: App):
         logging.info(f"Not creating launcher shortcuts, {constants.RUNMODE} already handles this")
         return
 
+    # Always copy, so shortcuts pick up icons that changed in a newer release.
+    app_dir.mkdir(exist_ok=True)
     for src, path in [(app_icon_src, app_icon_path), (logos_icon_src, logos_icon_path)]:
-        if not path.is_file():
-            app_dir.mkdir(exist_ok=True)
-            shutil.copy(src, path)
-        else:
-            logging.info(f"Icon found at {path}.")
+        shutil.copy(src, path)
 
     # Create Logos/Verbum desktop file.
     logos_path = create_desktop_file(

@@ -184,7 +184,7 @@ def wine_release(app: App) -> Optional["wine.WineRelease"]:
     try:
         release, _ = wine.get_wine_release(binary)
         return release
-    except Exception:
+    except (OSError, ValueError):
         logging.debug("Couldn't read the Wine release", exc_info=True)
         return None
 
@@ -242,7 +242,7 @@ def renderer_summary(app: App) -> str:
         return "unknown"
     try:
         return wine.get_effective_renderer(app) or "default"
-    except Exception:
+    except OSError:
         return "unknown"
 
 

@@ -100,6 +100,193 @@ def uninstall(app: App):
     app.conf.reload()
 
 
+def leftover_wine(prefix: str | None) -> list[int]:
+    """PIDs of Wine processes still running in this prefix."""
+    import psutil  # type: ignore[import-untyped]
+    if not prefix:
+        return []
+    want = str(Path(prefix).resolve())
+    pids = []
+    for process in psutil.process_iter(["pid", "name"]):
+        try:
+            name = (process.info["name"] or "").lower()
+            if not (name.startswith("wine") or name.endswith(".exe")):
+                continue
+            env_prefix = process.environ().get("WINEPREFIX")
+            if env_prefix and str(Path(env_prefix).resolve()) == want:
+                pids.append(process.info["pid"])
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
+            pass
+    return pids
+
+
+def _kill(pids: list[int]) -> None:
+    import psutil
+    processes = []
+    for pid in pids:
+        try:
+            process = psutil.Process(pid)
+            process.kill()
+            processes.append(process)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    psutil.wait_procs(processes, timeout=10)
+
+
+# Desktop entries and URL handlers create_launcher_shortcuts writes.
+URL_SCHEMES = ("x-scheme-handler/logos4", "x-scheme-handler/libronixdls")
+
+
+def _raw_paths(app: App) -> tuple[Path | None, Path | None]:
+    """install_dir and our Wine prefix inside it, straight from the config file (never prompts).
+
+    A prefix given with WINEPREFIX isn't ours to delete (it may be shared), so it isn't returned."""
+    raw = app.conf._raw
+    if not raw.install_dir:
+        return None, None
+    install_dir = Path(raw.install_dir).expanduser()
+    return install_dir, install_dir / "data" / "wine64_bottle"
+
+
+def purge_targets(app: App) -> list[Path]:
+    """Everything Ou Dedetai and its Logos/Verbum install put on this computer."""
+    install_dir, prefix = _raw_paths(app)
+    applications = Path(constants.XDG_DATA_HOME) / "applications"
+    targets = [
+        install_dir, prefix,
+        Path(app.conf.config_file_path).expanduser(),
+        Path(constants.CONFIG_DIR).expanduser(),
+        Path(constants.CACHE_DIR).expanduser(),
+        Path(constants.STATE_DIR).expanduser(),
+        Path(constants.DATA_HOME).expanduser() / constants.BINARY_NAME,  # default install_dir
+        applications / f"{constants.BINARY_NAME}.desktop",
+    ]
+    for product in ("Logos", "Verbum"):
+        targets += [applications / f"{product}Bible.desktop", applications / f"{product}-url-handler.desktop"]
+    seen: list[Path] = []
+    for target in targets:
+        if target is None or not target.exists() or target in seen:
+            continue
+        # Skip anything already inside another target.
+        if any(parent in seen for parent in target.parents):
+            continue
+        seen = [s for s in seen if target not in s.parents] + [target]
+    return seen
+
+
+def _forget_url_handlers() -> None:
+    """Drop our logos4:/libronixdls: defaults from mimeapps.list."""
+    config_home = Path(os.getenv("XDG_CONFIG_HOME") or Path.home() / ".config")
+    for mimeapps in (config_home / "mimeapps.list",
+                     Path(constants.XDG_DATA_HOME) / "applications" / "mimeapps.list"):
+        try:
+            lines = mimeapps.read_text().splitlines(keepends=True)
+        except FileNotFoundError:
+            continue
+        kept = [line for line in lines if line.split("=", 1)[0].strip() not in URL_SCHEMES]
+        if kept != lines:
+            mimeapps.write_text("".join(kept))
+    if shutil.which("update-desktop-database"):
+        try:
+            system.run_command(["update-desktop-database", str(Path(constants.XDG_DATA_HOME) / "applications")])
+        except (OSError, subprocess.CalledProcessError) as e:
+            logging.warning(f"Couldn't refresh the desktop database: {e}")
+
+
+def _purge_akousousin(app: App) -> None:
+    """Remove Akousousin, its models and settings."""
+    launcher = system.akousousin_launcher()
+    if not launcher.is_file():
+        return
+    def aks(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run([str(launcher), *args], capture_output=True, text=True, timeout=300)
+    try:
+        if "--purge" in aks("--help").stdout:
+            aks("--purge")
+            return
+        # Older releases: quit, remove the bundle, then its models and settings ourselves.
+        aks("--quit")
+        aks("--uninstall-bundle", str(Path.home() / ".local"))
+    except (OSError, subprocess.SubprocessError) as e:
+        logging.warning(f"Couldn't run Akousousin's own uninstaller: {e}")
+    config_home = Path(os.getenv("XDG_CONFIG_HOME") or Path.home() / ".config")
+    for path in (config_home / "Akousousin", Path(constants.XDG_DATA_HOME) / "Akousousin"):
+        shutil.rmtree(path, ignore_errors=True)
+    launcher.unlink(missing_ok=True)
+
+
+def _purge_integrations() -> None:
+    from ou_dedetai import desktop_integrations
+    if not desktop_integrations.is_installed():
+        return
+    script = Path(constants.XDG_DATA_HOME) / "logos-plasma" / "uninstall.sh"
+    try:
+        subprocess.run(["sh", str(script)], capture_output=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as e:
+        logging.warning(f"Couldn't run the desktop integrations' uninstaller: {e}")
+    config_home = Path(os.getenv("XDG_CONFIG_HOME") or Path.home() / ".config")
+    shutil.rmtree(Path(constants.XDG_DATA_HOME) / "logos-plasma", ignore_errors=True)
+    shutil.rmtree(config_home / "logos-plasma", ignore_errors=True)
+
+
+PURGE_WARNING = (
+    "This deletes {product} and its Wine folder, including anything in it that hasn't synced "
+    "to Faithlife (downloaded books, offline notes, local settings), plus all of Ou Dedetai's "
+    "settings, logs, cache and shortcuts. It can't be undone. Make a backup first if you're unsure."
+)
+
+
+def purge(app: App) -> bool:
+    """Remove everything Ou Dedetai put on this computer, as if it was never installed.
+
+    Asks first (warning of data loss), then whether to remove Akousousin and the
+    desktop integrations too. Returns True if anything was removed."""
+    from ou_dedetai import desktop_integrations
+    product = app.conf._raw.faithlife_product or "Logos"
+    targets = purge_targets(app)
+    context = PURGE_WARNING.format(product=product) + "\n\nWe'll remove:\n" + "\n".join(f"  {t}" for t in targets)
+    if not app.approve("Remove everything?", context):
+        logging.debug("User refused to purge")
+        return False
+    with_aks = system.akousousin_installed() and app.approve(
+        "Also remove Akousousin?", "This deletes Akousousin with its voices, speech models and settings.")
+    with_integrations = desktop_integrations.is_installed() and app.approve(
+        "Also remove the Logos desktop integrations?", "The search shortcuts, widgets and their settings.")
+
+    app.status("Stopping Wine…")
+    _, prefix = _raw_paths(app)
+    _kill(leftover_wine(app.conf._overrides.wine_prefix or (str(prefix) if prefix else None)))
+    if with_aks:
+        app.status("Removing Akousousin…")
+        _purge_akousousin(app)
+    if with_integrations:
+        app.status("Removing the desktop integrations…")
+        _purge_integrations()
+
+    app.status("Removing files…")
+    failed = []
+    for path in targets:
+        try:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink(missing_ok=True)
+        except OSError as e:
+            logging.error(f"Couldn't remove {path}: {e}")
+            failed.append(str(path))
+    try:
+        Path(constants.DATA_HOME).expanduser().rmdir()  # only if nothing else is in it
+    except OSError:
+        pass
+    _forget_url_handlers()
+    if failed:
+        app.status("Some files couldn't be removed: " + ", ".join(failed))
+    else:
+        app.status("Removed")
+    app.conf.reload()
+    return True
+
+
 def get_support(app: App) -> str:
     """Creates a zip file with all the information to enable support and opens support
     """

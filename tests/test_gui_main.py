@@ -46,6 +46,7 @@ class GuiTestCase(unittest.TestCase):
         with mock.patch.object(gui_main.MainWindow, "start_thread"):
             self.window = gui_main.MainWindow(Root(), EphemeralConfiguration.load_from_path(
                 os.environ["CONFIG_FILE"]), show=False)
+        self.window.monitor_timer.stop()
 
     def tearDown(self):
         self.window.root.close()
@@ -110,12 +111,35 @@ class TestInstalled(GuiTestCase):
         self.assertTrue(network.is_offline())
 
 
+class TestBackgroundWork(GuiTestCase):
+    def test_unexpected_error_is_shown(self):
+        def broken():
+            raise KeyError("boom")
+        with mock.patch.object(QtWidgets.QMessageBox, "warning") as warning:
+            thread = self.window.start_thread(broken)
+            thread.join()
+            self.qt.processEvents()
+        warning.assert_called_once()
+        self.assertIn("boom", self.window.status_gui.message_label.text())
+
+    def test_results_arrive_through_signals(self):
+        self.window.signals.integrations.emit([{"title": "Plan", "readings": [{"label": "John 1"}]}], ["Study"])
+        self.qt.processEvents()
+        self.assertEqual(self.window._layouts, ["Study"])
+        self.assertFalse(self.window.reading_card.isHidden())
+
+    def test_logos_state_change_redraws(self):
+        with mock.patch.object(self.window, "refresh") as refresh:
+            self.window._logos_state_changed(gui_main.State.RUNNING)
+            self.window._logos_state_changed(gui_main.State.RUNNING)
+        refresh.assert_called_once()
+
+
 class TestGuideView(GuiTestCase):
     def test_one_progress_bar_while_installing(self):
         self.window.show_view(gui_main.INSTALLING)
-        self.assertTrue(self.window.status_gui.isHidden())
-        self.window.show_view(gui_main.SIMPLE)
         self.assertFalse(self.window.status_gui.isHidden())
+        self.assertEqual(self.window.guide.findChildren(QtWidgets.QProgressBar), [])
 
 
 class TestInstallGuide(unittest.TestCase):
@@ -124,14 +148,13 @@ class TestInstallGuide(unittest.TestCase):
         self.guide = gui_main.InstallGuide()
 
     def test_steps_follow_installer_messages(self):
-        self.guide.update_status("Ensuring wineprefix configuration…", 60)
+        self.guide.update_status("Ensuring wineprefix configuration…")
         self.assertEqual(self.guide.current, 6)
         self.assertEqual(self.guide.rows[0][0].text(), "✓")
-        self.assertEqual(self.guide.progress.value(), 60)
 
     def test_unknown_message_keeps_step(self):
-        self.guide.update_status("Ensuring ICU data files…", 70)
-        self.guide.update_status("Something new", 71)
+        self.guide.update_status("Ensuring ICU data files…")
+        self.guide.update_status("Something new")
         self.assertEqual(self.guide.current, 7)
 
     def test_every_step_has_a_title(self):

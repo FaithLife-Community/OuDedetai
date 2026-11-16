@@ -80,6 +80,9 @@ class CLI(App):
     def uninstall(self):
         control.uninstall(self)
 
+    def purge(self):
+        control.purge(self)
+
     def remove_library_catalog(self):
         control.remove_library_catalog(self)
 
