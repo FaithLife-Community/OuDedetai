@@ -294,8 +294,12 @@ def prepare_prefix(app: App, wine64_binary: Optional[str] = None, init: bool = F
     busy = bool(leftover_wine(app.conf.wine_prefix))
     env = get_wine_env(app, NO_MONO_GECKO)
     headless = {k: v for k, v in env.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
+    # Without DISPLAY/WAYLAND_DISPLAY Wine's Wayland driver still finds the default
+    # "wayland-0" socket, so the window appeared anyway: leave both drivers out too
+    # (Wine then uses its null driver).
+    headless["WINEDLLOVERRIDES"] = f"{headless.get('WINEDLLOVERRIDES', '')};winex11.drv=;winewayland.drv="
     for attempt in (headless, env):
-        logging.debug(f"Running: {' '.join(command)} (display: {'DISPLAY' in attempt or 'WAYLAND_DISPLAY' in attempt})")
+        logging.debug(f"Running: {' '.join(command)} (headless: {attempt is headless})")
         try:
             result = subprocess.run(command, env=attempt, capture_output=True, text=True, timeout=900)
         except (OSError, subprocess.SubprocessError) as error:

@@ -15,6 +15,7 @@ because not every desktop shows a tray.
 All operations are the existing UI-agnostic ones (installer, logos, wine, control…);
 this module only arranges them.
 """
+import html
 import logging
 import os
 import subprocess
@@ -984,7 +985,7 @@ class MainWindow(GuiApp):
         self.offline.blockSignals(False)
         self.p_desktop.setText(tr("Installed") if desktop_integrations.is_installed() else tr("Install"))
         self.p_desktop.setEnabled(not desktop_integrations.is_installed() and not offline)
-        self.p_speech.setEnabled(installed and not offline)
+        self._show_akousousin()
         self.logging.blockSignals(True)
         self.logging.setChecked(bool(self.conf.faithlife_product_logging))
         self.logging.blockSignals(False)
@@ -992,8 +993,15 @@ class MainWindow(GuiApp):
             reports = wine_settings.report_for_app(self)
             needed = [r for r in reports if r.needed and r.setting.group == wine_settings.Group.NEEDED]
             ok = sum(r.state == wine_settings.State.APPLIED for r in needed)
-            self.t_settings.setText(tr("All applied") if ok == len(needed) else
-                                    tr("{ok} of {total} applied").format(ok=ok, total=len(needed)))
+            missing = [tr(r.setting.title) for r in needed if r.state != wine_settings.State.APPLIED]
+            if not missing:
+                self.t_settings.setText(tr("All applied"))
+            else:
+                # Say which, not just how many (details under Settings → Wine settings).
+                self.t_settings.setText(
+                    tr("{ok} of {total} applied").format(ok=ok, total=len(needed))
+                    + "<br><span style='font-size: 9pt; font-weight: 400;'>"
+                    + tr("Not yet: {names}").format(names=html.escape(", ".join(missing))) + "</span>")
         else:
             self.t_settings.setText("–")
 
@@ -1195,6 +1203,9 @@ class MainWindow(GuiApp):
         self._show_akousousin()
 
     def _show_akousousin(self) -> None:
+        if not self.is_installed() or network.is_offline():
+            self.p_speech.setEnabled(False)
+            return
         if not system.akousousin_installed():
             self.p_speech.setText(tr("Install"))
             self.p_speech.setEnabled(not network.is_offline())

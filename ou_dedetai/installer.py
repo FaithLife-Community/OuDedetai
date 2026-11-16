@@ -347,6 +347,12 @@ def apply_wine_config(app: App):
     # Stand-ins for Windows fonts Logos uses; WPF fails fast if even Arial is missing.
     wine.set_font_replacements(app, app.conf.wine64_binary)
 
+    # Our own Wine builds: Logos may update itself, and media goes through FFmpeg.
+    # (Also re-applied each time Logos starts; done here so a fresh install is complete.)
+    release, _ = wine.get_wine_release(app.conf.wine_binary)
+    if wine.wine_supports_logos_updates(release):
+        wine.allow_logos_updates(app, app.conf.wine64_binary)
+
 
 def update_wine_config(app: App):
     """Re-apply the install's Wine settings to an existing install."""

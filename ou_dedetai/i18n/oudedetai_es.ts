@@ -684,10 +684,6 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Logos está al día</translation>
     </message>
     <message>
-      <source>{ok} of {total} applied</source>
-      <translation>{ok} de {total} aplicados</translation>
-    </message>
-    <message>
       <source>Applied</source>
       <translation>Aplicado</translation>
     </message>
@@ -740,8 +736,16 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>winetricks no está disponible: {error}</translation>
     </message>
     <message>
+      <source>Not yet: {names}</source>
+      <translation>Aún no: {names}</translation>
+    </message>
+    <message>
       <source>Not applied: {names}</source>
       <translation>Sin aplicar: {names}</translation>
+    </message>
+    <message>
+      <source>{ok} of {total} applied</source>
+      <translation>{ok} de {total} aplicados</translation>
     </message>
     <message>
       <source>Printing through GDI</source>
