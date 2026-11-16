@@ -258,9 +258,10 @@ def check_wine_version_and_branch(release_version: Optional[str], test_binary,
     return True, "None"
 
 
-# Logos needs neither Wine Mono (.NET Framework) nor Wine Gecko (Internet Explorer), and
-# Wine asks to download them whenever it creates or updates a prefix. Leaving both DLLs
-# out of every Wine run means those prompts never appear.
+# Wine asks to download Wine Mono and Wine Gecko whenever it creates or updates a
+# prefix; Logos needs neither. Leave the two DLLs out only while wineboot runs: Wine's
+# loader still needs mscoree.dll for Logos's .NET assemblies ("IL-only binary
+# System.Runtime.dll cannot be loaded" without it), so never in normal runs.
 NO_MONO_GECKO = "mscoree=;mshtml="
 
 
@@ -274,7 +275,7 @@ def prepare_prefix(app: App, wine64_binary: Optional[str] = None, init: bool = F
     command = [binary, "wineboot", "--init" if init else "--update"]
     # If Wine is already running here (Logos open), don't wait for it to exit.
     busy = bool(leftover_wine(app.conf.wine_prefix))
-    env = get_wine_env(app)
+    env = get_wine_env(app, NO_MONO_GECKO)
     headless = {k: v for k, v in env.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
     for attempt in (headless, env):
         logging.debug(f"Running: {' '.join(command)} (display: {'DISPLAY' in attempt or 'WAYLAND_DISPLAY' in attempt})")
@@ -1056,8 +1057,6 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     if winepath.name != 'wine64':  # AppImage
         winepath = Path(app.conf.wine64_binary)
     overrides = app.conf.wine_dll_overrides
-    if "mscoree" not in overrides and "mshtml" not in overrides:
-        overrides = ";".join(o for o in (overrides, NO_MONO_GECKO) if o)
     wine_env_defaults = {
         'WINE': str(winepath),
         'WINEDEBUG': app.conf.wine_debug,

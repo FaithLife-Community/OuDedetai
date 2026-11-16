@@ -1268,6 +1268,8 @@ class MainWindow(GuiApp):
 
     def _install_finished(self) -> None:
         self._installing = False
+        # Keep the "Install Complete!" message; the full bar isn't needed any more.
+        self.status_gui.progress.setVisible(False)
         self.show_view(SIMPLE)
         self.refresh()
 

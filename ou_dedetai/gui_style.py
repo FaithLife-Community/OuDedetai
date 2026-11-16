@@ -63,6 +63,7 @@ QPushButton[kind="nav"] {{ background: transparent; border: none; text-align: le
     font-weight: 400; font-size: 11pt; }}
 QPushButton[kind="nav"]:checked {{ background: {BLUE_LIGHT}; color: {BLUE_DARK}; font-weight: 600; }}
 QToolButton[kind="primary"]::menu-button {{ border-left: 1px solid #5aa8dc; width: 22px; }}
+QToolButton[kind="primary"] {{ padding-right: 38px; }}  /* room for the arrow after "Run Logos" */
 QLabel[pill="ok"] {{ background: {GREEN_BG}; color: {GREEN}; border-radius: 3px; padding: 1px 8px;
     font-weight: 600; font-size: 9pt; }}
 QLabel[pill="warn"] {{ background: {YELLOW_BG}; color: {YELLOW}; border-radius: 3px; padding: 1px 8px;

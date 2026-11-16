@@ -176,3 +176,20 @@ class TestRenderer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMonoGeckoOnlyForWineboot(unittest.TestCase):
+    def test_normal_runs_keep_mscoree(self):
+        # Wine's loader needs mscoree.dll for Logos's .NET assemblies.
+        from unittest import mock
+        from ou_dedetai import wine
+        app = mock.Mock()
+        app.conf.wine_binary = "/w/bin/wine"
+        app.conf.wine_dll_overrides = ""
+        app.conf.wine64_binary = "/w/bin/wine"
+        app.conf.wine_debug = "err+all"
+        app.conf.wine_prefix = "/p"
+        app.conf.wineserver_binary = "/w/bin/wineserver"
+        env = wine.get_wine_env(app)
+        self.assertNotIn("mscoree", env["WINEDLLOVERRIDES"])
+        self.assertIn("mscoree=", wine.get_wine_env(app, wine.NO_MONO_GECKO)["WINEDLLOVERRIDES"])
