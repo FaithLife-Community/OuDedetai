@@ -71,7 +71,8 @@ Back up). Builds are made by hand from the
   - repair actions
   - backup and restore
   - **Remove everything…** (see `--purge` below)
-- **Tray**: the Logos shortcut starts Logos with Ou Dedetai in the tray, which quits when Logos closes.
+- **Tray**: starting Logos (from its shortcut or from the window) puts Ou Dedetai in the tray. It quits
+  when Logos closes unless the window is open.
   Without a display or PySide6 it falls back to the command line as before. The shortcut's right-click
   menu offers Today's reading, Stop and Ou Dedetai.
 - **Links** (`logos4:`, `libronixdls:`): handed straight to Logos if it's running (as before, which is
@@ -83,6 +84,8 @@ Back up). Builds are made by hand from the
 - **Desktop integrations**: offered once on KDE Plasma and on GNOME. The Plasma install offers to
   reload Plasma; GNOME asks for one log out and in.
 - **Akousousin**: Update is only offered when there's a newer release. Logos can stay open.
+- **Update checks** use the existing 12-hour release cache, so opening the window doesn't hit the
+  servers each time. Troubleshooting → More → *Check for updates now* clears it and checks at once.
 - **Look**: Faithlife's colours and type, our blue Ou Dedetai icon on the window; the Logos/Verbum
   icon only next to the product name.
 - **Spanish** translation of the window (`ou_dedetai/i18n`, Qt Linguist files;
