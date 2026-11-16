@@ -667,7 +667,8 @@ class MainWindow(GuiApp):
         self.t_wine = self._tile(tiles, 1, tr("Wine"))
         self.t_settings = self._tile(tiles, 2, tr("Wine settings for Logos"))
         see = button(tr("See the list…"), "link", lambda: self.show_page(SETTINGS))
-        tile_layout = self.t_settings.parentWidget().layout() if self.t_settings.parentWidget() else None
+        tile = self.t_settings.parentWidget()
+        tile_layout = tile.layout() if tile is not None else None
         if tile_layout is not None:
             tile_layout.addWidget(see)
         v.addLayout(tiles)
@@ -1582,6 +1583,8 @@ def run_with_tray(ephemeral_config: EphemeralConfiguration) -> int:
     if not window.is_installed():
         window.root.show()
         return app.exec()
+    if window.logos.hand_off_link():
+        return 0  # a link for the Logos that's already running: nothing more to do
     window.start_thread(window.logos.start)
     tray = TrayController(window, app)  # noqa: F841 (kept alive by the event loop)
     app._od_tray = tray  # type: ignore[attr-defined]

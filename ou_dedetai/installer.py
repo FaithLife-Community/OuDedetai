@@ -696,16 +696,14 @@ def create_launcher_shortcuts(app: App):
         filename=url_handler_desktop_filename,
         app_name=f"{flproduct} URL Handler",
         comment="Handles logos4: and libronixdls: URL Schemes",
-        exec_cmd=(
-            f"/bin/sh -c \""
-            f"({oudedetai_executable} --wine '{app.conf.logos_exe_windows_path.replace('\\', '\\\\')}' ''%u'') "
-            "|| (echo 'Failed to spawn logos. If you are logging in please hit the link for not being redirected "
-            "automatically then the link for still having trouble. If you contact support please attach this log'"
-            "; sleep 60; exit 1); wait\""
-        ),
+        # Logos running: the link is handed straight to it (as before, through Wine).
+        # Not running: Logos starts the normal way with the link, so the tray and
+        # Ou Dedetai's monitoring come up as from the shortcut. Errors go to the log
+        # (Troubleshooting → Save a support report) instead of a terminal window.
+        exec_cmd=f"{oudedetai_executable} --run-installed-app %u",
         icon_path=app_icon_path,
         mime_types=["x-scheme-handler/logos4", "x-scheme-handler/libronixdls"],
-        terminal=True
+        terminal=False
     )
     # For most users Logos will be "installed" at this point, if we fail here there is no easy
     # way in the current flow to re-apply these - and this isn't required for Logos to function,

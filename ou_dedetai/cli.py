@@ -93,6 +93,8 @@ class CLI(App):
         self.logos.index()
 
     def run_installed_app(self):
+        if self.logos.hand_off_link():
+            return
         self.logos.start()
         # Keep the process running so that our background threads can keep running
         while self.logos.logos_state != LogosRunningState.STOPPED:

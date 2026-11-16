@@ -242,6 +242,8 @@ class EphemeralConfiguration:
     app_run_as_root_permitted: bool = False
     offline: bool = False
     """Work offline for this run (--offline or OUDEDETAI_OFFLINE=1), whatever the saved setting."""
+    logos_link: Optional[str] = None
+    """A logos4:/libronixdls: link to open (--run-installed-app LINK, used by the link handler)."""
 
     agreed_to_faithlife_terms: bool = False
     """The user expressed clear agreement with faithlife's terms.

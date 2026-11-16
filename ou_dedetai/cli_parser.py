@@ -105,8 +105,9 @@ def get_parser():
         help='update the installed FaithLife app to the latest release',
     )
     cmd.add_argument(
-        '--run-installed-app', '-C', action='store_true',
-        help='run installed FaithLife app',
+        '--run-installed-app', '-C', nargs='?', const=True, metavar='LINK',
+        help='run installed FaithLife app; with a logos4:/libronixdls: LINK, open it '
+             '(handed straight to Logos if it is already running)',
     )
     cmd.add_argument(
         '--stop-installed-app', action='store_true',
@@ -464,6 +465,8 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
     run_action = None
     for arg in action_names:
         if getattr(args, arg) or getattr(args, arg) == []:
+            if arg == "run_installed_app" and isinstance(getattr(args, arg), str):
+                ephemeral_config.logos_link = getattr(args, arg)
             if arg == "set_appimage":
                 ephemeral_config.wine_appimage_path = getattr(args, arg)[0]
                 if not utils.file_exists(ephemeral_config.wine_appimage_path):

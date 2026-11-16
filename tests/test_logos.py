@@ -40,3 +40,48 @@ class TestReapFinished(unittest.TestCase):
         manager.processes = {"Logos.exe": ended, "Indexer.exe": running}
         manager.reap_finished()
         self.assertEqual(list(manager.processes), ["Indexer.exe"])
+
+
+class TestLinkHandOff(unittest.TestCase):
+    def manager(self, running):
+        from unittest import mock
+        from ou_dedetai import logos
+        app = mock.Mock()
+        app.conf._overrides.logos_link = "logos4:Signin?code=1"
+        m = logos.LogosManager(app)
+        m.monitor = mock.Mock(side_effect=lambda: setattr(
+            m, "logos_state", logos.State.RUNNING if running else logos.State.STOPPED))
+        return m, app
+
+    def test_running_logos_gets_the_link_directly(self):
+        from unittest import mock
+        from ou_dedetai import logos
+        m, app = self.manager(running=True)
+        with mock.patch.object(logos.wine, "run_wine_process") as run:
+            self.assertTrue(m.hand_off_link())
+        self.assertEqual(run.call_args.kwargs["exe_args"], ["logos4:Signin?code=1"])
+        self.assertIsNone(app.conf._overrides.logos_link)
+
+    def test_not_running_starts_normally(self):
+        from unittest import mock
+        from ou_dedetai import logos
+        m, app = self.manager(running=False)
+        with mock.patch.object(logos.wine, "run_wine_process") as run:
+            self.assertFalse(m.hand_off_link())
+        run.assert_not_called()
+        self.assertEqual(app.conf._overrides.logos_link, "logos4:Signin?code=1")  # for start()
+
+
+class TestRunInstalledAppLink(unittest.TestCase):
+    def test_parser_keeps_the_link(self):
+        from unittest import mock
+        from ou_dedetai import cli_parser
+        parser = cli_parser.get_parser()
+        for argv, link in ((["--run-installed-app"], None),
+                           (["--run-installed-app", "logos4:Signin?x=1"], "logos4:Signin?x=1")):
+            args = parser.parse_args(argv)
+            with mock.patch.object(cli_parser.EphemeralConfiguration, "load",
+                                   return_value=cli_parser.EphemeralConfiguration.load_from_path("/nonexistent")):
+                config, action = cli_parser.od_parse_args(args, parser)
+            self.assertEqual(action.__name__, "run_installed_app")
+            self.assertEqual(config.logos_link, link)

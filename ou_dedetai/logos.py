@@ -88,6 +88,29 @@ class LogosManager:
             if exe_path:
                 self.existing_processes[exe_path] = system.get_pids(exe_path)
 
+    def hand_off_link(self) -> bool:
+        """If Logos is already running, pass the pending link straight to it.
+
+        Returns True when it did, so nothing else (tray, monitoring, a second start)
+        happens: that is the sign-in callback's path and must stay a plain hand-off."""
+        link = self.app.conf._overrides.logos_link
+        if not link:
+            return False
+        self.monitor()
+        if self.logos_state not in (State.STARTING, State.RUNNING):
+            return False
+        logging.info(f"Logos is running; handing it {link.split(':', 1)[0]}: link.")
+        with open(os.devnull, "w") as devnull:
+            process = wine.run_wine_process(self.app, self.app.conf.wine_binary, devnull, devnull,
+                                            exe=self.app.conf.logos_exe, exe_args=[link])
+        if process is not None:
+            try:
+                process.wait(timeout=60)
+            except subprocess.TimeoutExpired:
+                logging.warning("Logos took over a minute to take the link.")
+        self.app.conf._overrides.logos_link = None
+        return True
+
     def reap_finished(self):
         """Collect the exit of Wine processes we started that have ended on their own
         (e.g. the user closed Logos). Otherwise they stay as <defunct> entries while
@@ -177,10 +200,15 @@ class LogosManager:
             self.set_auto_updates(False)
             if not self.app.conf.logos_exe:
                 raise ValueError("Could not find installed Logos EXE to run")
+            # A link from the link handler (sign-in, Bible links) goes on Logos's command
+            # line, as Logos.exe <link> does on Windows. Used once.
+            link = self.app.conf._overrides.logos_link
+            self.app.conf._overrides.logos_link = None
             process = wine.run_wine_application(
                 self.app,
                 self.app.conf.wine_binary,
-                exe=self.app.conf.logos_exe
+                exe=self.app.conf.logos_exe,
+                exe_args=[link] if link else None,
             )
             if process is not None:
                 self.processes[self.app.conf.logos_exe] = process
