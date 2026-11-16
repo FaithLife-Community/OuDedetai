@@ -857,6 +857,9 @@ def postinstall_dependencies(superuser_command: str):
 def install_dependencies(app: App, target_version=10):
     if app.conf.skip_install_system_dependencies:
         return
+    if network.is_offline():
+        app.status("Offline mode is on, so system packages weren't checked or installed.")
+        return
 
     install_deps_failed = False
     reboot_required = False

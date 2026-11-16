@@ -26,6 +26,33 @@ from . import constants
 from . import utils
 
 
+_offline = os.getenv("OUDEDETAI_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+class OfflineError(requests.exceptions.ConnectionError):
+    """Raised instead of connecting while offline mode is on."""
+
+    def __init__(self, url: str = "") -> None:
+        super().__init__(f"Offline mode is on: not connecting to {url or 'the internet'}.")
+
+
+def set_offline(value: bool) -> None:
+    """Turn offline mode on or off for every request this process makes."""
+    global _offline
+    _offline = bool(value) or os.getenv("OUDEDETAI_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def is_offline() -> bool:
+    return _offline
+
+
+def _ensure_online(url: str) -> None:
+    """The one gate every request passes through. Offline mode never connects."""
+    if _offline:
+        logging.info(f"Offline mode: skipped {url}")
+        raise OfflineError(url)
+
+
 def _request_headers(url: str) -> dict[str, str]:
     headers = {"Accept-Encoding": "identity"}
     if urlparse(url).netloc.lower() == "api.github.com":
@@ -109,8 +136,11 @@ class UrlProps(Props):
     def _get_headers(self) -> requests.structures.CaseInsensitiveDict:
         logging.debug(f"Getting headers from {self.path}.")
         try:
+            _ensure_online(self.path)
             headers = _request_headers(self.path)
             r = requests.head(self.path, allow_redirects=True, headers=headers)
+        except OfflineError:
+            return requests.structures.CaseInsensitiveDict()
         except requests.exceptions.ConnectionError:
             logging.critical("Failed to connect to the server.")
             return requests.structures.CaseInsensitiveDict()
@@ -222,7 +252,9 @@ class CachedRequests:
         - Either an empty new one
         - Or the existing one
         """
-        if force or not self._is_fresh():
+        if _offline and not force:
+            logging.debug("Offline mode: keeping the last-known cache")
+        elif force or not self._is_fresh():
             logging.debug("Cleaning out cache…")
             self = CachedRequests(last_updated=time.time())
             self._write()
@@ -483,6 +515,11 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
     # - Check available disk space before starting download
     logging.debug(f"Download source: {url}")
     logging.debug(f"Download destination: {target}")
+    if _offline:
+        logging.info(f"Offline mode: not downloading {url}")
+        if app:
+            app.status("Offline mode is on, so nothing was downloaded.")
+        return None
     target_props = FileProps(target)  # sets path and size attribs
     if app and target_props.path:
         app.status(f"Downloading {target_props.path.name}…", 0)
@@ -539,6 +576,7 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
             # One that writes into a file, and one that returns a str, 
             # that share most of the internal logic
             if target_props.path is None:  # return url content as text
+                _ensure_online(url_props.path)
                 with requests.get(url_props.path, headers=headers) as r:
                     if callable(r):
                         logging.error("Failed to retrieve data from the URL.")
@@ -569,6 +607,7 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
 
                     return r._content  # raw bytes
             else:  # download url to target.path
+                _ensure_online(url_props.path)
                 with requests.get(url_props.path, stream=True, headers=headers) as r:
                     with target_props.path.open(mode=file_mode) as f:
                         if file_mode == 'wb':

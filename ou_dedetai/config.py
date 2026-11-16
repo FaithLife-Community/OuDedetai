@@ -240,6 +240,9 @@ class EphemeralConfiguration:
 
     # Start of values just set via cli arg
     app_run_as_root_permitted: bool = False
+    offline: bool = False
+    """Work offline for this run (--offline or OUDEDETAI_OFFLINE=1), whatever the saved setting."""
+
     agreed_to_faithlife_terms: bool = False
     """The user expressed clear agreement with faithlife's terms.
     Normally the MSI would prompt for this as well.
@@ -338,6 +341,10 @@ class PersistentConfiguration:
     app_release_channel: str = "stable"
     # Whether we've offered to install the KDE Plasma desktop integrations (asked once)
     desktop_integrations_offered: bool = False
+    # Never connect to the internet (no update checks, no downloads) until switched off
+    offline_mode: bool = False
+    # Open the full view (reading plan, layouts, status) instead of the simple window
+    gui_full_view: bool = False
 
     _legacy: Optional[LegacyConfiguration] = None
     """A Copy of the legacy configuration.
@@ -565,6 +572,8 @@ class Config:
         self._raw = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
         self._overrides = ephemeral_config
 
+        # Before any network object exists: offline mode keeps the last-known cache.
+        network.set_offline(self.offline_mode)
         self._network = self._create_network_requests_with_hook()
         logging.debug("Current persistent config:")
         for k, v in self._raw.__dict__.items():
@@ -766,6 +775,29 @@ class Config:
     def desktop_integrations_offered(self, value: bool) -> None:
         if self._raw.desktop_integrations_offered != value:
             self._raw.desktop_integrations_offered = value
+            self._write()
+
+    @property
+    def offline_mode(self) -> bool:
+        """Whether Ou Dedetai must not connect to the internet at all."""
+        return bool(self._overrides.offline or self._raw.offline_mode)
+
+    @offline_mode.setter
+    def offline_mode(self, value: bool) -> None:
+        if self._raw.offline_mode != value:
+            self._raw.offline_mode = value
+            self._write()
+        network.set_offline(self.offline_mode)
+
+    @property
+    def gui_full_view(self) -> bool:
+        """Whether the GUI opens the full view rather than the simple window"""
+        return self._raw.gui_full_view
+
+    @gui_full_view.setter
+    def gui_full_view(self, value: bool) -> None:
+        if self._raw.gui_full_view != value:
+            self._raw.gui_full_view = value
             self._write()
 
     @property

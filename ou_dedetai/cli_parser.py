@@ -81,6 +81,11 @@ def get_parser():
         '-q', '--quiet', action='store_true',
         help='Suppress all non-error output',
     )
+    cfg.add_argument(
+        '--offline', action='store_true',
+        help='Never connect to the internet during this run (no update checks, no downloads). '
+        'Also set with OUDEDETAI_OFFLINE=1, or saved as a setting in the GUI.',
+    )
 
     # Define runtime actions (mutually exclusive).
     grp = parser.add_argument_group(
@@ -375,6 +380,9 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
 
     if args.i_agree_to_faithlife_terms:
         ephemeral_config.agreed_to_faithlife_terms = True
+
+    if args.offline or os.getenv("OUDEDETAI_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on"):
+        ephemeral_config.offline = True
 
 
     def cli_operation(action: str) -> EphemeralConfiguration:

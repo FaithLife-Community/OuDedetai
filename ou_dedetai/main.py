@@ -250,6 +250,16 @@ def setup_config() -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfigura
     return od_parse_args(args, parser)
 
 
+def _offline_mode(ephemeral_config: EphemeralConfiguration) -> bool:
+    """Offline for this run, or saved as a setting."""
+    if ephemeral_config.offline:
+        return True
+    try:
+        return PersistentConfiguration.load_from_path(ephemeral_config.config_path).offline_mode
+    except Exception:
+        return False
+
+
 def is_app_installed(ephemeral_config: EphemeralConfiguration):
     persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
     if persistent_config.faithlife_product is None or persistent_config.install_dir is None:
@@ -298,6 +308,24 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         'toggle_app_logging',
         'toggle_media_support',
     ]
+    needs_internet = [
+        'install_app',
+        'install_dependencies',
+        'install_desktop_integrations',
+        'install_icu',
+        'update_akousousin',
+        'update_installed_app',
+        'update_latest_appimage',
+        'update_self',
+    ]
+    if action.__name__ in needs_internet and _offline_mode(ephemeral_config):
+        print(
+            f"Offline mode is on, so {constants.APP_NAME} won't connect to the internet. "
+            "Turn it off in the GUI's Settings, or remove --offline / OUDEDETAI_OFFLINE, to do this.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     if action.__name__ not in install_required:
         logging.info(f"Running function: {action.__name__}")
         action(ephemeral_config)
