@@ -5,7 +5,7 @@ from pathlib import Path
 from threading import Event
 from typing import Callable, Optional
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 from ou_dedetai.app import App
 from ou_dedetai.config import EphemeralConfiguration
