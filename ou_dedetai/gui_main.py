@@ -508,10 +508,6 @@ class MainWindow(GuiApp):
         self.s_hint = label(tr("The arrow next to Run opens your Bible, today's reading or a "
                                "saved layout. While Logos runs, Ou Dedetai sits in the system tray."), "muted")
         v.addWidget(self.s_hint)
-        self.s_full_default = QtWidgets.QCheckBox(
-            tr("Open the full view when Ou Dedetai starts (reading plan, layouts, status)"))
-        self.s_full_default.toggled.connect(lambda on: setattr(self.conf, "gui_full_view", on))
-        v.addWidget(self.s_full_default)
         v.addSpacing(8)
         foot = QtWidgets.QHBoxLayout()
         foot.addWidget(button(tr("Settings and troubleshooting…"), "link", lambda: self.open_full(SETTINGS)))
@@ -669,7 +665,11 @@ class MainWindow(GuiApp):
         tiles.setSpacing(12)
         self.t_updates = self._tile(tiles, 0, tr("Logos updates"))
         self.t_wine = self._tile(tiles, 1, tr("Wine"))
-        self.t_settings = self._tile(tiles, 2, tr("Settings"))
+        self.t_settings = self._tile(tiles, 2, tr("Wine settings for Logos"))
+        see = button(tr("See the list…"), "link", lambda: self.show_page(SETTINGS))
+        tile_layout = self.t_settings.parentWidget().layout() if self.t_settings.parentWidget() else None
+        if tile_layout is not None:
+            tile_layout.addWidget(see)
         v.addLayout(tiles)
 
         both = QtWidgets.QHBoxLayout()
@@ -743,6 +743,14 @@ class MainWindow(GuiApp):
         self.ws_rows = QtWidgets.QVBoxLayout()
         self.ws_layout.addLayout(self.ws_rows)
         v.addWidget(ws)
+
+        win, wl = card()
+        wl.addWidget(label(tr("Ou Dedetai window"), "h2"))
+        self.s_full_default = QtWidgets.QCheckBox(
+            tr("Open the full view when Ou Dedetai starts (reading plan, layouts, status)"))
+        self.s_full_default.toggled.connect(lambda on: setattr(self.conf, "gui_full_view", on))
+        wl.addWidget(self.s_full_default)
+        v.addWidget(win)
 
         self.dev_toggle = QtWidgets.QCheckBox(tr("Show developer and testing options"))
         v.addWidget(self.dev_toggle)
@@ -950,7 +958,6 @@ class MainWindow(GuiApp):
         self.s_install_box.setVisible(not installed)
         self.s_run_box.setVisible(installed)
         self.s_hint.setVisible(installed)
-        self.s_full_default.setVisible(installed)
         self.s_full_default.blockSignals(True)
         self.s_full_default.setChecked(self.conf.gui_full_view)
         self.s_full_default.blockSignals(False)
@@ -995,11 +1002,11 @@ class MainWindow(GuiApp):
             ok = sum(r.state == wine_settings.State.APPLIED for r in needed)
             missing = [tr(r.setting.title) for r in needed if r.state != wine_settings.State.APPLIED]
             if not missing:
-                self.t_settings.setText(tr("All applied"))
+                self.t_settings.setText(tr("All {total} needed are applied").format(total=len(needed)))
             else:
                 # Say which, not just how many (details under Settings → Wine settings).
                 self.t_settings.setText(
-                    tr("{ok} of {total} applied").format(ok=ok, total=len(needed))
+                    tr("{ok} of {total} needed are applied").format(ok=ok, total=len(needed))
                     + "<br><span style='font-size: 9pt; font-weight: 400;'>"
                     + tr("Not yet: {names}").format(names=html.escape(", ".join(missing))) + "</span>")
         else:
@@ -1030,7 +1037,8 @@ class MainWindow(GuiApp):
             rows = [r for r in reports if r.setting.group == group and r.needed]
             if not rows:
                 continue
-            self.ws_rows.addWidget(label(title.upper(), "group"))
+            applied = sum(r.state == wine_settings.State.APPLIED for r in rows)
+            self.ws_rows.addWidget(label(f"{title.upper()} · {applied}/{len(rows)}", "group"))
             for r in rows:
                 kind, text = {
                     wine_settings.State.APPLIED: ("ok", tr("Applied")),

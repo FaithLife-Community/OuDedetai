@@ -108,10 +108,6 @@
       <translation>La flecha junto a Ejecutar abre su Biblia, la lectura de hoy o un diseño guardado. Mientras Logos se ejecuta, Ou Dedetai queda en la bandeja del sistema.</translation>
     </message>
     <message>
-      <source>Open the full view when Ou Dedetai starts (reading plan, layouts, status)</source>
-      <translation>Abrir la vista completa al iniciar Ou Dedetai (plan de lectura, diseños, estado)</translation>
-    </message>
-    <message>
       <source>Run Logos</source>
       <translation>Ejecutar Logos</translation>
     </message>
@@ -132,8 +128,12 @@
       <translation>Wine</translation>
     </message>
     <message>
-      <source>Settings</source>
-      <translation>Configuración</translation>
+      <source>Wine settings for Logos</source>
+      <translation>Configuración de Wine para Logos</translation>
+    </message>
+    <message>
+      <source>See the list…</source>
+      <translation>Ver la lista…</translation>
     </message>
     <message>
       <source>On</source>
@@ -150,6 +150,10 @@
     <message>
       <source>Work offline</source>
       <translation>Trabajar sin conexión</translation>
+    </message>
+    <message>
+      <source>Open the full view when Ou Dedetai starts (reading plan, layouts, status)</source>
+      <translation>Abrir la vista completa al iniciar Ou Dedetai (plan de lectura, diseños, estado)</translation>
     </message>
     <message>
       <source>Show developer and testing options</source>
@@ -252,6 +256,10 @@
       <translation>Inicio</translation>
     </message>
     <message>
+      <source>Settings</source>
+      <translation>Configuración</translation>
+    </message>
+    <message>
       <source>Troubleshooting</source>
       <translation>Solución de problemas</translation>
     </message>
@@ -336,8 +344,8 @@
       <translation>Logos tiene su propia opción sin conexión: Configuración del programa › Internet, en Logos.</translation>
     </message>
     <message>
-      <source>Wine settings for Logos</source>
-      <translation>Configuración de Wine para Logos</translation>
+      <source>Ou Dedetai window</source>
+      <translation>Ventana de Ou Dedetai</translation>
     </message>
     <message>
       <source>Developer and testing options</source>
@@ -576,10 +584,6 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Ou Dedetai actualiza Logos</translation>
     </message>
     <message>
-      <source>All applied</source>
-      <translation>Todo aplicado</translation>
-    </message>
-    <message>
       <source>Install Logos first.</source>
       <translation>Instale Logos primero.</translation>
     </message>
@@ -684,6 +688,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Logos está al día</translation>
     </message>
     <message>
+      <source>All {total} needed are applied</source>
+      <translation>Los {total} necesarios están aplicados</translation>
+    </message>
+    <message>
       <source>Applied</source>
       <translation>Aplicado</translation>
     </message>
@@ -710,6 +718,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Nothing left over</source>
       <translation>No queda nada</translation>
+    </message>
+    <message>
+      <source>All applied</source>
+      <translation>Todo aplicado</translation>
     </message>
     <message>
       <source>OpenGL 3.2 or newer is needed</source>
@@ -744,8 +756,8 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Sin aplicar: {names}</translation>
     </message>
     <message>
-      <source>{ok} of {total} applied</source>
-      <translation>{ok} de {total} aplicados</translation>
+      <source>{ok} of {total} needed are applied</source>
+      <translation>{ok} de {total} necesarios aplicados</translation>
     </message>
     <message>
       <source>Printing through GDI</source>
