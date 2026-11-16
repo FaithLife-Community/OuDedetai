@@ -81,6 +81,15 @@ class TestPurge(unittest.TestCase):
         self.assertIn("can't be undone", context)
         self.assertIn(str(self.install), context)
 
+    def test_akousousin_purges_itself(self):
+        launcher = self.home / "akousousin"
+        log = self.home / "aks.log"
+        launcher.write_text(f'#!/bin/sh\n[ "$1" = --help ] && echo "  --purge" && exit 0\necho "$@" >> {log}\n')
+        launcher.chmod(0o755)
+        with mock.patch.object(control.system, "akousousin_launcher", return_value=launcher):
+            control._purge_akousousin(self.app)
+        self.assertEqual(log.read_text(), "--purge --yes\n")
+
     def test_targets_are_not_nested(self):
         targets = control.purge_targets(self.app)
         for t in targets:

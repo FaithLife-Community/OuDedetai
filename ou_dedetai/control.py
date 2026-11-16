@@ -194,25 +194,21 @@ def _forget_url_handlers() -> None:
 
 
 def _purge_akousousin(app: App) -> None:
-    """Remove Akousousin, its models and settings."""
+    """Akousousin removes itself (voices, models, settings, its Wine registration)."""
     launcher = system.akousousin_launcher()
     if not launcher.is_file():
         return
-    def aks(*args: str) -> subprocess.CompletedProcess:
-        return subprocess.run([str(launcher), *args], capture_output=True, text=True, timeout=300)
     try:
-        if "--purge" in aks("--help").stdout:
-            aks("--purge")
+        help_text = subprocess.run([str(launcher), "--help"], capture_output=True, text=True, timeout=60).stdout
+        if "--purge" not in help_text:
+            app.status("This Akousousin is too old to remove itself; update it first, then run akousousin --purge.")
             return
-        # Older releases: quit, remove the bundle, then its models and settings ourselves.
-        aks("--quit")
-        aks("--uninstall-bundle", str(Path.home() / ".local"))
+        result = subprocess.run([str(launcher), "--purge", "--yes"], capture_output=True, text=True, timeout=600)
+        if result.returncode != 0:
+            logging.warning(f"akousousin --purge: {result.stdout}{result.stderr}")
+            app.status("Akousousin couldn't remove everything; see the log.")
     except (OSError, subprocess.SubprocessError) as e:
-        logging.warning(f"Couldn't run Akousousin's own uninstaller: {e}")
-    config_home = Path(os.getenv("XDG_CONFIG_HOME") or Path.home() / ".config")
-    for path in (config_home / "Akousousin", Path(constants.XDG_DATA_HOME) / "Akousousin"):
-        shutil.rmtree(path, ignore_errors=True)
-    launcher.unlink(missing_ok=True)
+        logging.warning(f"Couldn't run akousousin --purge: {e}")
 
 
 def _purge_integrations() -> None:
