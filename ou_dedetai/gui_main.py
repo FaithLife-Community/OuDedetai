@@ -919,7 +919,8 @@ class MainWindow(GuiApp):
             a.setEnabled(False)
             return
         for key, slot in (("wine", self.update_wine), ("app", self.update_to_latest_lli_release),
-                          ("logos", self.update_faithlife_product), ("aks", self.update_akousousin)):
+                          ("logos", self.update_faithlife_product), ("aks", self.update_akousousin),
+                          ("desktop", self.install_integrations)):
             enabled, text = self._updates.get(key, (False, ""))
             if text:
                 a = menu.addAction(text)
@@ -995,9 +996,8 @@ class MainWindow(GuiApp):
         self.offline.setChecked(self.conf.offline_mode)
         self.offline.setEnabled(not self.conf._overrides.offline)
         self.offline.blockSignals(False)
-        self.p_desktop.setText(tr("Installed") if desktop_integrations.is_installed() else tr("Install"))
-        self.p_desktop.setEnabled(not desktop_integrations.is_installed() and not offline)
         self._show_akousousin()
+        self._show_desktop_integrations()
         self.logging.blockSignals(True)
         self.logging.setChecked(bool(self.conf.faithlife_product_logging))
         self.logging.blockSignals(False)
@@ -1209,11 +1209,27 @@ class MainWindow(GuiApp):
             newer = system.akousousin_update(self)
             updates["aks"] = (newer is not None, tr("Update Akousousin to {version}").format(version=newer)
                               if newer else tr("Akousousin is up to date"))
+        if desktop_integrations.is_installed() and desktop_integrations.desktop():
+            newer = desktop_integrations.update_available(self)
+            updates["desktop"] = (newer is not None,
+                                  tr("Update the desktop integrations to {version}").format(version=newer)
+                                  if newer else tr("Desktop integrations are up to date"))
         self.signals.updates.emit(updates)
 
     def _updates_checked(self, updates: dict) -> None:
         self._updates = updates
         self._show_akousousin()
+        self._show_desktop_integrations()
+
+    def _show_desktop_integrations(self) -> None:
+        offline = network.is_offline()
+        if not desktop_integrations.is_installed():
+            self.p_desktop.setText(tr("Install"))
+            self.p_desktop.setEnabled(not offline)
+            return
+        can, _ = self._updates.get("desktop", (False, ""))
+        self.p_desktop.setText(tr("Update") if can else tr("Installed"))
+        self.p_desktop.setEnabled(can and not offline)
 
     def _show_akousousin(self) -> None:
         if not self.is_installed() or network.is_offline():
@@ -1394,7 +1410,8 @@ class MainWindow(GuiApp):
 
     def install_integrations(self) -> None:
         def run():
-            desktop_integrations.install(self)
+            if desktop_integrations.install(self) and "desktop" in self._updates:
+                self._updates = {**self._updates, "desktop": (False, tr("Desktop integrations are up to date"))}
             self._load_integrations()
             self._refresh_later()
         self.start_thread(run)

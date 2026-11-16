@@ -84,6 +84,10 @@ Back up). Builds are made by hand from the
 - **Desktop integrations**: offered once on KDE Plasma and on GNOME. The Plasma install offers to
   reload Plasma; GNOME asks for one log out and in.
 - **Akousousin**: Update is only offered when there's a newer release. Logos can stay open.
+- **Desktop integrations**: a newer release shows in the Update menu and on the Settings card's
+  button (GUI), as a status line plus *Update Desktop Integrations* (TUI), and
+  `--install-desktop-integrations` installs the latest (CLI). The installed version is read from
+  `~/.local/share/logos-plasma/VERSION` (v0.5.1+; older installs count as older).
 - **Update checks** use the existing 12-hour release cache, so opening the window doesn't hit the
   servers each time. Troubleshooting → More → *Check for updates now* clears it and checks at once.
 - **Look**: Faithlife's colours and type, our blue Ou Dedetai icon on the window; the Logos/Verbum

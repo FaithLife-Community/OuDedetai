@@ -266,7 +266,7 @@ class TextualUI(TextualApp[None]):
         self.set_interval(2.5, self._monitor_tick)
         self.domain.status("TUI ready")
         # Once, on KDE Plasma: offer the Logos desktop integrations
-        self.domain.start_thread(desktop_integrations.offer, app=self.domain)
+        self.domain.start_thread(desktop_integrations.offer_or_notice_update, app=self.domain)
 
     def _monitor_tick(self) -> None:
         try:
@@ -645,7 +645,7 @@ class TUI(App):
                 from ou_dedetai import wine_settings
                 self.info(wine_settings.format_report(
                     wine_settings.report_for_app(self), wine_settings.renderer_summary(self)))
-            elif choice == "Install Desktop Integrations":
+            elif choice in ("Install Desktop Integrations", "Update Desktop Integrations"):
                 self.start_thread(desktop_integrations.install, self)
             elif choice == "Remove Everything":
                 self.start_thread(control.purge, self)
@@ -719,8 +719,9 @@ class TUI(App):
         labels.extend([f"Check for {constants.APP_NAME} Updates", "Install Dependencies"])
         if self.is_installed():
             labels.extend(["Update Wine Configuration", "Show Wine Settings"])
-            if desktop_integrations.desktop() and not desktop_integrations.is_installed():
-                labels.append("Install Desktop Integrations")
+            if desktop_integrations.desktop():
+                labels.append("Update Desktop Integrations" if desktop_integrations.is_installed()
+                              else "Install Desktop Integrations")
         channel = self.conf.wine_release_channel
         labels.append(f"Wine Builds (Current: {WINE_CHANNELS.get(channel, channel)})")
         labels.append(f"Work Offline (Current: {'On' if self.conf.offline_mode else 'Off'})")

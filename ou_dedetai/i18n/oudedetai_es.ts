@@ -436,10 +436,6 @@
       <translation>Con conexión</translation>
     </message>
     <message>
-      <source>Installed</source>
-      <translation>Instalado</translation>
-    </message>
-    <message>
       <source>Needed for Logos</source>
       <translation>Necesario para Logos</translation>
     </message>
@@ -454,6 +450,10 @@
     <message>
       <source>Logos updates itself</source>
       <translation>Logos se actualiza solo</translation>
+    </message>
+    <message>
+      <source>Installed</source>
+      <translation>Instalado</translation>
     </message>
     <message>
       <source>Up to date</source>
@@ -648,6 +648,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Akousousin está actualizado</translation>
     </message>
     <message>
+      <source>Desktop integrations are up to date</source>
+      <translation>Las integraciones de escritorio están al día</translation>
+    </message>
+    <message>
       <source>Everything is up to date.</source>
       <translation>Todo está al día.</translation>
     </message>
@@ -746,6 +750,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Update Akousousin to {version}</source>
       <translation>Actualizar Akousousin a {version}</translation>
+    </message>
+    <message>
+      <source>Update the desktop integrations to {version}</source>
+      <translation>Actualizar las integraciones de escritorio a {version}</translation>
     </message>
     <message>
       <source>Updates available: {names}</source>

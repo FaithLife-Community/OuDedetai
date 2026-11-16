@@ -3,7 +3,7 @@
 On KDE Plasma these add KRunner commands, a "Look up in Logos" shortcut, reading-plan
 reminders and desktop widgets; on GNOME, search in the Activities overview, the shortcut
 and reminders. They are a separate project; this module only offers to install them
-(once, on a supported desktop) and runs their installer on request.
+(once, on a supported desktop), notices newer releases, and runs their installer on request.
 """
 import json
 import logging
@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Mapping, Optional
 
 import requests
+from packaging.version import InvalidVersion, Version
 
 from ou_dedetai import constants, network, system
 from ou_dedetai.app import App
@@ -47,6 +48,38 @@ def is_installed(env: Optional[Mapping[str, str]] = None) -> bool:
     env = os.environ if env is None else env
     data_home = Path(env.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
     return (data_home / "logos-plasma" / "logos_plasma.py").is_file()
+
+
+def installed_version(env: Optional[Mapping[str, str]] = None) -> Optional[str]:
+    """The installed release ("0.5.2"), "0" for installs older than v0.5.1 (which didn't
+    record it), or None when they aren't installed."""
+    if not is_installed(env):
+        return None
+    env = os.environ if env is None else env
+    data_home = Path(env.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    try:
+        return (data_home / "logos-plasma" / "VERSION").read_text().strip().lstrip("v") or "0"
+    except OSError:
+        return "0"
+
+
+def update_available(app: App) -> Optional[str]:
+    """The latest release's version if it's newer than the installed one, else None.
+
+    Uses the shared release cache (renewed every 12 hours), like Ou Dedetai's other update
+    checks; Troubleshooting → Check for updates now renews it at once."""
+    current = installed_version()
+    if current is None or desktop() is None or network.is_offline():
+        return None
+    try:
+        latest = str(app.conf._network._repo_version(REPOSITORY, tag="latest").version).lstrip("v")
+    except (requests.RequestException, OSError, ValueError, LookupError, RuntimeError) as e:
+        logging.debug(f"Desktop integrations update check failed: {e}")
+        return None
+    try:
+        return latest if Version(latest) > Version(current) else None
+    except InvalidVersion:
+        return latest if latest != current else None
 
 
 def should_offer(app: App, env: Optional[Mapping[str, str]] = None) -> bool:
@@ -82,6 +115,15 @@ def offer(app: App) -> None:
     )
     if app.approve(question, context):
         install(app)
+
+
+def offer_or_notice_update(app: App) -> None:
+    """For the TUI: the one-time install offer, or a status line when an update is out."""
+    if should_offer(app):
+        offer(app)
+    elif newer := update_available(app):
+        app.status(f"Logos desktop integrations {newer} is available: "
+                   "choose Update Desktop Integrations in the menu.")
 
 
 def latest_release_tag() -> str:

@@ -158,6 +158,15 @@ class TestBackgroundWork(GuiTestCase):
             self.window.check_updates_now()
         clear.assert_not_called()
 
+    def test_desktop_integrations_update_shown(self):
+        with mock.patch.object(gui_main.desktop_integrations, "is_installed", return_value=True), \
+                mock.patch.object(gui_main.network, "is_offline", return_value=False):
+            self.window._updates_checked({"desktop": (True, "Update the desktop integrations to 0.5.2")})
+            self.assertEqual(self.window.p_desktop.text(), "Update")
+            self.assertTrue(self.window.p_desktop.isEnabled())
+            self.window._updates_checked({"desktop": (False, "Desktop integrations are up to date")})
+            self.assertFalse(self.window.p_desktop.isEnabled())
+
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:
             self.window._logos_state_changed(gui_main.State.RUNNING)

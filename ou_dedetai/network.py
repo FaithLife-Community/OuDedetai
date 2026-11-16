@@ -685,6 +685,9 @@ def _get_asset_url(release: dict, asset_name: Optional[str] = None) -> str:
                 asset for asset in assets if asset.get("name") == "oudedetai"
             ]
         assets = matching_assets
+    if not assets and asset_name is None and release.get("tarball_url"):
+        # A release with no attached files (e.g. logos-desktop-integrations): its source archive.
+        return str(release["tarball_url"])
     if not assets:
         raise ValueError(f"Could not find asset {asset_name!r} in release {release.get('tag_name')}")
     download_url = assets[0].get("browser_download_url")
