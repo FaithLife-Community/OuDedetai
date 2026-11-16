@@ -341,6 +341,11 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
 
 
 def main():
+    # Every program we start (uname, xdg-open, systemctl, sh…) should get the system's
+    # libraries, not the ones bundled in this binary: Kubuntu 26.04's uutils failed
+    # with ours. Our own process already loaded its libraries, so this doesn't affect it.
+    os.environ.clear()
+    os.environ.update(system.fix_ld_library_path(None))
     msg.initialize_logging()
     ephemeral_config, action = setup_config()
     system.check_architecture()
