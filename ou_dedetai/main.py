@@ -344,8 +344,9 @@ def main():
     # Every program we start (uname, xdg-open, systemctl, sh…) should get the system's
     # libraries, not the ones bundled in this binary: Kubuntu 26.04's uutils failed
     # with ours. Our own process already loaded its libraries, so this doesn't affect it.
+    environment = system.fix_ld_library_path(None)  # read before clearing
     os.environ.clear()
-    os.environ.update(system.fix_ld_library_path(None))
+    os.environ.update(environment)
     msg.initialize_logging()
     ephemeral_config, action = setup_config()
     system.check_architecture()

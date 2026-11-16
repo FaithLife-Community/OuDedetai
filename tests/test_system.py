@@ -1,3 +1,4 @@
+import os
 import io
 import json
 import tarfile
@@ -264,3 +265,15 @@ class TestWinetricksTools(unittest.TestCase):
                 patch.object(system, "run_command") as run:
             system.offer_winetricks_tools(self.app)
         run.assert_not_called()
+
+
+class TestStartupEnvironment(unittest.TestCase):
+    def test_main_keeps_the_environment_but_restores_library_path(self):
+        from ou_dedetai import constants, main
+        env = {"HOME": "/home/x", "DISPLAY": ":0", "LD_LIBRARY_PATH": "/tmp/_MEI1", "LD_LIBRARY_PATH_ORIG": "/usr/lib"}
+        with patch.dict(os.environ, env, clear=True), patch.object(constants, "RUNMODE", "binary"), \
+                patch.object(main.msg, "initialize_logging", side_effect=RuntimeError("stop")):
+            with self.assertRaises(RuntimeError):
+                main.main()
+            self.assertEqual(os.environ.get("DISPLAY"), ":0")
+            self.assertEqual(os.environ.get("LD_LIBRARY_PATH"), "/usr/lib")
