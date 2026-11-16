@@ -157,12 +157,12 @@ def check_for_known_bugs(app: App):
             logging.warning("Detected chromium based browser")
         elif snap_or_flatpak_detected:
             logging.warning("Detected snap or flatpak browser")
-        if app.conf.wine_binary == constants.WINE_RECOMMENDED_SIGIL:
-            logging.info("Switching user to the beta wine branch due to issue #435")
-            app.conf.wine_binary = constants.WINE_BETA_SIGIL
-        elif app.conf.wine_binary == constants.WINE_BETA_SIGIL:
-            # No need to do anything
-            pass
+        if app.conf.wine_binary in (constants.WINE_RECOMMENDED_SIGIL, constants.WINE_RECOMMENDED_TARBALL_SIGIL,
+                                    constants.WINE_BETA_SIGIL):
+            # The recommended Wine is now the newest build (the bundled tarball), which
+            # has the fix. Switching to the beta sigil here left wine_binary set to the
+            # sigil itself ("Experimental (AKA Beta)"), and the install then failed.
+            logging.info("Recommended Wine already includes the fix for issue #435")
         else:
             logging.warning("Sign In button may not launch the browser due to issue #435")
 

@@ -117,3 +117,14 @@ class TestSystemPackagesOff(unittest.TestCase):
                 mock.patch.object(installer.utils, "install_dependencies") as deps:
             installer.ensure_sys_deps(app)
         deps.assert_called_once_with(app)
+
+
+class TestKnownBug435(unittest.TestCase):
+    def test_snap_browser_keeps_the_recommended_wine(self):
+        from ou_dedetai import constants
+        app = mock.Mock()
+        app.conf.wine_binary = constants.WINE_RECOMMENDED_SIGIL
+        result = subprocess.CompletedProcess([], 0, "firefox_firefox.desktop\n", "")
+        with mock.patch.object(installer.system, "run_command", return_value=result):
+            installer.check_for_known_bugs(app)
+        self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_SIGIL)
