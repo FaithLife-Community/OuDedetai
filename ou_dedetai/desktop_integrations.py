@@ -5,7 +5,6 @@ reminders and desktop widgets; on GNOME, the same commands in the Activities ove
 the shortcut and the reminders. They are a separate project; this module only offers to
 install them (once, and only on those desktops) and runs their installer on request.
 """
-import json
 import logging
 import os
 import re
@@ -50,11 +49,34 @@ def release_supports(tag: str, desktop: str) -> bool:
     return desktop == PLASMA or release_version(tag) >= FIRST_GNOME_RELEASE
 
 
+def data_dir(env: Optional[Mapping[str, str]] = None) -> Path:
+    env = os.environ if env is None else env
+    return Path(env.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "logos-plasma"
+
+
 def is_installed(env: Optional[Mapping[str, str]] = None) -> bool:
     """True when the integrations' backend is installed for this user."""
-    env = os.environ if env is None else env
-    data_home = Path(env.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-    return (data_home / "logos-plasma" / "logos_plasma.py").is_file()
+    return (data_dir(env) / "logos_plasma.py").is_file()
+
+
+def installed_version(env: Optional[Mapping[str, str]] = None) -> str:
+    """The installed release, e.g. "0.5.1"; "0" for releases before 0.5.1, which didn't record it."""
+    try:
+        return (data_dir(env) / "VERSION").read_text().strip() or "0"
+    except OSError:
+        return "0"
+
+
+def latest_release(app: App) -> network.SoftwareReleaseInfo:
+    """The latest release, via Ou Dedetai's cached GitHub lookups."""
+    return app.conf._network.desktop_integrations_latest_version()
+
+
+def _may_ask(app: App) -> bool:
+    return (
+        not app.conf._overrides.assume_yes  # never install something optional unasked
+        and app.is_installed()
+    )
 
 
 def should_offer(app: App, env: Optional[Mapping[str, str]] = None) -> bool:
@@ -62,24 +84,34 @@ def should_offer(app: App, env: Optional[Mapping[str, str]] = None) -> bool:
     integrations aren't."""
     return (
         not app.conf.desktop_integrations_offered
-        and not app.conf._overrides.assume_yes  # never install something optional unasked
         and supported_desktop(env) is not None
         and not is_installed(env)
-        and app.is_installed()
+        and _may_ask(app)
     )
 
 
+def should_offer_update(app: App, env: Optional[Mapping[str, str]] = None) -> bool:
+    """Whether to look for an update: installed, on a supported desktop, interactively."""
+    return supported_desktop(env) is not None and is_installed(env) and _may_ask(app)
+
+
 def offer(app: App) -> None:
-    """Ask once whether to install the integrations for this desktop; install them if wanted."""
-    if not should_offer(app):
-        return
+    """Ask once whether to install the integrations for this desktop, or, when they're
+    installed, once per newer release whether to update them."""
+    if should_offer(app):
+        offer_install(app)
+    elif should_offer_update(app):
+        offer_update(app)
+
+
+def offer_install(app: App) -> None:
     desktop = supported_desktop()
     assert desktop is not None
     if desktop == GNOME:
         # GNOME support arrived in a later release: until it's out, don't ask (and don't
         # record the offer), so GNOME users are asked once it is.
         try:
-            if not release_supports(latest_release_tag(), GNOME):
+            if not release_supports(latest_release(app).version, GNOME):
                 return
         except Exception as e:
             logging.debug(f"Not offering desktop integrations: {e}")
@@ -103,14 +135,30 @@ def offer(app: App) -> None:
         install(app)
 
 
-def latest_release_tag() -> str:
-    data = network._net_get(f"https://api.github.com/repos/{REPOSITORY}/releases/latest")
-    if data is None:
-        raise RuntimeError(f"Couldn't look up the latest release of {REPOSITORY}")
-    tag = json.loads(data.decode()).get("tag_name")
-    if not tag:
-        raise RuntimeError(f"No release found for {REPOSITORY}")
-    return str(tag)
+def offer_update(app: App) -> None:
+    """Offer a newer release once; quietly does nothing offline."""
+    desktop = supported_desktop()
+    assert desktop is not None
+    try:
+        latest = latest_release(app).version
+    except Exception as e:
+        logging.debug(f"Couldn't check for a desktop integrations update: {e}")
+        return
+    if (
+        release_version(latest) <= release_version(installed_version())
+        or latest == app.conf.desktop_integrations_skipped_update
+        or not release_supports(latest, desktop)
+    ):
+        return
+    # Record it first, so declining (or closing the prompt) means we don't ask about this release again.
+    app.conf.desktop_integrations_skipped_update = latest
+    question = f"Update the Logos desktop integrations to v{latest}?"
+    context = (
+        f"A new release is out: {PROJECT_URL}/releases/tag/v{latest}\n\n"
+        f"You can update later with: {constants.BINARY_NAME} --install-desktop-integrations"
+    )
+    if app.approve(question, context):
+        install(app)
 
 
 def install(app: App) -> bool:
@@ -121,13 +169,14 @@ def install(app: App) -> bool:
                  "and neither seems to be running.")
         return False
     try:
-        tag = latest_release_tag()
+        release = latest_release(app)
+        tag = f"v{release.version}"
         if not release_supports(tag, desktop):
             app.info(f"The latest release of the Logos desktop integrations ({tag}) doesn't support "
                      f"{DESKTOP_NAMES[desktop]} yet. See {PROJECT_URL}")
             return False
         app.status(f"Downloading Logos desktop integrations {tag}…")
-        archive = network._net_get(f"{PROJECT_URL}/archive/refs/tags/{tag}.tar.gz")
+        archive = network._net_get(release.download_url)
         if archive is None:
             raise RuntimeError("Download failed")
         with tempfile.TemporaryDirectory(prefix="logos-desktop-integrations-") as tmp:

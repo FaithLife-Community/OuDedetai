@@ -417,6 +417,10 @@ class NetworkRequests:
     def icu_latest_version(self) -> SoftwareReleaseInfo:
         return self._repo_version("FaithLife-Community/icu")
 
+    def desktop_integrations_latest_version(self) -> SoftwareReleaseInfo:
+        """Latest release of the Logos desktop integrations (source archive only)."""
+        return self._repo_version("FaithLife-Community/logos-desktop-integrations")
+
 
 def logos_reuse_download(
     sourceurl: str,
@@ -640,6 +644,9 @@ def _get_asset_url(release: dict, asset_name: Optional[str] = None) -> str:
                 asset for asset in assets if asset.get("name") == "oudedetai"
             ]
         assets = matching_assets
+    elif not assets and release.get("tarball_url"):
+        # A release with no attached files (e.g. source-only): use its source archive
+        return str(release["tarball_url"])
     if not assets:
         raise ValueError(f"Could not find asset {asset_name!r} in release {release.get('tag_name')}")
     download_url = assets[0].get("browser_download_url")

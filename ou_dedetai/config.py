@@ -338,6 +338,8 @@ class PersistentConfiguration:
     app_release_channel: str = "stable"
     # Whether we've offered to install the desktop integrations for KDE Plasma or GNOME (asked once)
     desktop_integrations_offered: bool = False
+    # A desktop integrations release the user chose not to update to (asked once per release)
+    desktop_integrations_skipped_update: Optional[str] = None
 
     _legacy: Optional[LegacyConfiguration] = None
     """A Copy of the legacy configuration.
@@ -766,6 +768,17 @@ class Config:
     def desktop_integrations_offered(self, value: bool) -> None:
         if self._raw.desktop_integrations_offered != value:
             self._raw.desktop_integrations_offered = value
+            self._write()
+
+    @property
+    def desktop_integrations_skipped_update(self) -> Optional[str]:
+        """A release of the desktop integrations we offered as an update and won't offer again"""
+        return self._raw.desktop_integrations_skipped_update
+
+    @desktop_integrations_skipped_update.setter
+    def desktop_integrations_skipped_update(self, value: Optional[str]) -> None:
+        if self._raw.desktop_integrations_skipped_update != value:
+            self._raw.desktop_integrations_skipped_update = value
             self._write()
 
     @property

@@ -60,3 +60,12 @@ class TestGetAssetUrl(unittest.TestCase):
     def test_no_name_returns_first(self):
         url = network._get_asset_url(self.release)
         self.assertEqual(url, 'https://x/oudedetai-arm')
+
+    def test_no_assets_and_no_name_uses_the_source_archive(self):
+        release = {'tag_name': 'v0.5.1', 'assets': [], 'tarball_url': 'https://x/tarball/v0.5.1'}
+        self.assertEqual(network._get_asset_url(release), 'https://x/tarball/v0.5.1')
+
+    def test_named_asset_never_falls_back_to_the_source_archive(self):
+        release = {'tag_name': 'v0.5.1', 'assets': [], 'tarball_url': 'https://x/tarball/v0.5.1'}
+        with self.assertRaises(ValueError):
+            network._get_asset_url(release, r'.*\.AppImage')
