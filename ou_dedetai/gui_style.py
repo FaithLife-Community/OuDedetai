@@ -22,6 +22,9 @@ GREEN_BG, GREEN = "#e9f8e1", "#2f7a12"
 YELLOW_BG, YELLOW = "#fff8e0", "#8a6400"
 RED = "#bd2929"
 
+# A white tick for checked boxes (drawn on our blue).
+CHECK_MARK = (constants.APP_IMAGE_DIR / "check.svg").as_posix()
+
 FONT_FAMILIES = ["Source Sans 3", "Source Sans Pro", "Noto Sans", "Cantarell", "DejaVu Sans"]
 
 STYLESHEET = f"""
@@ -69,6 +72,13 @@ QLabel[pill="off"] {{ background: {PANEL}; color: {TEXT_MUTED}; border-radius: 3
 QProgressBar {{ background: {PANEL}; border: none; border-radius: 4px; height: 8px; text-align: center; }}
 QProgressBar::chunk {{ background: {BLUE_ACCENT}; border-radius: 4px; }}
 QCheckBox, QRadioButton {{ color: {TEXT}; spacing: 8px; }}
+QCheckBox[role="strong"] {{ font-weight: 600; font-size: 11pt; }}
+QCheckBox::indicator {{ width: 18px; height: 18px; border: 2px solid #6b6b6b; border-radius: 3px;
+    background: white; }}
+QCheckBox::indicator:hover {{ border-color: {BLUE}; }}
+QCheckBox::indicator:checked {{ background: {BLUE}; border-color: {BLUE};
+    image: url("{CHECK_MARK}"); }}
+QCheckBox::indicator:disabled {{ border-color: {BORDER_STRONG}; background: {PAGE}; }}
 QComboBox, QLineEdit {{ background: white; border: 1px solid {BORDER_STRONG}; border-radius: 3px;
     padding: 4px 8px; color: {TEXT}; }}
 QMenu {{ background: white; border: 1px solid {BORDER_STRONG}; padding: 4px 0; }}

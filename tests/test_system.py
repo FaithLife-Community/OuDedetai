@@ -179,3 +179,22 @@ class TestAkousousinInstalled(unittest.TestCase):
             (Path(home) / ".local/bin").mkdir(parents=True)
             (Path(home) / ".local/bin/akousousin").write_text("#!/bin/sh\n")
             self.assertTrue(system.akousousin_installed())
+
+
+class TestImageBasedOS(unittest.TestCase):
+    def test_ostree_is_image_based(self):
+        from unittest.mock import patch
+        from ou_dedetai import system
+        with patch("ou_dedetai.system.Path.exists", return_value=True):
+            self.assertTrue(system.is_image_based_os())
+
+    def test_skips_packages_on_image_based_os(self):
+        from unittest.mock import Mock, patch
+        from ou_dedetai import system
+        app = Mock()
+        app.conf.skip_install_system_dependencies = False
+        with patch("ou_dedetai.system.is_image_based_os", return_value=True), \
+                patch("ou_dedetai.system.get_package_manager") as get_pm:
+            system.install_dependencies(app)
+        get_pm.assert_not_called()
+        app.status.assert_called()

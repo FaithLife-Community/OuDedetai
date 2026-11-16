@@ -345,7 +345,18 @@ class MainWindow(GuiApp):
         if view == FULL:
             self.root.resize(max(self.root.width(), 1040), max(self.root.height(), 700))
         elif view == SIMPLE:
-            self.root.resize(720, 480)
+            self._fit_simple()
+
+    def _fit_simple(self) -> None:
+        """Size the window to the simple view's content (no empty band)."""
+        page = self.stack.widget(SIMPLE)
+        if page is None:
+            return
+        page.adjustSize()
+        height = page.sizeHint().height()
+        if not self.status_gui.isHidden():
+            height += self.status_gui.sizeHint().height()
+        self.root.resize(720, max(height, 260))
 
     def _build_simple(self) -> QtWidgets.QWidget:
         page = QtWidgets.QWidget()
@@ -416,7 +427,7 @@ class MainWindow(GuiApp):
             tr("Open the full view when Ou Dedetai starts (reading plan, layouts, status)"))
         self.s_full_default.toggled.connect(lambda on: setattr(self.conf, "gui_full_view", on))
         v.addWidget(self.s_full_default)
-        v.addStretch(1)
+        v.addSpacing(8)
         foot = QtWidgets.QHBoxLayout()
         foot.addWidget(button(tr("Settings and troubleshooting…"), "link", lambda: self.open_full(SETTINGS)))
         foot.addStretch(1)
@@ -613,6 +624,7 @@ class MainWindow(GuiApp):
         net, nl = card()
         nl.addWidget(label(tr("Internet"), "h2"))
         self.offline = QtWidgets.QCheckBox(tr("Work offline"))
+        self.offline.setProperty("role", "strong")
         self.offline.toggled.connect(self.set_offline)
         nl.addWidget(self.offline)
         nl.addWidget(label(tr("Ou Dedetai won't connect to the internet at all: no update checks, no "
@@ -805,6 +817,11 @@ class MainWindow(GuiApp):
         self._dispatch(self.refresh, wait=False)
 
     def refresh(self) -> None:
+        self._refresh()
+        if self.stack.currentIndex() == SIMPLE:
+            QtCore.QTimer.singleShot(0, self._fit_simple)
+
+    def _refresh(self) -> None:
         product = self.conf._raw.faithlife_product or constants.FAITHLIFE_PRODUCTS[0]
         installed = self.is_installed()
         icon = self.conf.faithlife_product_icon_path if self.conf._raw.faithlife_product else \
@@ -1107,6 +1124,10 @@ class MainWindow(GuiApp):
         def install():
             try:
                 self.populate_defaults()
+                # One-click install always uses the recommended Wine (the chosen channel's
+                # newest build), not one left in the config by an earlier attempt.
+                # "Choose options…" keeps a manual choice.
+                self.conf.wine_binary = constants.WINE_RECOMMENDED_SIGIL
                 installer.install(self)
             except Exception:
                 logging.exception("Install failed")

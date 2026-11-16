@@ -854,8 +854,29 @@ def postinstall_dependencies(superuser_command: str):
     return command
 
 
+def is_image_based_os() -> bool:
+    """SteamOS, Bazzite, Fedora Silverblue/Kinoite and other image-based systems.
+
+    Their system files are read-only and replaced on update, so packages installed
+    there are lost (or the install fails). Ou Dedetai keeps everything in your home
+    folder on these systems instead."""
+    if Path("/run/ostree-booted").exists():
+        return True
+    try:
+        return distro.id() == "steamos"
+    except Exception:
+        return False
+
+
 def install_dependencies(app: App, target_version=10):
     if app.conf.skip_install_system_dependencies:
+        return
+    if is_image_based_os():
+        app.status(
+            "This system is image-based (e.g. SteamOS, Bazzite, Silverblue), so Ou Dedetai "
+            "doesn't install system packages; everything goes in your home folder."
+        )
+        logging.info("Image-based OS: skipping system package installation")
         return
     if network.is_offline():
         app.status("Offline mode is on, so system packages weren't checked or installed.")
