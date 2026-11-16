@@ -340,6 +340,8 @@ class MainWindow(GuiApp):
     # ── Views ──
     def show_view(self, view: int) -> None:
         self.stack.setCurrentIndex(view)
+        # The install guide has its own progress bar and status line.
+        self.status_gui.setVisible(view != INSTALLING)
         if view == FULL:
             self.root.resize(max(self.root.width(), 1040), max(self.root.height(), 700))
         elif view == SIMPLE:

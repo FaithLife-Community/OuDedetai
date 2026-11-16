@@ -110,6 +110,14 @@ class TestInstalled(GuiTestCase):
         self.assertTrue(network.is_offline())
 
 
+class TestGuideView(GuiTestCase):
+    def test_one_progress_bar_while_installing(self):
+        self.window.show_view(gui_main.INSTALLING)
+        self.assertTrue(self.window.status_gui.isHidden())
+        self.window.show_view(gui_main.SIMPLE)
+        self.assertFalse(self.window.status_gui.isHidden())
+
+
 class TestInstallGuide(unittest.TestCase):
     def setUp(self):
         gui_main._qt_app()
