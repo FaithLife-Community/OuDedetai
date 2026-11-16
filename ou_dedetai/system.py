@@ -354,6 +354,11 @@ def check_architecture():
         logging.critical("System archictecture unknown.")
 
 
+# os-release is all we need. distro's default also runs `uname -rs` and lets a failure
+# escape (seen on Kubuntu 26.04, whose coreutils are uutils), stopping the install.
+_distro = distro.LinuxDistribution(include_uname=False, include_lsb=False)
+
+
 def get_os() -> Tuple[str, str]:
     """Gets OS information
     
@@ -363,9 +368,9 @@ def get_os() -> Tuple[str, str]:
     """
     # FIXME: Not working? Returns "Linux" on some systems? On Ubuntu 24.04 it
     # correctly returns "ubuntu".
-    os_name = distro.id()
+    os_name = _distro.id()
     logging.info(f"OS name: {os_name}")
-    os_release = distro.version()
+    os_release = _distro.version()
     logging.info(f"OS release: {os_release}")
     return os_name, os_release
 
@@ -434,10 +439,10 @@ class PackageManager:
 
 
 def get_package_manager() -> PackageManager | None:
-    major_ver_str = distro.major_version()
+    major_ver_str = _distro.major_version()
     # None on rolling/testing releases (e.g. Debian sid)
     major_ver: int | None = int(major_ver_str) if major_ver_str.isdigit() else None
-    os_name = distro.id()
+    os_name = _distro.id()
     logging.debug(f"{os_name=}; {major_ver=}")
     # Check for package manager and associated packages.
 
@@ -866,7 +871,7 @@ def is_image_based_os() -> bool:
     if Path("/run/ostree-booted").exists():
         return True
     try:
-        return distro.id() == "steamos"
+        return _distro.id() == "steamos"
     except Exception:
         return False
 

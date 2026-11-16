@@ -223,3 +223,13 @@ class TestImageBasedOS(unittest.TestCase):
             system.install_dependencies(app)
         get_pm.assert_not_called()
         app.status.assert_called()
+
+
+class TestGetOsWithoutUname(unittest.TestCase):
+    def test_failing_uname_doesnt_stop_os_detection(self):
+        import distro as distro_module
+        fresh = distro_module.LinuxDistribution(include_uname=False, include_lsb=False)
+        with patch.object(system, '_distro', fresh), \
+                patch('subprocess.check_output', side_effect=subprocess.CalledProcessError(1, ['uname', '-rs'])):
+            name, _ = system.get_os()
+        self.assertTrue(name)
