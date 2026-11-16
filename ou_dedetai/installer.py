@@ -551,8 +551,10 @@ def create_desktop_file(
         wm_class: str | None = None,
         additional_keywords: list[str] | None = None,
         mime_types: list[str] | None = None,
-        terminal: Optional[bool] = None
+        terminal: Optional[bool] = None,
+        actions: list[tuple[str, str, str]] | None = None,
 ):
+    """``actions`` are right-click entries: (id, name, command)."""
     contents = f"""[Desktop Entry]
 Name={app_name}
 Type=Application
@@ -574,6 +576,11 @@ Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(addit
         contents += f"StartupWMClass={wm_class}\n"
     else:
         contents += "StartupNotify=false\n"
+
+    if actions:
+        contents += f"Actions={';'.join(a[0] for a in actions)};\n"
+        for action_id, name, command in actions:
+            contents += f"\n[Desktop Action {action_id}]\nName={name}\nExec={command}\n"
 
     xdg_data_home = Path(constants.XDG_DATA_HOME)
     launcher_path = xdg_data_home / "applications" / filename
@@ -640,7 +647,13 @@ def create_launcher_shortcuts(app: App):
         exec_cmd=f"{oudedetai_executable} --run-installed-app",
         icon_path=logos_icon_path,
         wm_class=f"{flproduct.lower()}.exe",
-        additional_keywords=["Catholic"] if flproduct == "Verbum" else None
+        additional_keywords=["Catholic"] if flproduct == "Verbum" else None,
+        # Right-click entries. A fixed list (saved layouts live in the Run menu and tray).
+        actions=[
+            ("todays-reading", "Today's reading", f"{oudedetai_executable} --open-todays-reading"),
+            ("stop", f"Stop {flproduct}", f"{oudedetai_executable} --stop-installed-app"),
+            ("oudedetai", constants.APP_NAME, oudedetai_executable),
+        ],
     )
     logging.debug(f"> File exists?: {logos_path}: {logos_path.is_file()}")
     # Create Ou Dedetai desktop file.

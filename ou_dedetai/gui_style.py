@@ -1,0 +1,113 @@
+"""Look of the Qt windows: Faithlife's palette and type, native window frames.
+
+Colours follow Faithlife's own MIT-licensed UI library (Faithlife/styled-ui,
+theme/core.js), darkened where needed so text passes WCAG contrast (4.5:1).
+"""
+from PySide6 import QtCore, QtGui, QtWidgets
+
+from . import constants
+
+BLUE = "#0174b9"          # buttons, links (styled-ui blue5; 5:1 with white)
+BLUE_DARK = "#015d95"     # hover/pressed
+BLUE_ACCENT = "#1e91d6"   # stripes, progress (styled-ui blue4; decoration only)
+BLUE_LIGHT = "#d5ecfc"
+BLUE_LIGHTEST = "#ebf7ff"
+TEXT = "#3d3d3d"
+TEXT_MUTED = "#575251"     # Faithlife grey
+BORDER = "#dbdbdb"
+BORDER_STRONG = "#c7c7c7"
+PAGE = "#f5f5f5"
+PANEL = "#ebebeb"
+GREEN_BG, GREEN = "#e9f8e1", "#2f7a12"
+YELLOW_BG, YELLOW = "#fff8e0", "#8a6400"
+RED = "#bd2929"
+
+FONT_FAMILIES = ["Source Sans 3", "Source Sans Pro", "Noto Sans", "Cantarell", "DejaVu Sans"]
+
+STYLESHEET = f"""
+QWidget#od-root, QWidget#od-page {{ background: {PAGE}; color: {TEXT}; }}
+QLabel {{ color: {TEXT}; background: transparent; }}
+QLabel[role="muted"] {{ color: {TEXT_MUTED}; }}
+QLabel[role="title"] {{ font-size: 20pt; font-weight: 600; }}
+QLabel[role="h2"] {{ font-size: 13pt; font-weight: 600; }}
+QLabel[role="group"] {{ color: {TEXT_MUTED}; font-size: 9pt; font-weight: 700; }}
+QFrame#card {{ background: white; border: 1px solid {BORDER}; border-radius: 6px; }}
+QFrame#card[accent="true"] {{ border-top: 3px solid {BLUE_ACCENT}; }}
+QFrame#card[accent="warn"] {{ border-top: 3px solid #e97732; }}
+QFrame#sidebar {{ background: white; border-right: 1px solid {BORDER}; }}
+QFrame#reading {{ background: white; border: 1px solid {BORDER}; border-radius: 6px; }}
+QFrame#readinghead {{ background: {BLUE_LIGHTEST}; border-bottom: 1px solid {BLUE_LIGHT};
+    border-top-left-radius: 6px; border-top-right-radius: 6px; }}
+QFrame#rowline {{ border-top: 1px solid {PANEL}; }}
+QPushButton, QToolButton {{
+    background: {PANEL}; color: {TEXT}; border: 1px solid {BORDER_STRONG};
+    border-radius: 3px; padding: 6px 14px; font-weight: 600;
+}}
+QPushButton:hover, QToolButton:hover {{ background: {BORDER}; }}
+QPushButton:disabled, QToolButton:disabled {{ color: #7a7a7a; background: {PAGE}; }}
+QPushButton:focus, QToolButton:focus {{ border: 2px solid {BLUE_ACCENT}; }}
+QPushButton[kind="primary"], QToolButton[kind="primary"] {{
+    background: {BLUE}; border-color: {BLUE}; color: white;
+}}
+QPushButton[kind="primary"]:hover, QToolButton[kind="primary"]:hover {{ background: {BLUE_DARK}; }}
+QPushButton[kind="primary"]:disabled, QToolButton[kind="primary"]:disabled {{
+    background: {PANEL}; border-color: {BORDER_STRONG}; color: #6b6b6b; }}
+QPushButton[kind="danger"] {{ background: white; color: {RED}; border-color: #e3b4ae; }}
+QPushButton[kind="link"] {{ background: transparent; border: none; color: {BLUE}; padding: 2px 0;
+    font-weight: 400; text-align: left; }}
+QPushButton[kind="link"]:hover {{ color: {BLUE_DARK}; text-decoration: underline; }}
+QPushButton[kind="nav"] {{ background: transparent; border: none; text-align: left; padding: 8px 12px;
+    font-weight: 400; font-size: 11pt; }}
+QPushButton[kind="nav"]:checked {{ background: {BLUE_LIGHT}; color: {BLUE_DARK}; font-weight: 600; }}
+QToolButton[kind="primary"]::menu-button {{ border-left: 1px solid #5aa8dc; width: 22px; }}
+QLabel[pill="ok"] {{ background: {GREEN_BG}; color: {GREEN}; border-radius: 3px; padding: 1px 8px;
+    font-weight: 600; font-size: 9pt; }}
+QLabel[pill="warn"] {{ background: {YELLOW_BG}; color: {YELLOW}; border-radius: 3px; padding: 1px 8px;
+    font-weight: 600; font-size: 9pt; }}
+QLabel[pill="off"] {{ background: {PANEL}; color: {TEXT_MUTED}; border-radius: 3px; padding: 1px 8px;
+    font-weight: 600; font-size: 9pt; }}
+QProgressBar {{ background: {PANEL}; border: none; border-radius: 4px; height: 8px; text-align: center; }}
+QProgressBar::chunk {{ background: {BLUE_ACCENT}; border-radius: 4px; }}
+QCheckBox, QRadioButton {{ color: {TEXT}; spacing: 8px; }}
+QComboBox, QLineEdit {{ background: white; border: 1px solid {BORDER_STRONG}; border-radius: 3px;
+    padding: 4px 8px; color: {TEXT}; }}
+QMenu {{ background: white; border: 1px solid {BORDER_STRONG}; padding: 4px 0; }}
+QMenu::item {{ padding: 6px 22px 6px 14px; color: {TEXT}; }}
+QMenu::item:selected {{ background: {BLUE_LIGHTEST}; }}
+QMenu::item:disabled {{ color: #7a7a7a; }}
+QMenu::separator {{ height: 1px; background: {PANEL}; margin: 4px 0; }}
+QScrollArea {{ border: none; background: transparent; }}
+QToolTip {{ background: white; color: {TEXT}; border: 1px solid {BORDER_STRONG}; }}
+"""
+
+
+def apply(app: QtWidgets.QApplication) -> None:
+    app.setStyle("Fusion")
+    font = QtGui.QFont()
+    font.setFamilies(FONT_FAMILIES)
+    font.setPointSize(10)
+    app.setFont(font)
+    palette = app.palette()
+    palette.setColor(QtGui.QPalette.ColorRole.Window, QtGui.QColor(PAGE))
+    palette.setColor(QtGui.QPalette.ColorRole.WindowText, QtGui.QColor(TEXT))
+    palette.setColor(QtGui.QPalette.ColorRole.Base, QtGui.QColor("white"))
+    palette.setColor(QtGui.QPalette.ColorRole.Text, QtGui.QColor(TEXT))
+    palette.setColor(QtGui.QPalette.ColorRole.Button, QtGui.QColor(PANEL))
+    palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor(TEXT))
+    palette.setColor(QtGui.QPalette.ColorRole.Highlight, QtGui.QColor(BLUE))
+    palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor("white"))
+    palette.setColor(QtGui.QPalette.ColorRole.Link, QtGui.QColor(BLUE))
+    app.setPalette(palette)
+    app.setStyleSheet(STYLESHEET)
+
+
+def app_icon() -> QtGui.QIcon:
+    return QtGui.QIcon(str(constants.APP_IMAGE_DIR / "icon.png"))
+
+
+def pixmap(path, size: int) -> QtGui.QPixmap:
+    pm = QtGui.QPixmap(str(path))
+    if pm.isNull():
+        return pm
+    return pm.scaled(size, size, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                     QtCore.Qt.TransformationMode.SmoothTransformation)

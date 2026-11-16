@@ -138,6 +138,10 @@ def get_parser():
         help="re-apply the installer's Wine settings to an existing install",
     )
     cmd.add_argument(
+        '--open-todays-reading', action='store_true',
+        help="open today's first reading-plan entry in Logos (needs the desktop integrations)",
+    )
+    cmd.add_argument(
         '--show-wine-config', action='store_true',
         help='list the Wine settings Ou Dedetai applies, whether each is set, and why',
     )
@@ -316,6 +320,24 @@ def parse_database_command(args, ephemeral_config):
     raise RuntimeError(f"Unknown database command: {args.database_command}")
 
 
+def _tray_wanted(config: EphemeralConfiguration) -> bool:
+    """Use the tray when there's a display, the GUI isn't turned off and Qt loads.
+
+    Over SSH, with --dialog cli/tty or OUDEDETAI_NO_TRAY=1, the shortcut keeps today's
+    command-line behaviour."""
+    if os.getenv("OUDEDETAI_NO_TRAY", "").strip().lower() in ("1", "true", "yes", "on"):
+        return False
+    if config.dialog and config.dialog != "tk":
+        return False
+    if not (os.getenv("DISPLAY") or os.getenv("WAYLAND_DISPLAY")):
+        return False
+    try:
+        import PySide6.QtWidgets  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
 def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]:
     from . import main
     if args.config:
@@ -390,6 +412,14 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
 
         Lazily instantiates CLI at call-time"""
         def _run(config: EphemeralConfiguration):
+            if action == 'run_installed_app' and _tray_wanted(config):
+                # The Logos shortcut: start Logos and sit in the tray while it runs.
+                from . import gui_main
+                try:
+                    gui_main.run_with_tray(config)
+                    return
+                except Exception:
+                    logging.exception("Couldn't start the tray; running Logos from the command line instead")
             getattr(cli.CLI(config), action)()
         output = _run
         output.__name__ = action
@@ -412,6 +442,7 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
         'update_installed_app',
         'update_wine_config',
         'show_wine_config',
+        'open_todays_reading',
         'update_akousousin',
         'stop_installed_app',
         'set_appimage',

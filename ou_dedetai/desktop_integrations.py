@@ -109,3 +109,90 @@ def install(app: App) -> bool:
     app.info("Logos desktop integrations installed.\n\n"
              "Try Alt+Space and type 'logos', or right-click the desktop → Add Widgets → search 'Logos'.")
     return True
+
+
+# ── Using the installed integrations from Ou Dedetai's own windows ───────────
+#
+# Ou Dedetai never reads Logos's databases for these features itself: it asks the
+# integrations' backend, which owns that code (and its `logos_databases` switch).
+# Each call returns an empty result when the integrations aren't installed, are an
+# older version without the command, or have reading Logos's data switched off, so
+# the window simply leaves the feature out.
+
+def _backend(env: Optional[Mapping[str, str]] = None) -> Optional[Path]:
+    env = os.environ if env is None else env
+    data_home = Path(env.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    path = data_home / "logos-plasma" / "logos_plasma.py"
+    return path if path.is_file() else None
+
+
+def _run_backend(*args: str, timeout: int = 60) -> Optional[str]:
+    backend = _backend()
+    python = "/usr/bin/python3" if Path("/usr/bin/python3").is_file() else "python3"
+    if backend is None:
+        return None
+    # The backend runs on the system's Python, not the one bundled in our binary.
+    env = system.fix_ld_library_path(dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1"))
+    try:
+        import subprocess
+        result = subprocess.run([python, str(backend), *args], capture_output=True, text=True,
+                                timeout=timeout, env=env)
+    except Exception as error:
+        logging.debug(f"Desktop integrations {args}: {error}")
+        return None
+    if result.returncode != 0:
+        logging.debug(f"Desktop integrations {args}: exit {result.returncode}: {result.stderr.strip()}")
+        return None
+    return result.stdout
+
+
+def _json(*args: str, timeout: int = 60):
+    out = _run_backend(*args, timeout=timeout)
+    if not out:
+        return None
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        return None
+
+
+def logos_data_enabled() -> bool:
+    """Whether the integrations may read Logos's databases (their `logos_databases` setting)."""
+    sources = _json("--data-sources", timeout=20)
+    return bool(isinstance(sources, dict) and sources.get("logos_databases"))
+
+
+def reading_plans() -> list[dict]:
+    """Today's reading-plan entries, as the Reading Plans widget shows them."""
+    plans = _json("--reading-plans")
+    return [p for p in plans if isinstance(p, dict)] if isinstance(plans, list) else []
+
+
+def saved_layouts() -> list[str]:
+    names = _json("--layouts", "--json", timeout=30)
+    return [n for n in names if isinstance(n, str)] if isinstance(names, list) else []
+
+
+def open_layout(name: str) -> bool:
+    """Load a saved layout in the running Logos (COM LoadLayout, a few seconds)."""
+    return _run_backend("--layout", name, timeout=180) is not None
+
+
+def open_url(url: str) -> bool:
+    """Open a Logos link (logosres:, logosref:, logos4:) without a terminal."""
+    return _run_backend("--open", url, timeout=60) is not None
+
+
+def open_reference(text: str) -> bool:
+    """Open a typed Bible reference in the preferred Bible."""
+    return _run_backend("--reference", text, timeout=120) is not None
+
+
+def todays_reading() -> Optional[dict]:
+    """The first reading due from your reading plans: {"title", "label", "url"}, or None."""
+    for plan in reading_plans():
+        for reading in plan.get("readings") or []:
+            if isinstance(reading, dict) and reading.get("url"):
+                return {"title": plan.get("title", ""), "label": reading.get("label", ""),
+                        "url": reading["url"]}
+    return None

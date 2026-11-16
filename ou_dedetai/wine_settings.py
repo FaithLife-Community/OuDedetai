@@ -165,14 +165,33 @@ def parse_reg_file(path: Path) -> dict[str, dict[str, str]]:
     return result
 
 
-def _context(app: App) -> SettingsContext:
+def configured_wine_binary(app: App) -> Optional[str]:
+    """The Wine binary from the saved config, without asking the user for one."""
+    raw = app.conf._raw.wine_binary
+    if not raw:
+        return None
+    if not Path(raw).exists() and app.conf._raw.install_dir:
+        candidate = Path(app.conf._raw.install_dir) / raw
+        if candidate.exists():
+            return str(candidate)
+    return raw
+
+
+def wine_release(app: App) -> Optional["wine.WineRelease"]:
+    binary = configured_wine_binary(app)
+    if binary is None:
+        return None
     try:
-        release, _ = wine.get_wine_release(app.conf.wine_binary)
-        oinos = wine.wine_supports_logos_updates(release)
+        release, _ = wine.get_wine_release(binary)
+        return release
     except Exception:
-        logging.debug("Couldn't read the Wine release for the settings report", exc_info=True)
-        oinos = False
-    return SettingsContext(oinos=oinos)
+        logging.debug("Couldn't read the Wine release", exc_info=True)
+        return None
+
+
+def _context(app: App) -> SettingsContext:
+    release = wine_release(app)
+    return SettingsContext(oinos=bool(release and wine.wine_supports_logos_updates(release)))
 
 
 def report(
@@ -211,13 +230,16 @@ def report(
 
 
 def report_for_app(app: App) -> list[SettingReport]:
-    if not app.conf.wine_prefix:
+    # Only from saved values: reading the report must never prompt the user.
+    if not app.conf._raw.install_dir and not app.conf._overrides.wine_prefix:
         return []
     return report(Path(app.conf.wine_prefix), _context(app))
 
 
 def renderer_summary(app: App) -> str:
     """The renderer in use, e.g. "dxvk", "gl" or "gdi"; "default" when nothing is set."""
+    if not app.conf._raw.install_dir and not app.conf._overrides.wine_prefix:
+        return "unknown"
     try:
         return wine.get_effective_renderer(app) or "default"
     except Exception:

@@ -58,6 +58,13 @@ class CLI(App):
     def update_wine_config(self):
         installer.update_wine_config(self)
 
+    def open_todays_reading(self):
+        entry = desktop_integrations.todays_reading()
+        if entry is None:
+            self.exit("No reading for today was found. This needs the desktop integrations and a reading plan.")
+            return
+        desktop_integrations.open_url(entry["url"])
+
     def show_wine_config(self):
         from . import wine_settings
         print(wine_settings.format_report(

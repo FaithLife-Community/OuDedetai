@@ -302,6 +302,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         'update_installed_app',
         'update_wine_config',
         'show_wine_config',
+        'open_todays_reading',
         'update_akousousin',
         'stop_installed_app',
         'set_appimage',
