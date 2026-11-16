@@ -135,6 +135,14 @@ class App(abc.ABC):
 
         return answer
 
+    def agree_to_licence(self, product: str, text: Optional[str]) -> bool:
+        """Ask the user to accept the product's licence agreement.
+
+        text is the agreement itself when it could be read from the installer; front
+        ends that can show long text (the GUI) override this to show it in full."""
+        return self.approve(f"Do you agree to {product}'s licence agreement (EULA)?",
+                            "https://faithlife.com/terms")
+
     def approve_or_exit(self, question: str, context: Optional[str] = None) -> bool:
         """Asks the user a question, if they refuse, shutdown"""
         if not self.approve(question, context):

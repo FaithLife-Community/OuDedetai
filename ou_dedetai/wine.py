@@ -716,6 +716,42 @@ def configure_printing(app: App, wine64_binary: str):
     wine_reg_install(app, name, reg_text, wine64_binary)
 
 
+# Reads the licence agreement from the installer with Windows Installer's own scripting
+# (msi.dll automation, run by cscript in the prefix): the text Faithlife's installer
+# shows on its licence page. Nothing extra to install.
+_LICENCE_VBS = r'''Set installer = CreateObject("WindowsInstaller.Installer")
+Set db = installer.OpenDatabase(WScript.Arguments(0), 0)
+Set view = db.OpenView("SELECT `Text` FROM `Control` WHERE `Type`='ScrollableText'")
+view.Execute
+Set rec = view.Fetch
+If Not rec Is Nothing Then
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set f = fso.CreateTextFile(WScript.Arguments(1), True, True)
+    f.Write rec.StringData(1)
+    f.Close
+End If
+'''
+
+
+def msi_licence_text(app: App, msi_path: str) -> Optional[str]:
+    """The installer's licence agreement as plain text, or None if it can't be read."""
+    with tempfile.TemporaryDirectory(prefix="oudedetai-licence-") as tmp:
+        script, out = Path(tmp) / "licence.vbs", Path(tmp) / "licence.txt"
+        script.write_text(_LICENCE_VBS)
+
+        def win(path: Path | str) -> str:
+            return "Z:" + str(Path(path).absolute()).replace("/", "\\")
+        try:
+            run_wine_completed_process(app, app.conf.wine64_binary, exe="cscript",
+                                       exe_args=["//nologo", win(script), win(msi_path), win(out)])
+            rtf = out.read_text(encoding="utf-16")
+        except (OSError, UnicodeError, subprocess.SubprocessError) as error:
+            logging.info(f"Couldn't read the licence from the installer: {error}")
+            return None
+    text = utils.rtf_to_text(rtf).strip()
+    return text or None
+
+
 def install_msi(app: App):
     app.status(f"Running MSI installer: {app.conf.faithlife_installer_name}.")
     # Define the Wine executable and initial arguments for msiexec
@@ -729,11 +765,11 @@ def install_msi(app: App):
     # Since the launcher only prompts for EULA, and askes where to install 
     # (which is pointless as it's in it's own wine prefix), we can just skip the interaction
     # entirely once we confirm the user has agreed to EULA (for Faithlife's sake)
-    if (
-        app.conf._overrides.agreed_to_faithlife_terms or
-        app.approve_or_exit("Do you agree to Faithlife's EULA? https://faithlife.com/terms")
-    ):
-        exe_args.append("/passive")
+    if not app.conf._overrides.agreed_to_faithlife_terms:
+        product = app.conf.faithlife_product
+        if not app.agree_to_licence(product, msi_licence_text(app, exe_args[1])):
+            app.exit(f"{product} can't be installed without accepting its licence agreement.", intended=True)
+    exe_args.append("/passive")
 
     # Add MST transform if needed
     release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release

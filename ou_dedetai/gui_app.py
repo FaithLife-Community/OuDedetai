@@ -148,6 +148,32 @@ class GuiApp(App):
     def clear_status(self):
         self._status_gui.set_status('', 0)
 
+    def agree_to_licence(self, product: str, text: Optional[str]) -> bool:
+        if not text:
+            return super().agree_to_licence(product, text)
+
+        def ask() -> bool:
+            dialog = QtWidgets.QDialog(self.root)
+            dialog.setWindowTitle(f"{product} licence agreement")
+            dialog.resize(640, 560)
+            layout = QtWidgets.QVBoxLayout(dialog)
+            intro = QtWidgets.QLabel(f"Please read {product}'s licence agreement. Installing needs you to accept it.")
+            intro.setWordWrap(True)
+            layout.addWidget(intro)
+            body = QtWidgets.QPlainTextEdit(text)
+            body.setReadOnly(True)
+            body.setAccessibleName("Licence agreement")
+            layout.addWidget(body, 1)
+            buttons = QtWidgets.QDialogButtonBox()
+            agree = buttons.addButton("I agree", QtWidgets.QDialogButtonBox.ButtonRole.AcceptRole)
+            buttons.addButton(QtWidgets.QDialogButtonBox.StandardButton.Cancel)
+            agree.setProperty("kind", "primary")
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            layout.addWidget(buttons)
+            return dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted
+        return bool(self._dispatch(ask))
+
     def approve(self, question: str, context: str | None = None) -> bool:
         message = f"{question}\n\n{context or ''}".strip()
         return bool(self._dispatch(

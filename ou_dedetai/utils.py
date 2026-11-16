@@ -713,3 +713,60 @@ def get_logos_paths(ephemeral_config):
 
 def get_logos_databases(ephemeral_config) -> list[Path]:
     return get_logos_paths(ephemeral_config).databases
+
+
+# Destinations whose contents aren't text (font/colour tables, pictures, metadata…).
+_RTF_SKIP = {"fonttbl", "colortbl", "stylesheet", "info", "pict", "header", "footer", "footnote",
+             "listtable", "listoverridetable", "rsidtbl", "generator", "themedata", "colorschememapping",
+             "latentstyles", "datastore", "xmlnstbl", "mmathPr", "pgdsctbl", "object", "field-inst"}
+_RTF_TOKEN = re.compile(r"\\([a-zA-Z]+)(-?\d+)? ?|\\'([0-9a-fA-F]{2})|\\([^a-zA-Z])|([{}])|[\r\n]+|(.)", re.S)
+
+
+def rtf_to_text(rtf: str) -> str:
+    """Plain text from RTF, enough for a licence agreement: paragraphs, tabs, escaped and
+    Unicode characters; formatting and non-text groups dropped. No dependencies."""
+    out: list[str] = []
+    stack: list[tuple[bool, int]] = []
+    skip, uc, pending_skip = False, 1, 0
+    for word, arg, hexcode, symbol, brace, char in _RTF_TOKEN.findall(rtf):
+        if brace == "{":
+            stack.append((skip, uc))
+        elif brace == "}":
+            skip, uc = stack.pop() if stack else (False, 1)
+        elif symbol:
+            if symbol == "*":
+                skip = True
+            elif symbol in "\\{}" and not skip:
+                out.append(symbol)
+            elif symbol == "~" and not skip:
+                out.append("\u00a0")
+        elif word:
+            if word in _RTF_SKIP:
+                skip = True
+            elif skip:
+                continue
+            elif word in ("par", "line", "sect", "page"):
+                out.append("\n")
+            elif word == "tab":
+                out.append("\t")
+            elif word == "uc":
+                uc = int(arg or 1)
+            elif word == "u":
+                value = int(arg or 0)
+                out.append(chr(value + 65536 if value < 0 else value))
+                pending_skip = uc
+            elif word in ("emdash", "endash", "bullet", "lquote", "rquote", "ldblquote", "rdblquote"):
+                out.append({"emdash": "—", "endash": "–", "bullet": "•", "lquote": "‘", "rquote": "’",
+                            "ldblquote": "“", "rdblquote": "”"}[word])
+        elif hexcode:
+            if pending_skip:
+                pending_skip -= 1
+            elif not skip:
+                out.append(bytes([int(hexcode, 16)]).decode("cp1252", errors="replace"))
+        elif char:
+            if pending_skip:
+                pending_skip -= 1
+            elif not skip:
+                out.append(char)
+    text = "".join(out)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(line.rstrip() for line in text.splitlines()))

@@ -340,3 +340,13 @@ class TestGeneralUtils(unittest.TestCase):
     @unittest.skip("Test requires oudedetai binary.")
     def test_update_to_latest_lli_release(self):
         pass
+
+
+class TestRtfToText(unittest.TestCase):
+    def test_licence_like_rtf(self):
+        from ou_dedetai import utils
+        rtf = (r"{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fnil Tahoma;}}{\colortbl ;\red0\green0\blue0;}"
+               r"{\*\generator Riched20}\viewkind4\uc1\pard\b END USER LICENSE AGREEMENT\b0\par"
+               r"\par Faithlife\rquote s software \'96 read carefully.\par Price: 5\'80 \u8364? \{ok\}\par}")
+        self.assertEqual(utils.rtf_to_text(rtf).strip(),
+                         "END USER LICENSE AGREEMENT\n\nFaithlife’s software – read carefully.\nPrice: 5€ € {ok}")

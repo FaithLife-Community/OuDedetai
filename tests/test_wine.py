@@ -196,3 +196,19 @@ class TestMonoGeckoOnlyForWineboot(unittest.TestCase):
         env = wine.get_wine_env(app)
         self.assertNotIn("mscoree", env["WINEDLLOVERRIDES"])
         self.assertIn("mscoree=", wine.get_wine_env(app, wine.NO_MONO_GECKO)["WINEDLLOVERRIDES"])
+
+
+class TestLicenceBeforeInstall(unittest.TestCase):
+    def test_refusing_the_licence_stops_the_install(self):
+        from ou_dedetai import wine
+        app = mock.Mock()
+        app.conf._overrides.agreed_to_faithlife_terms = False
+        app.conf.faithlife_product = "Logos"
+        app.agree_to_licence.return_value = False
+        app.exit.side_effect = SystemExit
+        with mock.patch.object(wine, "msi_licence_text", return_value="EULA text"), \
+                mock.patch.object(wine, "run_wine_during_install") as run:
+            with self.assertRaises(SystemExit):
+                wine.install_msi(app)
+        app.agree_to_licence.assert_called_once_with("Logos", "EULA text")
+        run.assert_not_called()
