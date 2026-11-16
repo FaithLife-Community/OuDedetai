@@ -1,6 +1,7 @@
 import re
 
 import distro
+import json
 import logging
 import os
 import psutil
@@ -15,7 +16,9 @@ import zipfile
 
 from collections.abc import MutableMapping
 from dataclasses import dataclass
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
+
+import requests
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -1107,7 +1110,7 @@ def ensure_akousousin(app: App, update: bool = False) -> bool:
 
     try:
         if update or not launcher.is_file():
-            filename = "Akousousin-Linux-x86_64.tar.gz"
+            filename = AKOUSOUSIN_TARBALL
             # Explicit updates must bypass the cached release lookup.
             lookup = network._get_release_data if update else app.conf._network._repo_version
             try:
@@ -1136,17 +1139,59 @@ def ensure_akousousin(app: App, update: bool = False) -> bool:
     return True
 
 
-def update_akousousin(app: App):
-    """Install the latest stable tar and register it with the current Wine runner."""
-    from .logos import State
+AKOUSOUSIN_TARBALL = "Akousousin-Linux-x86_64.tar.gz"
 
+
+def akousousin_version() -> Optional[str]:
+    """The installed Akousousin's version, from its bundle's build.json."""
+    build = akousousin_launcher().resolve().parent / "resources/build.json"
+    if not build.is_file():
+        build = Path.home() / ".local/lib/akousousin/resources/build.json"
+    try:
+        version = json.loads(build.read_text()).get("version")
+        return str(version) if version else None
+    except (OSError, ValueError):
+        return None
+
+
+def akousousin_update(app: App) -> Optional[str]:
+    """The latest release's version if it's newer than the installed one, else None.
+
+    Uses the cached release lookup, so it's cheap to call when building a menu."""
+    if not akousousin_installed() or network.is_offline():
+        return None
+    try:
+        release = app.conf._network._repo_version("jg00dman/akousousin", tag="latest",
+                                                  asset_name=re.escape(AKOUSOUSIN_TARBALL))
+    except (requests.RequestException, OSError, ValueError, LookupError) as error:
+        logging.debug(f"Akousousin update check failed: {error}")
+        return None
+    latest = str(release.version).lstrip("v")
+    current = (akousousin_version() or "").lstrip("v")
+    try:
+        newer = not current or Version(latest) > Version(current)
+    except InvalidVersion:
+        newer = latest != current
+    return latest if newer else None
+
+
+def update_akousousin(app: App):
+    """Install the latest stable tar and register it with the current Wine runner.
+
+    Logos can stay open; Akousousin itself is asked to quit first (its installer
+    needs that) and starts again when next needed."""
     if not app.is_installed():
-        app.status("Install Logos/Verbum before updating Akousousin.")
+        app.status("Install Logos/Verbum before updating Akousousin.", 0)
         return
-    app.logos.monitor()
-    if app.logos.logos_state in (State.STARTING, State.RUNNING):
-        app.status("Close Logos/Verbum before updating Akousousin.")
+    if akousousin_installed() and akousousin_update(app) is None:
+        app.status(f"Akousousin {akousousin_version() or ''} is up to date.", 0)
         return
+    if akousousin_installed():
+        try:
+            subprocess.run([str(akousousin_launcher()), "--quit"], capture_output=True, timeout=60,
+                           env=dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1"))
+        except (OSError, subprocess.SubprocessError) as error:
+            logging.debug(f"akousousin --quit: {error}")
     if ensure_akousousin(app, update=True):
         app.status("Akousousin updated and Wine speech registration refreshed.", 100)
 

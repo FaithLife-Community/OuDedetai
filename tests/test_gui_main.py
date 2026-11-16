@@ -43,12 +43,17 @@ class GuiTestCase(unittest.TestCase):
         from ou_dedetai.gui_app import Root
         self.qt = gui_main._qt_app()
         # No background threads in tests: they'd outlive the temporary home.
-        with mock.patch.object(gui_main.MainWindow, "start_thread"):
+        with mock.patch.object(gui_main.MainWindow, "start_thread"), \
+                mock.patch.object(gui_main.MainWindow, "_poll_logos"):
             self.window = gui_main.MainWindow(Root(), EphemeralConfiguration.load_from_path(
                 os.environ["CONFIG_FILE"]), show=False)
         self.window.monitor_timer.stop()
 
     def tearDown(self):
+        # Results still queued for this window would arrive after its temporary home is gone.
+        self.window.signals.blockSignals(True)
+        if self.window._refresh_later in self.window.config_updated_hooks:
+            self.window.config_updated_hooks.remove(self.window._refresh_later)
         self.window.root.close()
         self.env.stop()
         network.set_offline(False)
@@ -135,7 +140,36 @@ class TestBackgroundWork(GuiTestCase):
         refresh.assert_called_once()
 
 
+class TestInstalledMenus(GuiTestCase):
+    installed = True
+
+    def test_reading_plan_card_above_devotional(self):
+        self.window.signals.integrations.emit([
+            {"title": "Daily Devotional", "kind": "devotional", "readings": [{"label": "Day 1", "url": "x"}]},
+            {"title": "Bible in a Year", "status": "On track", "progress": 0.5,
+             "readings": [{"label": "Gen 1", "url": "y"}]},
+        ], [])
+        self.qt.processEvents()
+        texts = [w.text() for w in self.window.reading_card.findChildren(QtWidgets.QLabel)]
+        self.assertLess(texts.index("Reading plan"), texts.index("Today's devotional"))
+
+    def test_run_menu_has_bible_and_blank(self):
+        self.window._layouts = ["Study", "Blank"]
+        menu = QtWidgets.QMenu()
+        self.window._fill_run_menu(menu)
+        texts = [a.text() for a in menu.actions()]
+        self.assertIn("Bible (your preferred Bible)", texts)
+        self.assertIn("Blank (no panels open)", texts)
+
+
 class TestGuideView(GuiTestCase):
+    def test_guide_closes_when_install_completes(self):
+        self.window._installing = True
+        self.window.show_view(gui_main.INSTALLING)
+        self.window._show_status("Install Complete!", 100)
+        self.assertEqual(self.window.stack.currentIndex(), gui_main.SIMPLE)
+        self.assertFalse(self.window._installing)
+
     def test_one_progress_bar_while_installing(self):
         self.window.show_view(gui_main.INSTALLING)
         self.assertFalse(self.window.status_gui.isHidden())

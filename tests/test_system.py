@@ -129,13 +129,38 @@ class TestAkousousinUpdate(unittest.TestCase):
         self.assertEqual(self.run_command.call_count, 2)
         self.assert_registration(self.launcher)
 
-    def test_update_refuses_running_logos(self):
+    def test_update_skipped_when_up_to_date(self):
+        self.app.is_installed.return_value = True
+        self.launcher.parent.mkdir(parents=True, exist_ok=True)
+        self.launcher.touch()
+        with patch.object(system, 'akousousin_update', return_value=None), \
+                patch.object(system, 'ensure_akousousin') as install:
+            system.update_akousousin(self.app)
+        install.assert_not_called()
+
+    def test_update_asks_akousousin_to_quit_not_logos(self):
         from ou_dedetai.logos import State
         self.app.is_installed.return_value = True
         self.app.logos.logos_state = State.RUNNING
-        with patch.object(system, 'ensure_akousousin') as install:
+        self.launcher.parent.mkdir(parents=True, exist_ok=True)
+        self.launcher.touch()
+        with patch.object(system, 'akousousin_update', return_value='9.9'), \
+                patch.object(system.subprocess, 'run') as run, \
+                patch.object(system, 'ensure_akousousin') as install:
             system.update_akousousin(self.app)
-        install.assert_not_called()
+        self.assertEqual(run.call_args[0][0], [str(self.launcher), '--quit'])
+        install.assert_called_once_with(self.app, update=True)
+
+    def test_newer_release_detected(self):
+        self.launcher.parent.mkdir(parents=True, exist_ok=True)
+        self.launcher.touch()
+        self.app.conf._network._repo_version.return_value = network.SoftwareReleaseInfo('v0.9.0', 'u')
+        with patch.object(system, 'akousousin_version', return_value='0.8.2'), \
+                patch.object(network, 'is_offline', return_value=False):
+            self.assertEqual(system.akousousin_update(self.app), '0.9.0')
+        with patch.object(system, 'akousousin_version', return_value='0.9.0'), \
+                patch.object(network, 'is_offline', return_value=False):
+            self.assertIsNone(system.akousousin_update(self.app))
 
     def test_update_refreshes_registration_after_install(self):
         from ou_dedetai.logos import State
@@ -164,7 +189,7 @@ class TestAkousousinActions(unittest.TestCase):
         from ou_dedetai import gui_main, tui_app
         gui = Mock()
         gui_main.MainWindow.update_akousousin(gui)
-        gui.start_thread.assert_called_once_with(system.update_akousousin, gui)
+        gui.start_thread.assert_called_once()
         tui = Mock()
         tui_app.TUI.utilities_menu_select(tui, 'Update Akousousin')
         tui.start_thread.assert_called_once_with(system.update_akousousin, tui)

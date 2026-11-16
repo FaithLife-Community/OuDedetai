@@ -104,8 +104,8 @@
       <translation>Detener</translation>
     </message>
     <message>
-      <source>The arrow next to Run starts Logos with today's reading, a passage or a saved layout. While Logos runs, Ou Dedetai sits in the system tray.</source>
-      <translation>La flecha junto a Ejecutar abre Logos con la lectura de hoy, un pasaje o un diseño guardado. Mientras Logos está abierto, Ou Dedetai queda en la bandeja del sistema.</translation>
+      <source>The arrow next to Run opens your Bible, today's reading or a saved layout. While Logos runs, Ou Dedetai sits in the system tray.</source>
+      <translation>La flecha junto a Ejecutar abre su Biblia, la lectura de hoy o un diseño guardado. Mientras Logos se ejecuta, Ou Dedetai queda en la bandeja del sistema.</translation>
     </message>
     <message>
       <source>Open the full view when Ou Dedetai starts (reading plan, layouts, status)</source>
@@ -118,10 +118,6 @@
     <message>
       <source>The arrow offers more ways to start Logos</source>
       <translation>La flecha ofrece más formas de abrir Logos</translation>
-    </message>
-    <message>
-      <source>Today's reading</source>
-      <translation>Lectura de hoy</translation>
     </message>
     <message>
       <source>Run indexing</source>
@@ -188,12 +184,8 @@
       <translation>Más</translation>
     </message>
     <message>
-      <source>Start as usual</source>
-      <translation>Abrir como siempre</translation>
-    </message>
-    <message>
-      <source>Open a passage…</source>
-      <translation>Abrir un pasaje…</translation>
+      <source>Bible (your preferred Bible)</source>
+      <translation>Biblia (su Biblia preferida)</translation>
     </message>
     <message>
       <source>Saved layouts</source>
@@ -210,18 +202,6 @@
     <message>
       <source>Not installed yet</source>
       <translation>Aún no instalado</translation>
-    </message>
-    <message>
-      <source>Plan progress</source>
-      <translation>Progreso del plan</translation>
-    </message>
-    <message>
-      <source>Open a passage</source>
-      <translation>Abrir un pasaje</translation>
-    </message>
-    <message>
-      <source>Bible reference, e.g. John 3:16 or Rom 8:28-30</source>
-      <translation>Referencia bíblica, p. ej. Juan 3:16 o Rom 8:28-30</translation>
     </message>
     <message>
       <source>Choose a Wine build</source>
@@ -286,6 +266,10 @@
     <message>
       <source>Simple view</source>
       <translation>Vista sencilla</translation>
+    </message>
+    <message>
+      <source>Plan progress</source>
+      <translation>Progreso del plan</translation>
     </message>
     <message>
       <source>Looking after Logos</source>
@@ -416,6 +400,14 @@
       <translation>Comprobar de nuevo</translation>
     </message>
     <message>
+      <source>Blank (no panels open)</source>
+      <translation>En blanco (sin paneles abiertos)</translation>
+    </message>
+    <message>
+      <source>Blank: save an empty layout named “Blank” in Logos first</source>
+      <translation>En blanco: primero guarde en Logos un diseño vacío llamado «Blank»</translation>
+    </message>
+    <message>
       <source>Offline mode is on</source>
       <translation>El modo sin conexión está activado</translation>
     </message>
@@ -460,12 +452,12 @@
       <translation>Comprobando…</translation>
     </message>
     <message>
-      <source>Mark readings done in Logos.</source>
-      <translation>Marque las lecturas como hechas en Logos.</translation>
-    </message>
-    <message>
       <source>Logos updates itself</source>
       <translation>Logos se actualiza solo</translation>
+    </message>
+    <message>
+      <source>Up to date</source>
+      <translation>Actualizado</translation>
     </message>
     <message>
       <source>Logos is running</source>
@@ -584,8 +576,8 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Listo</translation>
     </message>
     <message>
-      <source>Install {product} on Linux</source>
-      <translation>Instalar {product} en Linux</translation>
+      <source>Install {product}</source>
+      <translation>Instalar {product}</translation>
     </message>
     <message>
       <source>Ou Dedetai updates Logos</source>
@@ -624,6 +616,18 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Cerrarlos</translation>
     </message>
     <message>
+      <source>Reading plan</source>
+      <translation>Plan de lectura</translation>
+    </message>
+    <message>
+      <source>Today's devotional</source>
+      <translation>Devocional de hoy</translation>
+    </message>
+    <message>
+      <source>Mark readings done in Logos.</source>
+      <translation>Marque las lecturas como hechas en Logos.</translation>
+    </message>
+    <message>
       <source>Update Wine to the recommended build</source>
       <translation>Actualizar Wine a la versión recomendada</translation>
     </message>
@@ -634,6 +638,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Ou Dedetai is up to date</source>
       <translation>Ou Dedetai está al día</translation>
+    </message>
+    <message>
+      <source>Akousousin is up to date</source>
+      <translation>Akousousin está actualizado</translation>
     </message>
     <message>
       <source>winetricks isn't available with this Wine build.</source>
@@ -650,6 +658,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Ou Dedetai {version} · community supported</source>
       <translation>Ou Dedetai {version} · mantenido por la comunidad</translation>
+    </message>
+    <message>
+      <source>Start as usual</source>
+      <translation>Abrir como siempre</translation>
     </message>
     <message>
       <source>Run {product}</source>
@@ -718,6 +730,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Update Ou Dedetai to {version}</source>
       <translation>Actualizar Ou Dedetai a {version}</translation>
+    </message>
+    <message>
+      <source>Update Akousousin to {version}</source>
+      <translation>Actualizar Akousousin a {version}</translation>
     </message>
     <message>
       <source>Today's reading: {reading}</source>

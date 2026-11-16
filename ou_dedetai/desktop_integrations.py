@@ -7,6 +7,7 @@ install them (once, and only on KDE Plasma) and runs their installer on request.
 import json
 import logging
 import os
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -109,9 +110,37 @@ def install(app: App) -> bool:
                  + "\n".join(output.splitlines()[-15:]))
         return False
     app.status("Logos desktop integrations installed.")
-    app.info("Logos desktop integrations installed.\n\n"
-             "Try Alt+Space and type 'logos', or right-click the desktop → Add Widgets → search 'Logos'.")
+    if app.approve(
+        "Restart the Plasma desktop now?",
+        "The new widgets and search commands appear once Plasma reloads. Your panels and desktop "
+        "will disappear for a few seconds and come back; open windows, including Logos, aren't affected.\n\n"
+        "Afterwards try Alt+Space and type 'logos', or right-click the desktop → Add Widgets → search 'Logos'.",
+    ):
+        restart_plasma(app)
+    else:
+        app.status("Logos desktop integrations installed. They appear after you next log in.")
     return True
+
+
+def restart_plasma(app: App) -> None:
+    """Reload plasmashell (and KRunner) so new widgets and runners show up."""
+    commands = [["systemctl", "--user", "restart", "plasma-plasmashell.service"]]
+    if shutil.which("kquitapp6") and shutil.which("kstart"):
+        commands.append(["sh", "-c", "kquitapp6 plasmashell; kstart plasmashell >/dev/null 2>&1"])
+    for command in commands:
+        try:
+            if subprocess.run(command, capture_output=True, timeout=60).returncode == 0:
+                break
+        except (OSError, subprocess.SubprocessError) as error:
+            logging.debug(f"{command}: {error}")
+    else:
+        app.status("Couldn't restart Plasma; log out and in to see the integrations.")
+        return
+    try:  # KRunner reloads its plugins when it next starts.
+        subprocess.run(["kquitapp6", "krunner"], capture_output=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    app.status("Logos desktop integrations installed; Plasma reloaded.")
 
 
 # ── Using the installed integrations from Ou Dedetai's own windows ───────────

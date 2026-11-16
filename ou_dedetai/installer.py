@@ -597,6 +597,16 @@ Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(addit
     return launcher_path
 
 
+def copy_icons(install_dir: str | Path, flproduct: str) -> None:
+    """Copy our icons next to the install, replacing older ones (the shortcuts point here)."""
+    app_dir = Path(install_dir) / "data"
+    app_dir.mkdir(exist_ok=True)
+    for src in (constants.APP_IMAGE_DIR / "icon.png", constants.APP_IMAGE_DIR / f"{flproduct}-128-icon.png"):
+        target = app_dir / src.name
+        if not target.is_file() or target.read_bytes() != src.read_bytes():
+            shutil.copy(src, target)
+
+
 def create_launcher_shortcuts(app: App):
     # Set variables for use in launcher files.
     flproduct = app.conf.faithlife_product
@@ -631,10 +641,7 @@ def create_launcher_shortcuts(app: App):
         logging.info(f"Not creating launcher shortcuts, {constants.RUNMODE} already handles this")
         return
 
-    # Always copy, so shortcuts pick up icons that changed in a newer release.
-    app_dir.mkdir(exist_ok=True)
-    for src, path in [(app_icon_src, app_icon_path), (logos_icon_src, logos_icon_path)]:
-        shutil.copy(src, path)
+    copy_icons(installdir, flproduct)
 
     # Create Logos/Verbum desktop file.
     logos_path = create_desktop_file(

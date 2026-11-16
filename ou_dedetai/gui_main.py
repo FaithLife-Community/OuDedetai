@@ -45,6 +45,18 @@ def tr(text: str) -> str:
     return QtCore.QCoreApplication.translate(CONTEXT, text)
 
 
+# Opens the preferred Bible (logosref: always uses it) at its start.
+PREFERRED_BIBLE = "logosref:Bible.Ge1.1"
+# A saved layout with this name serves as the Run menu's "Blank" (Logos has no
+# built-in empty layout that can be opened by name).
+BLANK_LAYOUT = "Blank"
+
+
+def product_name(product: str) -> str:
+    """Faithlife's full product name, as shown beside its icon."""
+    return "Logos Bible Software" if product == "Logos" else product
+
+
 # ── Small building blocks ────────────────────────────────────────────────────
 
 def label(text: str = "", role: Optional[str] = None, wrap: bool = True) -> QtWidgets.QLabel:
@@ -222,7 +234,7 @@ class InstallGuide(QtWidgets.QWidget):
         self.current = -1
 
     def set_product(self, product: str, icon_path) -> None:
-        self.title.setText(tr("Installing {product}").format(product=product))
+        self.title.setText(tr("Installing {product}").format(product=product_name(product)))
         self.icon.setPixmap(gui_style.pixmap(icon_path, 44))
 
     def update_status(self, message: str) -> None:
@@ -278,6 +290,7 @@ class Signals(QtCore.QObject):
     winver = QtCore.Signal(str, str)            # Windows version for Logos, indexer
     install_finished = QtCore.Signal()
     failed = QtCore.Signal(str)                 # an unexpected error in a background task
+    task_done = QtCore.Signal()                 # a background task returned
 HOME, SETTINGS, TROUBLE = 0, 1, 2
 
 
@@ -329,6 +342,7 @@ class MainWindow(GuiApp):
         sig.winver.connect(self._show_winver)
         sig.install_finished.connect(self._install_finished)
         sig.failed.connect(self._task_failed)
+        sig.task_done.connect(self._task_done)
 
         self.config_updated_hooks.append(self._refresh_later)
         self.refresh()
@@ -339,6 +353,10 @@ class MainWindow(GuiApp):
         self._poll_logos()
         self.start_thread(self._load_integrations)
         self.start_thread(self._check_updates)
+        raw = self.conf._raw
+        if raw.install_dir and raw.faithlife_product and Path(raw.install_dir).is_dir():
+            # Shortcuts made by an older release may still point at an old icon.
+            self.start_thread(installer.copy_icons, raw.install_dir, raw.faithlife_product)
         self.start_thread(desktop_integrations.offer, app=self)
         self.show_view(FULL if self.conf.gui_full_view and self.is_installed() else SIMPLE)
         if show:
@@ -360,6 +378,8 @@ class MainWindow(GuiApp):
             except Exception as error:  # top of the thread: nothing above us to handle it
                 logging.exception(f"Background task {name} failed")
                 self.signals.failed.emit(str(error) or type(error).__name__)
+            finally:
+                self.signals.task_done.emit()
         name = getattr(task, "__name__", str(task))
         guarded.__name__ = name
         return super().start_thread(guarded, daemon_bool=daemon_bool)
@@ -369,6 +389,18 @@ class MainWindow(GuiApp):
         self.status_gui.set_status(message, percent)
         if self._installing:
             self.guide.update_status(message)
+            if message.startswith("Install Complete"):
+                # Done, whichever way the install was started (one click or Choose options).
+                # Anything asked afterwards (the integrations offer) shows over the Run window.
+                self._install_finished()
+
+    def _task_done(self) -> None:
+        # A task that ended on a message without a percentage would leave the bar
+        # animating forever; keep the message, stop the animation.
+        bar = self.status_gui.progress
+        if bar.maximum() == 0 and not self._installing:
+            bar.setRange(0, 100)
+            bar.setVisible(False)
 
     def _task_failed(self, error: str) -> None:
         self.status_gui.set_status(tr("Something went wrong: {error}").format(error=error), None)
@@ -379,7 +411,15 @@ class MainWindow(GuiApp):
 
     # ── Views ──
     def show_view(self, view: int) -> None:
+        # Only the visible page counts towards the window's minimum size; otherwise the
+        # full view's size would stop the simple window shrinking back.
+        policy = QtWidgets.QSizePolicy.Policy
+        for i in range(self.stack.count()):
+            page = self.stack.widget(i)
+            if page is not None:
+                page.setSizePolicy(*(2 * (policy.Preferred if i == view else policy.Ignored,)))
         self.stack.setCurrentIndex(view)
+        self.stack.updateGeometry()
         if view == FULL:
             self.root.resize(max(self.root.width(), 1040), max(self.root.height(), 700))
         elif view == SIMPLE:
@@ -390,11 +430,17 @@ class MainWindow(GuiApp):
         page = self.stack.widget(SIMPLE)
         if page is None:
             return
-        page.adjustSize()
-        height = page.sizeHint().height()
+        width = 720
+        # Measure without resizing the page itself (adjustSize() here left the page
+        # narrower than the window until the next resize).
+        layout = page.layout()
+        if layout is not None and layout.hasHeightForWidth():
+            height = layout.heightForWidth(width)
+        else:
+            height = page.sizeHint().height()
         if not self.status_gui.isHidden():
             height += self.status_gui.sizeHint().height()
-        self.root.resize(720, max(height, 260))
+        self.root.resize(width, max(height, 260))
 
     def _build_simple(self) -> QtWidgets.QWidget:
         page = QtWidgets.QWidget()
@@ -458,7 +504,7 @@ class MainWindow(GuiApp):
         rb.addStretch(1)
         v.addWidget(self.s_run_box)
 
-        self.s_hint = label(tr("The arrow next to Run starts Logos with today's reading, a passage or a "
+        self.s_hint = label(tr("The arrow next to Run opens your Bible, today's reading or a "
                                "saved layout. While Logos runs, Ou Dedetai sits in the system tray."), "muted")
         v.addWidget(self.s_hint)
         self.s_full_default = QtWidgets.QCheckBox(
@@ -549,7 +595,16 @@ class MainWindow(GuiApp):
         self.show_view(FULL)
         self.show_page(page)
 
-    def _build_reading_card(self) -> QtWidgets.QFrame:
+    def _build_reading_card(self) -> QtWidgets.QWidget:
+        """Holder for the reading cards: a reading plan, then today's devotional."""
+        box = QtWidgets.QWidget()
+        self.reading_cards = QtWidgets.QVBoxLayout(box)
+        self.reading_cards.setContentsMargins(0, 0, 0, 0)
+        self.reading_cards.setSpacing(10)
+        box.setVisible(False)
+        return box
+
+    def _plan_card(self, heading: str, plan: dict, progress: bool) -> QtWidgets.QFrame:
         frame = QtWidgets.QFrame()
         frame.setObjectName("reading")
         v = QtWidgets.QVBoxLayout(frame)
@@ -559,18 +614,29 @@ class MainWindow(GuiApp):
         head.setObjectName("readinghead")
         hv = QtWidgets.QVBoxLayout(head)
         hv.setContentsMargins(12, 8, 12, 8)
-        t = label(tr("Today's reading"))
+        t = label(heading)
         t.setStyleSheet("font-weight: 600;")
         hv.addWidget(t)
-        self.reading_plan = label("", "muted")
-        hv.addWidget(self.reading_plan)
+        hv.addWidget(label(plan.get("title", ""), "muted"))
         v.addWidget(head)
         body = QtWidgets.QWidget()
-        self.reading_body = QtWidgets.QVBoxLayout(body)
-        self.reading_body.setContentsMargins(12, 8, 12, 10)
-        self.reading_body.setSpacing(4)
+        bv = QtWidgets.QVBoxLayout(body)
+        bv.setContentsMargins(12, 8, 12, 10)
+        bv.setSpacing(4)
+        for reading in plan.get("readings", [])[:5]:
+            bv.addWidget(button(reading.get("label") or reading.get("short") or "", "link",
+                                lambda url=reading.get("url"): self.open_link(url)))
+        if progress:
+            if plan.get("status"):
+                bv.addWidget(label(plan["status"], "muted"))
+            bar = QtWidgets.QProgressBar()
+            bar.setRange(0, 100)
+            bar.setValue(int(round(100 * float(plan.get("progress") or 0))))
+            bar.setTextVisible(False)
+            bar.setMaximumHeight(6)
+            bar.setAccessibleName(tr("Plan progress"))
+            bv.addWidget(bar)
         v.addWidget(body)
-        frame.setVisible(False)
         return frame
 
     def _build_home(self) -> QtWidgets.QWidget:
@@ -798,29 +864,30 @@ class MainWindow(GuiApp):
     # ── Menus ──
     def _fill_run_menu(self, menu: QtWidgets.QMenu) -> None:
         menu.clear()
-        default = menu.addAction(tr("Start as usual"))
-        default.triggered.connect(self.run_logos)
+        menu.addAction(tr("Start as usual")).triggered.connect(self.run_logos)
         menu.addSeparator()
+        bible = menu.addAction(tr("Bible (your preferred Bible)"))
+        bible.triggered.connect(lambda _=False: self.open_link(PREFERRED_BIBLE))
         for plan in self._plans[:3]:
             for reading in (plan.get("readings") or [])[:2]:
                 if reading.get("url"):
                     a = menu.addAction(tr("Today's reading: {reading}").format(
                         reading=reading.get("label") or plan.get("title", "")))
-                    a.triggered.connect(lambda _=False, url=reading["url"]: self.open_in_logos(
-                        lambda: desktop_integrations.open_url(url)))
-        passage = menu.addAction(tr("Open a passage…"))
-        passage.triggered.connect(self.ask_passage)
-        passage.setEnabled(desktop_integrations.is_installed())
+                    a.triggered.connect(lambda _=False, url=reading["url"]: self.open_link(url))
         layouts = menu.addMenu(tr("Saved layouts"))
-        if self._layouts:
-            for name in self._layouts:
-                a = layouts.addAction(name)
-                a.triggered.connect(lambda _=False, n=name: self.open_in_logos(
-                    lambda: desktop_integrations.open_layout(n), wait_for_com=True))
-        else:
+        names = [n for n in self._layouts if n.lower() != BLANK_LAYOUT.lower()]
+        for name in names:
+            layouts.addAction(name).triggered.connect(lambda _=False, n=name: self.open_layout(n))
+        if not names:
             empty = layouts.addAction(tr("None found (needs the desktop integrations)")
                                       if not desktop_integrations.is_installed() else tr("None saved yet"))
             empty.setEnabled(False)
+        blank = next((n for n in self._layouts if n.lower() == BLANK_LAYOUT.lower()), None)
+        b = menu.addAction(tr("Blank (no panels open)") if blank else
+                           tr("Blank: save an empty layout named “Blank” in Logos first"))
+        b.setEnabled(blank is not None)
+        if blank:
+            b.triggered.connect(lambda _=False: self.open_layout(blank))
         quick = menu.addMenu(tr("Quick Start layouts"))
         unavailable = quick.addAction(tr("Passage Study (not available yet)"))
         unavailable.setEnabled(False)
@@ -841,7 +908,7 @@ class MainWindow(GuiApp):
             a.setEnabled(False)
             return
         for key, slot in (("wine", self.update_wine), ("app", self.update_to_latest_lli_release),
-                          ("logos", self.update_faithlife_product)):
+                          ("logos", self.update_faithlife_product), ("aks", self.update_akousousin)):
             enabled, text = self._updates.get(key, (False, ""))
             if text:
                 a = menu.addAction(text)
@@ -868,13 +935,13 @@ class MainWindow(GuiApp):
             b.setChecked(b.text() == product)
             b.blockSignals(False)
         if installed:
-            title = f"{product} Bible Software" if product == "Logos" else product
+            title = product_name(product)
             state = tr("Running") if self.logos.logos_state == State.RUNNING else (
                 tr("Starting…") if self.logos.logos_state == State.STARTING else tr("Ready"))
             version = self.conf.installed_faithlife_product_release or ""
             state_line = f"{state} · {tr('version {version}').format(version=version)}" if version else state
         else:
-            title = tr("Install {product} on Linux").format(product=product)
+            title = tr("Install {product}").format(product=product_name(product))
             state_line = tr("Not installed yet")
         self.s_icon.setPixmap(gui_style.pixmap(icon, 64))
         self.h_icon.setPixmap(gui_style.pixmap(icon, 56))
@@ -992,6 +1059,8 @@ class MainWindow(GuiApp):
             self.start_thread(self._load_winver)
 
     def _load_winver(self) -> None:
+        if wine_settings.configured_wine_binary(self) is None:
+            return  # nothing to ask yet (and asking would prompt for a Wine build)
         self.signals.winver.emit(wine.get_win_version(self, "logos") or "",
                                  wine.get_win_version(self, "indexer") or "")
 
@@ -1047,27 +1116,17 @@ class MainWindow(GuiApp):
             self.checks_box.addWidget(row(title, str(detail), right, left))
 
     def _render_reading(self) -> None:
-        clear_layout(self.reading_body)
-        plan = next((p for p in self._plans if p.get("readings")), None)
-        self.reading_card.setVisible(plan is not None)
-        if plan is None:
-            return
-        self.reading_plan.setText(plan.get("status") or plan.get("title", ""))
-        title = label(plan.get("title", ""))
-        title.setStyleSheet("font-weight: 600;")
-        self.reading_body.addWidget(title)
-        for reading in plan.get("readings", [])[:5]:
-            b = button(reading.get("label") or reading.get("short") or "", "link",
-                       lambda url=reading.get("url"): self.open_in_logos(lambda: desktop_integrations.open_url(url)))
-            self.reading_body.addWidget(b)
-        bar = QtWidgets.QProgressBar()
-        bar.setRange(0, 100)
-        bar.setValue(int(round(100 * float(plan.get("progress") or 0))))
-        bar.setTextVisible(False)
-        bar.setMaximumHeight(6)
-        bar.setAccessibleName(tr("Plan progress"))
-        self.reading_body.addWidget(bar)
-        self.reading_body.addWidget(label(tr("Mark readings done in Logos."), "muted"))
+        clear_layout(self.reading_cards)
+        with_readings = [p for p in self._plans if p.get("readings")]
+        plan = next((p for p in with_readings if p.get("kind") != "devotional"), None)
+        devotional = next((p for p in with_readings if p.get("kind") == "devotional"), None)
+        if plan:
+            self.reading_cards.addWidget(self._plan_card(tr("Reading plan"), plan, progress=True))
+        if devotional:
+            self.reading_cards.addWidget(self._plan_card(tr("Today's devotional"), devotional, progress=False))
+        if plan:
+            self.reading_cards.addWidget(label(tr("Mark readings done in Logos."), "muted"))
+        self.reading_card.setVisible(bool(plan or devotional))
 
     # ── Background work ──
     def _poll_logos(self) -> None:
@@ -1128,10 +1187,24 @@ class MainWindow(GuiApp):
                 updates["logos"] = (not latest, tr("Update Logos") if not latest else tr("Logos is up to date"))
             except UPDATE_CHECK_ERRORS:
                 logging.debug("Logos update check failed", exc_info=True)
+        if system.akousousin_installed():
+            newer = system.akousousin_update(self)
+            updates["aks"] = (newer is not None, tr("Update Akousousin to {version}").format(version=newer)
+                              if newer else tr("Akousousin is up to date"))
         self.signals.updates.emit(updates)
 
     def _updates_checked(self, updates: dict) -> None:
         self._updates = updates
+        self._show_akousousin()
+
+    def _show_akousousin(self) -> None:
+        if not system.akousousin_installed():
+            self.p_speech.setText(tr("Install"))
+            self.p_speech.setEnabled(not network.is_offline())
+            return
+        can, _ = self._updates.get("aks", (False, ""))
+        self.p_speech.setText(tr("Update") if can else tr("Up to date"))
+        self.p_speech.setEnabled(can)
 
     def open_in_logos(self, action: Callable[[], object], wait_for_com: bool = False) -> None:
         """Start Logos if needed, then do something in it (open a link or layout)."""
@@ -1147,11 +1220,21 @@ class MainWindow(GuiApp):
             action()
         self.start_thread(run)
 
-    def ask_passage(self) -> None:
-        text, ok = QtWidgets.QInputDialog.getText(self.root, tr("Open a passage"),
-                                                  tr("Bible reference, e.g. John 3:16 or Rom 8:28-30"))
-        if ok and text.strip():
-            self.open_in_logos(lambda: desktop_integrations.open_reference(text.strip()))
+    def open_link(self, url: Optional[str]) -> None:
+        """Open a Logos link (logosref:, logosres:…), starting Logos first if needed."""
+        if url:
+            self.open_in_logos(lambda: self._send_link(url))
+
+    def _send_link(self, url: str) -> None:
+        if desktop_integrations.is_installed() and desktop_integrations.open_url(url):
+            return
+        # Without the integrations: hand the link to Logos.exe, as the link handler does.
+        with open(os.devnull, "w") as devnull:
+            wine.run_wine_process(self, self.conf.wine64_binary, devnull, devnull,
+                                  exe=self.conf.logos_exe_windows_path, exe_args=[url])
+
+    def open_layout(self, name: str) -> None:
+        self.open_in_logos(lambda: desktop_integrations.open_layout(name), wait_for_com=True)
 
     # ── Actions (existing operations) ──
     def _set_product(self, product: str) -> None:
@@ -1187,6 +1270,7 @@ class MainWindow(GuiApp):
         self.start_thread(install)
 
     def _install_finished(self) -> None:
+        self._installing = False
         self.show_view(SIMPLE)
         self.refresh()
 
@@ -1244,7 +1328,10 @@ class MainWindow(GuiApp):
         self.start_thread(backup.restore, app=self)
 
     def update_akousousin(self) -> None:
-        self.start_thread(system.update_akousousin, self)
+        def run():
+            system.update_akousousin(self)
+            self._check_updates()
+        self.start_thread(run)
 
     def update_wine_config(self) -> None:
         def run():
@@ -1382,12 +1469,13 @@ class TrayController(QtCore.QObject):
         head = menu.addAction(tr("Logos is running") if state == State.RUNNING else tr("Logos is starting…"))
         head.setEnabled(False)
         w = self.window
+        menu.addAction(tr("Bible (your preferred Bible)")).triggered.connect(
+            lambda _=False: w.start_thread(w._send_link, PREFERRED_BIBLE))
         for plan in w._plans[:2]:
             for reading in (plan.get("readings") or [])[:1]:
                 if reading.get("url"):
                     a = menu.addAction(tr("Today's reading: {reading}").format(reading=reading.get("label", "")))
-                    a.triggered.connect(lambda _=False, url=reading["url"]: w.start_thread(
-                        desktop_integrations.open_url, url))
+                    a.triggered.connect(lambda _=False, url=reading["url"]: w.start_thread(w._send_link, url))
         if w._layouts:
             layouts = menu.addMenu(tr("Open layout"))
             for name in w._layouts:

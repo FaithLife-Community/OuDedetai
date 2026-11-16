@@ -258,20 +258,45 @@ def check_wine_version_and_branch(release_version: Optional[str], test_binary,
     return True, "None"
 
 
+# Logos needs neither Wine Mono (.NET Framework) nor Wine Gecko (Internet Explorer), and
+# Wine asks to download them whenever it creates or updates a prefix. Leaving both DLLs
+# out of every Wine run means those prompts never appear.
+NO_MONO_GECKO = "mscoree=;mshtml="
+
+
+def prepare_prefix(app: App, wine64_binary: Optional[str] = None, init: bool = False) -> None:
+    """Create (init) or update the prefix without Wine's pop-ups.
+
+    Run with no display, so wineboot's "The Wine configuration is being updated" window
+    can't appear; if that fails (some Wine builds need a display), run normally."""
+    from ou_dedetai.control import leftover_wine
+    binary = wine64_binary or app.conf.wine64_binary
+    command = [binary, "wineboot", "--init" if init else "--update"]
+    # If Wine is already running here (Logos open), don't wait for it to exit.
+    busy = bool(leftover_wine(app.conf.wine_prefix))
+    env = get_wine_env(app)
+    headless = {k: v for k, v in env.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
+    for attempt in (headless, env):
+        logging.debug(f"Running: {' '.join(command)} (display: {'DISPLAY' in attempt or 'WAYLAND_DISPLAY' in attempt})")
+        try:
+            result = subprocess.run(command, env=attempt, capture_output=True, text=True, timeout=900)
+        except (OSError, subprocess.SubprocessError) as error:
+            logging.warning(f"wineboot failed: {error}")
+            continue
+        logging.debug(f"wineboot exited {result.returncode}: {result.stderr[-2000:]}")
+        # Let the prefix's processes (explorer started without a display) finish.
+        if not busy:
+            wineserver_wait(app)
+        if result.returncode == 0:
+            return
+    if init:
+        raise subprocess.CalledProcessError(1, command)
+
+
 def initializeWineBottle(wine64_binary: str, app: App):
     app.status("Initializing wine bottle…")
     logging.debug(f"{wine64_binary=}")
-    # Avoid wine-mono window
-    wine_dll_override="mscoree="
-    logging.debug(f"Running: {wine64_binary} wineboot --init")
-    run_wine_during_install(
-        app=app,
-        wine_binary=wine64_binary,
-        exe='wineboot',
-        exe_args=['--init'],
-        init=True,
-        additional_wine_dll_overrides=wine_dll_override
-    )
+    prepare_prefix(app, wine64_binary, init=True)
 
 
 def get_win_version(app: App, exe: str) -> Optional[str]:
@@ -1025,10 +1050,13 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     winepath = Path(app.conf.wine_binary)
     if winepath.name != 'wine64':  # AppImage
         winepath = Path(app.conf.wine64_binary)
+    overrides = app.conf.wine_dll_overrides
+    if "mscoree" not in overrides and "mshtml" not in overrides:
+        overrides = ";".join(o for o in (overrides, NO_MONO_GECKO) if o)
     wine_env_defaults = {
         'WINE': str(winepath),
         'WINEDEBUG': app.conf.wine_debug,
-        'WINEDLLOVERRIDES': app.conf.wine_dll_overrides,
+        'WINEDLLOVERRIDES': overrides,
         'WINELOADER': str(winepath),
         'WINEPREFIX': app.conf.wine_prefix,
         'WINESERVER': app.conf.wineserver_binary,
@@ -1084,3 +1112,7 @@ def setup_wine(app: App):
         app.conf.wine_appimage_path = None
 
     create_wine_symlinks(app)
+    if (Path(app.conf.wine_prefix) / "system.reg").is_file():
+        # A different Wine updates the prefix on first use; do it now, quietly.
+        app.status("Updating the Wine prefix for this Wine build…")
+        prepare_prefix(app)

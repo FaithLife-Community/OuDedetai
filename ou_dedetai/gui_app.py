@@ -374,9 +374,8 @@ class InstallerWindow(QtCore.QObject):
         self.gui.wine_dropdown.blockSignals(False)
         self.gui.skipdeps_checkbox.blockSignals(False)
 
-        self.root.setWindowIcon(
-            QtGui.QIcon(str(self.conf.faithlife_product_icon_path))
-        )
+        # The window keeps Ou Dedetai's icon; Faithlife's product icon appears only
+        # beside the product name.
         self.set_input_widgets_state("enabled", [self.gui.okay_button])
 
     def _post_dropdown_change(self):
