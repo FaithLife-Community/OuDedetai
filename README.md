@@ -4,6 +4,9 @@
 
 # Ou Dedetai
 
+> **You're on the `next` branch:** a preview of the next version for testing and review. See
+> [NEXT.md](NEXT.md) for what's new, why, the latest test build and the release plan.
+
 >Remember Jesus Christ, risen from the dead, the offspring of David, as preached in my gospel, for which I am suffering, bound with chains as a criminal. But **the word** of God **is not bound!**
 >
 >ἀλλʼ **ὁ λόγος** τοῦ θεοῦ **οὐ δέδεται**  

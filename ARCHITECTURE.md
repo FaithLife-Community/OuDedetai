@@ -9,7 +9,13 @@
 - UI implementations:
   - [ou_dedetai/cli.py](ou_dedetai/cli.py) — `CLI`
   - [ou_dedetai/tui_app.py](ou_dedetai/tui_app.py) — `TUI` (curses/dialog)
-  - [ou_dedetai/gui_app.py](ou_dedetai/gui_app.py) + [ou_dedetai/gui.py](ou_dedetai/gui.py) — `GuiApp` (Tkinter)
+  - [ou_dedetai/gui_main.py](ou_dedetai/gui_main.py) — `MainWindow` (Qt/PySide6): simple view,
+    install guide, full view (Home/Settings/Troubleshooting), tray. Background work reports back
+    through the `Signals` object; see [NEXT.md](NEXT.md).
+  - [ou_dedetai/gui_app.py](ou_dedetai/gui_app.py) + [ou_dedetai/gui.py](ou_dedetai/gui.py) — `GuiApp`
+    base (prompts, licence dialog) and the "Choose options" installer dialog;
+    [ou_dedetai/gui_style.py](ou_dedetai/gui_style.py) — palette and stylesheet;
+    [ou_dedetai/i18n](ou_dedetai/i18n) — translations
 - [ou_dedetai/main.py](ou_dedetai/main.py) — entry point / dispatcher.
 - Domain modules:
   - [ou_dedetai/installer.py](ou_dedetai/installer.py) — install orchestration (`ensure_*` functions)
@@ -19,7 +25,12 @@
   - [ou_dedetai/config.py](ou_dedetai/config.py) — Legacy/Persistent/Ephemeral config dataclasses
   - [ou_dedetai/constants.py](ou_dedetai/constants.py) — paths, RUNMODE, version
   - [ou_dedetai/database.py](ou_dedetai/database.py) — SQLite context managers
-  - Others: `network.py`, `backup.py`, `control.py`, `repair.py`, `utils.py`, `msg.py`
+  - [ou_dedetai/wine_settings.py](ou_dedetai/wine_settings.py) — the Wine settings Ou Dedetai applies,
+    with reasons, and a read-back from the prefix's registry files
+  - [ou_dedetai/desktop_integrations.py](ou_dedetai/desktop_integrations.py) — offers/installs the
+    Logos desktop integrations and calls their backend (a separate program)
+  - Others: `network.py` (incl. the offline gate), `backup.py`, `control.py` (incl. purge),
+    `repair.py`, `utils.py`, `msg.py`
 - **Version source of truth:** `ou_dedetai.constants.LLI_CURRENT_VERSION` —
   [pyproject.toml](pyproject.toml) reads the package version from this attribute.
 
