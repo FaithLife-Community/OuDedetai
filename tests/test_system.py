@@ -57,9 +57,11 @@ class TestAkousousinInstall(unittest.TestCase):
         self.app.exit.assert_not_called()
 
     def test_default_bundle_is_installed_quietly_before_registration(self):
-        system.ensure_akousousin(self.app)
+        with patch.object(network, '_get_release_data', return_value=network.SoftwareReleaseInfo(
+                'beta-123', 'https://example/package')) as lookup:
+            system.ensure_akousousin(self.app)
         self.assertTrue(self.logos_reuse_download.call_args.args[1].endswith('Akousousin-Linux-x86_64.tar.gz'))
-        self.app.conf._network._repo_version.assert_called_once_with(
+        lookup.assert_called_once_with(
             "jg00dman/akousousin", tag="latest", asset_name=r"Akousousin\-Linux\-x86_64\.tar\.gz",
         )
         self.assertEqual(self.run_command.call_count, 2)
@@ -88,9 +90,9 @@ class TestAkousousinInstall(unittest.TestCase):
         self.app.exit.assert_not_called()
 
     def test_no_stable_release_is_reported_not_fatal(self):
-        self.app.conf._network._repo_version.side_effect = RuntimeError(
-            "Could not retrieve releases from GitHub: jg00dman/akousousin")
-        self.assertFalse(system.ensure_akousousin(self.app))
+        with patch.object(network, '_get_release_data', side_effect=RuntimeError(
+                "Could not retrieve releases from GitHub: jg00dman/akousousin")):
+            self.assertFalse(system.ensure_akousousin(self.app))
         self.app.exit.assert_not_called()
         self.run_command.assert_not_called()
         self.assertIn("stable Akousousin release", self.app.status.call_args.args[0])
@@ -155,12 +157,16 @@ class TestAkousousinUpdate(unittest.TestCase):
     def test_newer_release_detected(self):
         self.launcher.parent.mkdir(parents=True, exist_ok=True)
         self.launcher.touch()
-        self.app.conf._network._repo_version.return_value = network.SoftwareReleaseInfo('v0.9.0', 'u')
+        latest = network.SoftwareReleaseInfo('v0.9.0', 'u')
         with patch.object(system, 'akousousin_version', return_value='0.8.2'), \
-                patch.object(network, 'is_offline', return_value=False):
+                patch.object(network, 'is_offline', return_value=False), \
+                patch.object(network, '_get_release_data', return_value=latest) as fresh:
             self.assertEqual(system.akousousin_update(self.app), '0.9.0')
+        fresh.assert_called_once()  # not the 12-hour cache
+        self.app.conf._network._repo_version.assert_not_called()
         with patch.object(system, 'akousousin_version', return_value='0.9.0'), \
-                patch.object(network, 'is_offline', return_value=False):
+                patch.object(network, 'is_offline', return_value=False), \
+                patch.object(network, '_get_release_data', return_value=latest):
             self.assertIsNone(system.akousousin_update(self.app))
 
     def test_update_refreshes_registration_after_install(self):

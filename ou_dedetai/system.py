@@ -1269,8 +1269,8 @@ def ensure_akousousin(app: App, update: bool = False) -> bool:
     try:
         if update or not launcher.is_file():
             filename = AKOUSOUSIN_TARBALL
-            # Explicit updates must bypass the cached release lookup.
-            lookup = network._get_release_data if update else app.conf._network._repo_version
+            # Always the current release (the shared cache can be 12 hours old).
+            lookup = network._get_release_data
             try:
                 release = lookup("jg00dman/akousousin", tag="latest", asset_name=re.escape(filename))
             except Exception as error:
@@ -1315,12 +1315,13 @@ def akousousin_version() -> Optional[str]:
 def akousousin_update(app: App) -> Optional[str]:
     """The latest release's version if it's newer than the installed one, else None.
 
-    Uses the cached release lookup, so it's cheap to call when building a menu."""
+    Asks GitHub each time (one request, from the background update check): the shared
+    release cache lasts 12 hours, so a new Akousousin release went unnoticed for that long."""
     if not akousousin_installed() or network.is_offline():
         return None
     try:
-        release = app.conf._network._repo_version("jg00dman/akousousin", tag="latest",
-                                                  asset_name=re.escape(AKOUSOUSIN_TARBALL))
+        release = network._get_release_data("jg00dman/akousousin", tag="latest",
+                                            asset_name=re.escape(AKOUSOUSIN_TARBALL))
     except (requests.RequestException, OSError, ValueError, LookupError) as error:
         logging.debug(f"Akousousin update check failed: {error}")
         return None
