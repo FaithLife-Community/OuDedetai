@@ -327,3 +327,13 @@ class TestAppImageRuntime(unittest.TestCase):
             self.assertTrue(system.appimage_needs_extract(str(self.appimage)))
         with patch.object(system, "appimage_runs", side_effect=self.runs(True, True)):
             self.assertFalse(system.appimage_needs_extract(str(self.appimage)))
+
+
+class TestWineReleaseOfUnpackingAppImage(unittest.TestCase):
+    def test_version_read_with_extract_and_run(self):
+        from ou_dedetai import wine
+        with patch.object(system, "appimage_needs_extract", return_value=True), \
+                patch("subprocess.check_output", return_value="wine-11.22 (oinos)") as run:
+            release, _ = wine.get_wine_release("/x/wine.AppImage")
+        self.assertEqual(run.call_args.kwargs["env"]["APPIMAGE_EXTRACT_AND_RUN"], "1")
+        self.assertEqual(release.release, "oinos")

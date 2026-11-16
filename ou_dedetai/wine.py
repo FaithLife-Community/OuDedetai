@@ -59,7 +59,10 @@ def get_devel_or_stable(version: str) -> str:
 def get_wine_release(binary: str) -> tuple[Optional[WineRelease], str]:
     cmd = [binary, "--version"]
     try:
-        version_string = subprocess.check_output(cmd, encoding='utf-8').strip()
+        env = system.fix_ld_library_path(None)
+        if str(binary).lower().endswith(".appimage") and system.appimage_needs_extract(str(binary)):
+            env["APPIMAGE_EXTRACT_AND_RUN"] = "1"  # same as every other Wine run (see get_wine_env)
+        version_string = subprocess.check_output(cmd, encoding='utf-8', env=env).strip()
         logging.debug(f"Version string: {str(version_string)}")
         branch: Optional[str]
         try:
