@@ -137,6 +137,14 @@ def get_support(app: App) -> str:
         ):
             zip.write(app.conf._faithlife_crash_log)
 
+        try:
+            from . import wine_settings
+            zip.writestr("wine-settings.txt", wine_settings.format_report(
+                wine_settings.report_for_app(app), wine_settings.renderer_summary(app)
+            ))
+        except Exception:
+            logging.exception("Failed to add the Wine settings report to the support package")
+
         if Path("/etc/os-release").exists():
             zip.write("/etc/os-release")
         run_commands = [

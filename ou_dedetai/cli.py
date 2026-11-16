@@ -58,6 +58,12 @@ class CLI(App):
     def update_wine_config(self):
         installer.update_wine_config(self)
 
+    def show_wine_config(self):
+        from . import wine_settings
+        print(wine_settings.format_report(
+            wine_settings.report_for_app(self), wine_settings.renderer_summary(self)
+        ), end="")
+
     def install_icu(self):
         wine.enforce_icu_data_files(self)
 
