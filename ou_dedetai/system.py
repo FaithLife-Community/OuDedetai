@@ -1,6 +1,7 @@
 import re
 
 import distro
+import functools
 import json
 import logging
 import os
@@ -886,6 +887,79 @@ WINETRICKS_TOOLS = {
     "unzip": {"apt": "unzip", "dnf": "unzip", "zypper": "unzip", "pacman": "unzip",
               "pamac": "unzip", "apk": "unzip"},
 }
+
+
+# What a Wine AppImage needs to mount itself, per package manager. Older AppImage
+# runtimes need libfuse 2; ours (uruntime) need only fusermount, which comes with it.
+FUSE_PACKAGES = {"dnf": "fuse-libs", "zypper": "libfuse2", "pacman": "fuse2", "pamac": "fuse2", "apk": "fuse"}
+
+
+def _fuse_package(manager: str) -> str:
+    if manager != "apt":
+        return FUSE_PACKAGES.get(manager, "fuse")
+    # Ubuntu 24.04+ and Debian 13+ renamed it.
+    try:
+        known = subprocess.run(["apt-cache", "show", "libfuse2t64"], capture_output=True, timeout=30,
+                               env=fix_ld_library_path(None)).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        known = False
+    return "libfuse2t64" if known else "libfuse2"
+
+
+@functools.lru_cache(maxsize=8)
+def appimage_runs(path: str, extract: bool = False) -> bool:
+    """Whether this Wine AppImage starts here (`--version`), mounted with FUSE or,
+    with extract, unpacking itself (APPIMAGE_EXTRACT_AND_RUN). Cached per run."""
+    env = fix_ld_library_path(None)
+    if extract:
+        env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
+    try:
+        result = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=180, env=env)
+    except (OSError, subprocess.SubprocessError) as error:
+        logging.warning(f"Couldn't run {path}: {error}")
+        return False
+    if result.returncode != 0:
+        logging.info(f"{Path(path).name} --version (extract={extract}) exited {result.returncode}: "
+                     f"{(result.stderr or result.stdout).strip()[-300:]}")
+    return result.returncode == 0
+
+
+def appimage_needs_extract(path: str) -> bool:
+    """Run this AppImage by unpacking it: it can't mount itself, but can unpack."""
+    return Path(path).is_file() and not appimage_runs(path) and appimage_runs(path, extract=True)
+
+
+def ensure_appimage_runtime(app: App, path: str) -> None:
+    """Called when a Wine AppImage becomes the runner. Ou Dedetai no longer installs
+    system packages up front; an AppImage that can't mount itself gets its FUSE package
+    offered here (only that one), or, on image-based systems or if declined, runs by
+    unpacking itself each time instead."""
+    if not Path(path).is_file() or appimage_runs(path):
+        return
+    package_manager = None if is_image_based_os() else get_package_manager()
+    if package_manager is not None:
+        manager = Path(package_manager.install[0]).name
+        package = _fuse_package(manager)
+        install = ["pacman", "-S", "--needed", "--noconfirm"] if manager == "pacman" else package_manager.install
+        if app.approve(
+            f"Install {package} so this Wine AppImage can run?",
+            "AppImages mount themselves with FUSE, which isn't installed. Without it the AppImage "
+            "unpacks itself every time Wine starts, which is slower.\n\nThis runs: "
+            + " ".join(install + [package]),
+        ):
+            try:
+                run_command([app.superuser_command, *install, package])
+            except (OSError, subprocess.CalledProcessError) as error:
+                logging.warning(f"Installing {package} failed: {error}")
+            appimage_runs.cache_clear()
+            if appimage_runs(path):
+                app.status(f"Installed {package}.")
+                return
+    if appimage_runs(path, extract=True):
+        app.status("This Wine AppImage will unpack itself each time it starts (no FUSE here).")
+    else:
+        app.info(f"This Wine AppImage doesn't start on this system: {path}\n\n"
+                 "Choose the bundled Wine (the recommended one) instead.")
 
 
 def missing_winetricks_tools() -> list[str]:

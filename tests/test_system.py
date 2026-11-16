@@ -277,3 +277,53 @@ class TestStartupEnvironment(unittest.TestCase):
                 main.main()
             self.assertEqual(os.environ.get("DISPLAY"), ":0")
             self.assertEqual(os.environ.get("LD_LIBRARY_PATH"), "/usr/lib")
+
+
+class TestAppImageRuntime(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.appimage = Path(directory.name) / "wine.AppImage"
+        self.appimage.touch()
+        self.app = Mock()
+        self.app.superuser_command = "pkexec"
+        system.appimage_runs.cache_clear()
+        self.addCleanup(system.appimage_runs.cache_clear)
+        self.apt = system.PackageManager(install=["apt", "install", "-y"], download=[], remove=[], query=[],
+                                         query_prefix="", packages="", incompatible_packages="")
+
+    def runs(self, mounted, extracted):
+        return lambda path, extract=False: extracted if extract else mounted
+
+    def test_nothing_happens_when_it_runs(self):
+        with patch.object(system, "appimage_runs", side_effect=self.runs(True, True)), \
+                patch.object(system, "run_command") as run:
+            system.ensure_appimage_runtime(self.app, str(self.appimage))
+        self.app.approve.assert_not_called()
+        run.assert_not_called()
+
+    def test_offers_only_fuse_on_a_normal_distro(self):
+        self.app.approve.return_value = True
+        with patch.object(system, "appimage_runs", side_effect=self.runs(False, True)) as runs, \
+                patch.object(system, "is_image_based_os", return_value=False), \
+                patch.object(system, "get_package_manager", return_value=self.apt), \
+                patch.object(system, "_fuse_package", return_value="libfuse2t64"), \
+                patch.object(system, "run_command") as run:
+            runs.cache_clear = Mock()
+            system.ensure_appimage_runtime(self.app, str(self.appimage))
+        run.assert_called_once_with(["pkexec", "apt", "install", "-y", "libfuse2t64"])
+
+    def test_image_based_system_unpacks_instead(self):
+        with patch.object(system, "appimage_runs", side_effect=self.runs(False, True)), \
+                patch.object(system, "is_image_based_os", return_value=True), \
+                patch.object(system, "run_command") as run:
+            system.ensure_appimage_runtime(self.app, str(self.appimage))
+        self.app.approve.assert_not_called()
+        run.assert_not_called()
+        self.assertIn("unpack", self.app.status.call_args[0][0])
+
+    def test_needs_extract(self):
+        with patch.object(system, "appimage_runs", side_effect=self.runs(False, True)):
+            self.assertTrue(system.appimage_needs_extract(str(self.appimage)))
+        with patch.object(system, "appimage_runs", side_effect=self.runs(True, True)):
+            self.assertFalse(system.appimage_needs_extract(str(self.appimage)))

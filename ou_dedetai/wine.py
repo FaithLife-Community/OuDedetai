@@ -1092,6 +1092,11 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     if additional_wine_dll_overrides is not None:
         wine_env["WINEDLLOVERRIDES"] += ";" + additional_wine_dll_overrides
 
+    # A Wine AppImage that can't mount itself (no FUSE) unpacks itself instead.
+    appimage = Path(app.conf.wine_binary)
+    if appimage.name.lower().endswith(".appimage") and system.appimage_needs_extract(str(appimage)):
+        wine_env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
+
     updated_env = {k: wine_env.get(k) for k in wine_env_defaults.keys()}
 
     logging.debug(f"Wine env: {updated_env}")
@@ -1137,6 +1142,8 @@ def setup_wine(app: App):
         app.conf.wine_appimage_path = None
 
     create_wine_symlinks(app)
+    if app.conf.wine_appimage_path is not None:
+        system.ensure_appimage_runtime(app, str(app.conf.wine_appimage_path))
     if (Path(app.conf.wine_prefix) / "system.reg").is_file():
         # A different Wine updates the prefix on first use; do it now, quietly.
         app.status("Updating the Wine prefix for this Wine build…")
