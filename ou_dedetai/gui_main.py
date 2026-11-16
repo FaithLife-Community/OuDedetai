@@ -888,9 +888,6 @@ class MainWindow(GuiApp):
         b.setEnabled(blank is not None)
         if blank:
             b.triggered.connect(lambda _=False: self.open_layout(blank))
-        quick = menu.addMenu(tr("Quick Start layouts"))
-        unavailable = quick.addAction(tr("Passage Study (not available yet)"))
-        unavailable.setEnabled(False)
 
     def _update_menu(self) -> QtWidgets.QMenu:
         menu = QtWidgets.QMenu()

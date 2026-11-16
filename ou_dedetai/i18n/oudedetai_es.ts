@@ -192,14 +192,6 @@
       <translation>Diseños guardados</translation>
     </message>
     <message>
-      <source>Quick Start layouts</source>
-      <translation>Diseños de inicio rápido</translation>
-    </message>
-    <message>
-      <source>Passage Study (not available yet)</source>
-      <translation>Estudio de pasaje (aún no disponible)</translation>
-    </message>
-    <message>
       <source>Not installed yet</source>
       <translation>Aún no instalado</translation>
     </message>

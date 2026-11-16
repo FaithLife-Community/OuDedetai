@@ -42,8 +42,12 @@ class TestShouldOffer(unittest.TestCase):
     def test_offers_on_kde(self):
         self.assertTrue(di.should_offer(make_app(), self.kde))
 
-    def test_not_on_gnome(self):
-        env = dict(self.kde, XDG_CURRENT_DESKTOP="GNOME")
+    def test_offers_on_gnome(self):
+        env = dict(self.kde, XDG_CURRENT_DESKTOP="ubuntu:GNOME")
+        self.assertTrue(di.should_offer(make_app(), env))
+
+    def test_not_on_other_desktops(self):
+        env = dict(self.kde, XDG_CURRENT_DESKTOP="XFCE")
         self.assertFalse(di.should_offer(make_app(), env))
 
     def test_only_once(self):

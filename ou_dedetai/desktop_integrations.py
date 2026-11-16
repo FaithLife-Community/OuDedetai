@@ -1,8 +1,9 @@
 """Optional desktop integrations for Logos (FaithLife-Community/logos-desktop-integrations).
 
 On KDE Plasma these add KRunner commands, a "Look up in Logos" shortcut, reading-plan
-reminders and desktop widgets. They are a separate project; this module only offers to
-install them (once, and only on KDE Plasma) and runs their installer on request.
+reminders and desktop widgets; on GNOME, search in the Activities overview, the shortcut
+and reminders. They are a separate project; this module only offers to install them
+(once, on a supported desktop) and runs their installer on request.
 """
 import json
 import logging
@@ -30,6 +31,17 @@ def is_kde_plasma(env: Optional[Mapping[str, str]] = None) -> bool:
     return any(d.strip().upper() == "KDE" for d in desktops) or env.get("KDE_FULL_SESSION") == "true"
 
 
+def is_gnome(env: Optional[Mapping[str, str]] = None) -> bool:
+    """True when running in a GNOME session (including Ubuntu's)."""
+    env = os.environ if env is None else env
+    return any(d.strip().upper() == "GNOME" for d in env.get("XDG_CURRENT_DESKTOP", "").split(":"))
+
+
+def desktop(env: Optional[Mapping[str, str]] = None) -> Optional[str]:
+    """"plasma", "gnome", or None when the integrations don't support this desktop."""
+    return "plasma" if is_kde_plasma(env) else "gnome" if is_gnome(env) else None
+
+
 def is_installed(env: Optional[Mapping[str, str]] = None) -> bool:
     """True when the integrations' backend is installed for this user."""
     env = os.environ if env is None else env
@@ -38,28 +50,34 @@ def is_installed(env: Optional[Mapping[str, str]] = None) -> bool:
 
 
 def should_offer(app: App, env: Optional[Mapping[str, str]] = None) -> bool:
-    """Offer once, interactively, on KDE Plasma, when Logos is installed and the
-    integrations aren't."""
+    """Offer once, interactively, on KDE Plasma or GNOME, when Logos is installed and
+    the integrations aren't."""
     return (
         not app.conf.desktop_integrations_offered
         and not app.conf._overrides.assume_yes  # never install something optional unasked
-        and is_kde_plasma(env)
+        and desktop(env) is not None
         and not is_installed(env)
         and app.is_installed()
     )
 
 
 def offer(app: App) -> None:
-    """Ask once whether to install the KDE Plasma integrations; install them if wanted."""
+    """Ask once whether to install the desktop integrations; install them if wanted."""
     if not should_offer(app):
         return
     # Record the offer first, so declining (or closing the prompt) means we don't ask again.
     app.conf.desktop_integrations_offered = True
-    question = "Install the Logos integrations for KDE Plasma?"
+    if desktop() == "plasma":
+        question = "Install the Logos integrations for KDE Plasma?"
+        features = ("Logos commands in KRunner (Alt+Space), a shortcut to look up a copied Bible "
+                    "reference, reading-plan reminders, and Verse of the Day, Reading Plans and "
+                    "bookshelf widgets")
+    else:
+        question = "Install the Logos integrations for GNOME?"
+        features = ("Logos in the Activities overview search, a shortcut to look up a copied Bible "
+                    "reference, and reading-plan reminders")
     context = (
-        "These add Logos commands to KRunner (Alt+Space), a shortcut to look up a copied Bible "
-        "reference, reading-plan reminders, and Verse of the Day, Reading Plans and bookshelf "
-        f"widgets. They're a separate FaithLife Community project: {PROJECT_URL}\n\n"
+        f"These add {features}. They're a separate FaithLife Community project: {PROJECT_URL}\n\n"
         f"You can install them later with: {constants.BINARY_NAME} --install-desktop-integrations"
     )
     if app.approve(question, context):
@@ -78,8 +96,9 @@ def latest_release_tag() -> str:
 
 def install(app: App) -> bool:
     """Download the latest release and run its install.sh. Returns True on success."""
-    if not is_kde_plasma():
-        app.info("The Logos desktop integrations currently support KDE Plasma only.")
+    session = desktop()
+    if session is None:
+        app.info("The Logos desktop integrations support KDE Plasma and GNOME.")
         return False
     try:
         tag = latest_release_tag()
@@ -96,7 +115,7 @@ def install(app: App) -> bool:
             if not installers:
                 raise RuntimeError("install.sh not found in the release")
             app.status("Installing Logos desktop integrations…")
-            result = system.run_command(["sh", str(installers[0])], check=False, timeout=600,
+            result = system.run_command(["sh", str(installers[0]), f"--{session}"], check=False, timeout=600,
                                         cwd=str(installers[0].parent))
     except (requests.RequestException, OSError, tarfile.TarError, subprocess.SubprocessError, RuntimeError) as e:
         logging.error(f"Installing desktop integrations failed: {e}")
@@ -110,6 +129,11 @@ def install(app: App) -> bool:
                  + "\n".join(output.splitlines()[-15:]))
         return False
     app.status("Logos desktop integrations installed.")
+    if session == "gnome":
+        # GNOME Shell reads search providers only when it starts.
+        app.info("Logos desktop integrations installed. Log out and back in once, then search "
+                 "for a Bible reference or 'logos' in the Activities overview.")
+        return True
     if app.approve(
         "Restart the Plasma desktop now?",
         "The new widgets and search commands appear once Plasma reloads. Your panels and desktop "

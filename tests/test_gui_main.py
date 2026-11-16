@@ -89,8 +89,7 @@ class TestInstalled(GuiTestCase):
         self.assertIn("Today's reading: Hebrews 9", texts)
         layouts = next(a.menu() for a in menu.actions() if a.text() == "Saved layouts")
         self.assertEqual([a.text() for a in layouts.actions()], ["Sermon prep"])
-        quick = next(a.menu() for a in menu.actions() if a.text() == "Quick Start layouts")
-        self.assertFalse(quick.actions()[0].isEnabled())
+        self.assertNotIn("Quick Start layouts", texts)  # can't be opened yet, so not shown
 
     def test_full_view_opens_by_setting(self):
         self.window.s_full_default.setChecked(True)
