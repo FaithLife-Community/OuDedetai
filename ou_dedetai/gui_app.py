@@ -15,7 +15,7 @@ from ou_dedetai.constants import (
     PROMPT_OPTION_NEW_FILE,
 )
 
-from . import constants, gui, installer, system, utils
+from . import constants, gui, gui_style, installer, system, utils
 
 
 class GuiBridge(QtCore.QObject):
@@ -41,7 +41,7 @@ class Root(QtWidgets.QMainWindow):
         super().__init__()
         self.classname = kwargs.get("className", constants.BINARY_NAME)
         self.icon = constants.APP_IMAGE_DIR / "icon.png"
-        self.setWindowIcon(QtGui.QIcon(str(self.icon)))
+        self.setWindowIcon(gui_style.app_icon())
 
     def set_content(self, widget):
         self.setCentralWidget(widget)
@@ -51,7 +51,7 @@ class Toplevel(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setModal(True)
-        self.setWindowIcon(QtGui.QIcon(str(constants.APP_IMAGE_DIR / "icon.png")))
+        self.setWindowIcon(gui_style.app_icon())
 
 
 class GuiApp(App):
