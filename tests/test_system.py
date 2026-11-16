@@ -337,3 +337,29 @@ class TestWineReleaseOfUnpackingAppImage(unittest.TestCase):
             release, _ = wine.get_wine_release("/x/wine.AppImage")
         self.assertEqual(run.call_args.kwargs["env"]["APPIMAGE_EXTRACT_AND_RUN"], "1")
         self.assertEqual(release.release, "oinos")
+
+
+class TestWlClipboardOffer(unittest.TestCase):
+    def setUp(self):
+        self.app = Mock()
+        self.app.superuser_command = "pkexec"
+        apt = system.PackageManager(install=["apt", "install", "-y"], download=[], remove=[], query=[],
+                                    query_prefix="", packages="", incompatible_packages="")
+        p = patch.object(system, "get_package_manager", return_value=apt)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_not_offered_when_wl_paste_exists(self):
+        with patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-0"}), \
+                patch.object(system, "wl_paste_available", return_value=True):
+            system.offer_wl_clipboard(self.app)
+        self.app.approve.assert_not_called()
+
+    def test_offered_on_wayland_without_it(self):
+        self.app.approve.return_value = True
+        with patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-0"}), \
+                patch.object(system, "wl_paste_available", return_value=False), \
+                patch.object(system, "is_image_based_os", return_value=False), \
+                patch.object(system, "run_command") as run:
+            system.offer_wl_clipboard(self.app)
+        run.assert_called_once_with(["pkexec", "apt", "install", "-y", "wl-clipboard"])

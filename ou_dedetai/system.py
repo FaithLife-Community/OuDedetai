@@ -1000,6 +1000,35 @@ def offer_winetricks_tools(app: App) -> None:
         app.status(f"Couldn't install {', '.join(packages)}; winetricks may not manage everything.", 0)
 
 
+def wl_paste_available() -> bool:
+    """wl-paste on the system, or the copy Akousousin bundles (the integrations use either)."""
+    bundled = Path.home() / ".local/lib/akousousin/resources/helpers/wl-paste/bin/wl-paste"
+    return shutil.which("wl-paste") is not None or bundled.is_file()
+
+
+def offer_wl_clipboard(app: App) -> None:
+    """After installing the desktop integrations on Wayland: their look-up shortcut reads
+    highlighted text with wl-paste. If neither the system nor Akousousin has it, offer
+    just that package (it still works with copied text without it)."""
+    if not os.environ.get("WAYLAND_DISPLAY") or wl_paste_available() or is_image_based_os():
+        return
+    package_manager = get_package_manager()
+    if package_manager is None:
+        return
+    manager = Path(package_manager.install[0]).name
+    install = ["pacman", "-S", "--needed", "--noconfirm"] if manager == "pacman" else package_manager.install
+    if not app.approve(
+        "Install wl-clipboard too?",
+        "The Logos look-up shortcut uses it to read text you've highlighted. Without it, the "
+        "shortcut only reads text you've copied.\n\nThis runs: " + " ".join(install + ["wl-clipboard"]),
+    ):
+        return
+    try:
+        run_command([app.superuser_command, *install, "wl-clipboard"])
+    except (OSError, subprocess.CalledProcessError) as error:
+        logging.warning(f"Installing wl-clipboard failed: {error}")
+
+
 def install_dependencies(app: App, target_version=10):
     if app.conf.skip_install_system_dependencies:
         return

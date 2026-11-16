@@ -129,6 +129,7 @@ def install(app: App) -> bool:
                  + "\n".join(output.splitlines()[-15:]))
         return False
     app.status("Logos desktop integrations installed.")
+    system.offer_wl_clipboard(app)
     if session == "gnome":
         # GNOME Shell reads search providers only when it starts.
         app.info("Logos desktop integrations installed. Log out and back in once, then search "

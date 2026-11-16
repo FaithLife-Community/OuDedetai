@@ -101,7 +101,7 @@ Each is its own commit (see `git log 14e328b..next`), so any can be dropped or r
 | **Offline mode**: one gate in `network.py`; `--offline`, `OUDEDETAI_OFFLINE=1`, saved setting | A real promise not to connect, tested by blocking sockets | 53aea16 |
 | **No system packages during install**; `OUDEDETAI_INSTALL_DEPS=1` brings the old step back; "Install dependencies" still works on request | The bundled Wine tarball installed and ran on Kubuntu 26.04, Ubuntu 26.04 GNOME and Bazzite with none of them | 47e85ed |
 | **Image-based systems** (SteamOS, Bazzite, Silverblue): never install packages there | The root is read-only and replaced on update; the old SteamOS path ran `pacman -Syu` | 5483f6c |
-| **Packages offered only when needed**: FUSE when an AppImage runner is chosen (or the AppImage unpacks itself if FUSE can't be installed); cabextract/7-Zip/unzip when winetricks is opened | Keeps AppImages and winetricks working without installing everything up front (Nathan's concern) | ae5cade, dc2ebc7, 3a420f2 |
+| **Packages offered only when needed**: FUSE when an AppImage runner is chosen (or the AppImage unpacks itself if FUSE can't be installed); cabextract/7-Zip/unzip when winetricks is opened; wl-clipboard after installing the desktop integrations on Wayland if neither the system nor Akousousin has `wl-paste` (replaces #567) | Keeps AppImages and winetricks working without installing everything up front (Nathan's concern) | ae5cade, dc2ebc7, 3a420f2 |
 | **Default Wine channel = prerelease (oinos)**, choice in Settings and `--set-wine-channel` | Needed until oinos is a full release; to switch back at beta 17 (see release plan) | df73d80 |
 | **One-click install uses "Recommended"** | An old Wine left in the config was reused on the Deck | 5483f6c, f511bfd |
 | **FFmpeg media and Logos self-update settings** applied at install and each start with an oinos Wine | Video didn't play on a fresh prefix (GStreamer path, no system plugins) | 343db43, bce9da1 |
@@ -203,7 +203,6 @@ On a fresh install (Troubleshooting → Remove everything, or a spare machine):
 - No tray on GNOME without an AppIndicator extension (Ubuntu ships one); everything in the tray is also
   in the window.
 - Snap and Flatpak builds haven't been looked at.
-- #567 (install wl-clipboard as a dependency) would need to follow the "offer when needed" approach.
 
 ## Where the code is
 
