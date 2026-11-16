@@ -88,7 +88,16 @@ class LogosManager:
             if exe_path:
                 self.existing_processes[exe_path] = system.get_pids(exe_path)
 
+    def reap_finished(self):
+        """Collect the exit of Wine processes we started that have ended on their own
+        (e.g. the user closed Logos). Otherwise they stay as <defunct> entries while
+        Ou Dedetai runs, and tools looking for Logos.exe think it's still running."""
+        for name, process in list(self.processes.items()):
+            if process.poll() is not None:
+                del self.processes[name]
+
     def monitor(self):
+        self.reap_finished()
         if self.app.is_installed():
             self.get_logos_pids()
             try:

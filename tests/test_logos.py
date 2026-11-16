@@ -27,3 +27,16 @@ class TestMonitorForPotentialIssues(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestReapFinished(unittest.TestCase):
+    def test_ended_processes_are_collected(self):
+        from unittest import mock
+        from ou_dedetai import logos
+        manager = logos.LogosManager(mock.Mock())
+        ended, running = mock.Mock(), mock.Mock()
+        ended.poll.return_value = 0
+        running.poll.return_value = None
+        manager.processes = {"Logos.exe": ended, "Indexer.exe": running}
+        manager.reap_finished()
+        self.assertEqual(list(manager.processes), ["Indexer.exe"])
