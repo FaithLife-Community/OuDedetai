@@ -784,6 +784,14 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Permite que las actualizaciones propias de Logos terminen con este Wine en vez de fallar a medias.</translation>
     </message>
     <message>
+      <source>Video and audio through FFmpeg</source>
+      <translation>Vídeo y audio mediante FFmpeg</translation>
+    </message>
+    <message>
+      <source>Plays Logos's videos and audiobooks with the FFmpeg built into this Wine, not the system's GStreamer.</source>
+      <translation>Reproduce los vídeos y audiolibros de Logos con el FFmpeg incluido en este Wine, no con el GStreamer del sistema.</translation>
+    </message>
+    <message>
       <source>Font smoothing (RGB)</source>
       <translation>Suavizado de fuentes (RGB)</translation>
     </message>

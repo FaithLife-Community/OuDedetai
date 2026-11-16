@@ -62,12 +62,15 @@ class TestLogosUpdates(unittest.TestCase):
         app = mock.Mock()
         with mock.patch.object(wine, "run_wine_during_install") as run:
             wine.allow_logos_updates(app, "/fake/wine")
-        args = run.call_args.kwargs["exe_args"]
+        args = run.call_args_list[0].kwargs["exe_args"]
         self.assertEqual(run.call_args.kwargs["exe"], "reg")
         self.assertEqual(args[1], "HKCU\\Software\\Wine\\MSI")
         self.assertEqual(args[args.index("/v") + 1], "IgnoreFailedActions")
         self.assertEqual(args[args.index("/t") + 1], "REG_MULTI_SZ")
         self.assertEqual(args[args.index("/d") + 1], "RegisterStubMsixPackage")
+        media = run.call_args_list[1].kwargs["exe_args"]
+        self.assertEqual(media[1], "HKCU\\Software\\Wine\\MediaFoundation")
+        self.assertEqual(media[media.index("/v") + 1], "DisableGstByteStreamHandler")
 
 
 USER_REG_DXVK = """WINE REGISTRY Version 2

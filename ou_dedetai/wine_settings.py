@@ -127,6 +127,13 @@ SETTINGS: tuple[WineSetting, ...] = (
         needed_with=lambda ctx: ctx.oinos,
     ),
     WineSetting(
+        id="media",
+        title="Video and audio through FFmpeg",
+        reason="Plays Logos's videos and audiobooks with the FFmpeg built into this Wine, not the system's GStreamer.",
+        checks=(RegCheck("Software\\Wine\\MediaFoundation", "DisableGstByteStreamHandler", _dword(1), "1"),),
+        needed_with=lambda ctx: ctx.oinos,
+    ),
+    WineSetting(
         id="font-smoothing",
         title="Font smoothing (RGB)",
         reason="Subpixel text smoothing. No reason was recorded when it was added; may be removed.",

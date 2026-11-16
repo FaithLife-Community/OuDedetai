@@ -131,6 +131,23 @@ def allow_logos_updates(app: App, wine_binary: str):
     )
     if process is not None:
         process.wait()
+    use_ffmpeg_media(app, wine_binary)
+
+
+def use_ffmpeg_media(app: App, wine_binary: str):
+    """Video and audio through our builds' FFmpeg media source (oinos only).
+
+    Without it Wine uses GStreamer, which needs the system's H.264/AAC plugins
+    (gstreamer1.0-libav etc.); Ou Dedetai no longer installs system packages, so on
+    e.g. Kubuntu Logos's videos wouldn't play. This used to be the "experimental
+    media support" tick."""
+    process = run_wine_during_install(
+        app, wine_binary, exe='reg',
+        exe_args=['add', 'HKCU\\Software\\Wine\\MediaFoundation', '/v', 'DisableGstByteStreamHandler',
+                  '/t', 'REG_DWORD', '/d', '1', '/f'],
+    )
+    if process is not None:
+        process.wait()
 
 
 @dataclass
