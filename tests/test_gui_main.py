@@ -259,6 +259,20 @@ class TestBackgroundWork(GuiTestCase):
     def test_settings_tile_shows_formatted_text_not_markup(self):
         self.assertEqual(self.window.t_settings.textFormat(), QtCore.Qt.TextFormat.RichText)
 
+    def test_integrations_installed_by_the_offer_load_straight_away(self):
+        installed = iter([False, True])
+        with mock.patch.object(gui_main.desktop_integrations, "is_installed", side_effect=lambda: next(installed)), \
+                mock.patch.object(gui_main.desktop_integrations, "offer"), \
+                mock.patch.object(self.window, "_load_integrations") as load:
+            self.window._offer_integrations()
+        load.assert_called_once()
+
+    def test_integrations_reload_when_logos_closes(self):
+        self.window._last_state = gui_main.State.RUNNING
+        with mock.patch.object(self.window, "start_thread") as start, mock.patch.object(self.window, "refresh"):
+            self.window._logos_state_changed(gui_main.State.STOPPED)
+        start.assert_called_once_with(self.window._load_integrations)
+
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:
             self.window._logos_state_changed(gui_main.State.RUNNING)

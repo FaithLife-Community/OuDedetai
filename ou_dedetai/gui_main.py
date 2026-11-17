@@ -375,7 +375,7 @@ class MainWindow(GuiApp):
             self.start_thread(installer.copy_icons, raw.install_dir, raw.faithlife_product)
             # A newer Ou Dedetai (e.g. a downloaded test build) run from elsewhere: offer to install it.
             self.start_thread(installer.offer_to_replace_installed, self)
-        self.start_thread(desktop_integrations.offer, app=self)
+        self.start_thread(self._offer_integrations)
         self.show_view(FULL if self.conf.gui_full_view and self.is_installed() else SIMPLE)
         if show:
             self.root.show()
@@ -1196,8 +1196,19 @@ class MainWindow(GuiApp):
     def _logos_state_changed(self, state: State) -> None:
         self.monitor_timer.setInterval(1000 if self.is_installed() else 10000)
         if state != self._last_state:
+            if state == State.STOPPED and self._last_state == State.RUNNING:
+                # Readings may have been ticked off and layouts saved in Logos.
+                self.start_thread(self._load_integrations)
             self._last_state = state
             self.refresh()
+
+    def _offer_integrations(self) -> None:
+        """The one-time offer; if it installs them, show the reading plans and layouts now
+        rather than after a restart."""
+        before = desktop_integrations.is_installed()
+        desktop_integrations.offer(self)
+        if not before and desktop_integrations.is_installed():
+            self._load_integrations()
 
     def _load_integrations(self) -> None:
         if not desktop_integrations.is_installed():
