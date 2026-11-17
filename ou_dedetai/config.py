@@ -1,5 +1,6 @@
 import copy
 import os
+import re
 import subprocess
 from typing import Any, Optional
 from dataclasses import dataclass
@@ -1231,8 +1232,16 @@ class Config:
 
     @property
     def wine_recommended_version(self) -> str:
-        if self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL:
-            return self._wine_tarball_release.version
+        """The recommended Wine's version number ("11.22"), for comparing with the installed one."""
+        if (self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL
+                or self.is_wine_binary_in_distribution):
+            # An unpacked tarball is updated from the release channel's tarball, not the AppImage.
+            # Its tag ("11.22-oinos-pre-b1e3dff") carries the version first.
+            version = self._wine_tarball_release.version
+            found = re.match(r"\d+(?:\.\d+)+", version)
+            if found:
+                return found.group(0)
+            return version
         filename = self.wine_download_file_name
         # AppImage format: wine-[branch]_[version]-[arch]
         return filename.split("-")[1].split("_")[1]
