@@ -18,7 +18,6 @@ class TestSetWine(unittest.TestCase):
         self.app.conf.wine_download_file_name = "wine-recommended.AppImage"
 
     def test_an_appimage_replaces_a_tarball_wine(self):
-        # an install running an unpacked tarball
         for name in ("wine", "wine64", "wineserver"):
             (self.bindir / name).symlink_to("/old/distribution/bin/wine")
         self.app.conf.wine_binary = "/old/distribution/bin/wine"

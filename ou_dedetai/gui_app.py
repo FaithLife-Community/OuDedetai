@@ -659,7 +659,6 @@ class ControlWindow(GuiApp):
         self.root.event_generate(evt)
 
     def set_appimage(self, evt=None):
-        # TODO: Separate as advanced feature.
         appimage_filename = self.open_file_dialog("Wine runner (AppImage or tarball)", "AppImage tar.xz tar.gz tgz")
         if not appimage_filename:
             return
