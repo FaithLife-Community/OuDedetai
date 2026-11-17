@@ -50,6 +50,9 @@ class CLI(App):
     def install_dependencies(self):
         utils.install_dependencies(app=self)
 
+    def update_wine_config(self):
+        installer.update_wine_config(self)
+
     def install_icu(self):
         wine.enforce_icu_data_files(self)
 
