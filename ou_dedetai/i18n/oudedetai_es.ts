@@ -216,6 +216,30 @@
       <translation>Programas de Windows (*.exe *.msi);;Todos los archivos (*)</translation>
     </message>
     <message>
+      <source>Closing Logos</source>
+      <translation>Cerrando Logos</translation>
+    </message>
+    <message>
+      <source>Asking Logos to close…</source>
+      <translation>Pidiendo a Logos que se cierre…</translation>
+    </message>
+    <message>
+      <source>Force Logos to close…</source>
+      <translation>Forzar el cierre de Logos…</translation>
+    </message>
+    <message>
+      <source>Stop waiting</source>
+      <translation>Dejar de esperar</translation>
+    </message>
+    <message>
+      <source>Force Logos to close?</source>
+      <translation>¿Forzar el cierre de Logos?</translation>
+    </message>
+    <message>
+      <source>Forcing Logos to close stops it at once. Changes that haven't synced to your Faithlife account yet, or unsaved work, may be lost.</source>
+      <translation>Forzar el cierre detiene Logos al instante. Se pueden perder los cambios que aún no se hayan sincronizado con su cuenta de Faithlife o el trabajo sin guardar.</translation>
+    </message>
+    <message>
       <source>Stop Logos</source>
       <translation>Detener Logos</translation>
     </message>
@@ -468,6 +492,10 @@
       <translation>Accesos directos del menú y gestor de enlaces de Logos recreados para esta instalación.</translation>
     </message>
     <message>
+      <source>Logos appears to be syncing or saving. Waiting for it to finish…</source>
+      <translation>Parece que Logos está sincronizando o guardando. Esperando a que termine…</translation>
+    </message>
+    <message>
       <source>Logos is running</source>
       <translation>Logos está abierto</translation>
     </message>
@@ -494,10 +522,6 @@
     <message>
       <source>Quit anyway</source>
       <translation>Salir de todos modos</translation>
-    </message>
-    <message>
-      <source>Logos is still open (it may be asking you something), so Ou Dedetai is staying in the tray.</source>
-      <translation>Logos sigue abierto (quizá le esté preguntando algo), así que Ou Dedetai se queda en la bandeja.</translation>
     </message>
     <message>
       <source>Installing {product}</source>
@@ -684,12 +708,12 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>winetricks no está disponible con esta versión de Wine.</translation>
     </message>
     <message>
-      <source>Asking Logos to close…</source>
-      <translation>Pidiendo a Logos que se cierre…</translation>
+      <source>Logos hasn't closed. It may be asking you something: check its window.</source>
+      <translation>Logos no se ha cerrado. Quizá le esté preguntando algo: revise su ventana.</translation>
     </message>
     <message>
-      <source>Logos is still open, so Ou Dedetai is staying.</source>
-      <translation>Logos sigue abierto, así que Ou Dedetai se queda.</translation>
+      <source>Waiting for Logos to close…</source>
+      <translation>Esperando a que Logos se cierre…</translation>
     </message>
     <message>
       <source>In progress</source>

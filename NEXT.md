@@ -71,6 +71,11 @@ Back up). Builds are made by hand from the
   - repair actions
   - backup and restore
   - **Remove everything…** (see `--purge` below)
+- **Stop closes Logos politely** (window, tray, TUI, `--stop-installed-app`): Ou Dedetai asks Logos to
+  close as its close button does (Wine's `taskkill` without `/F`) and waits. While Logos looks busy
+  (CPU or disk writing: probably syncing or saving) it keeps waiting and says so; if it sits idle it
+  may be asking something. Forcing it (the old `kill -9`) is offered with a warning, never done
+  unattended. `LogosManager.stop()` itself is unchanged and still used internally.
 - **Tray**: starting Logos (from its shortcut or from the window) puts Ou Dedetai in the tray. It quits
   when Logos closes unless the window is open.
   Without a display or PySide6 it falls back to the command line as before. The shortcut's right-click

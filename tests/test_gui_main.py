@@ -190,14 +190,34 @@ class TestBackgroundWork(GuiTestCase):
         tray.quit()
         qt.quit.assert_called_once()
 
-    def test_tray_close_logos_and_quit_is_polite(self):
-        qt = mock.Mock()
-        tray = gui_main.TrayController(self.window, qt)
-        tray._after_close(False)  # Logos stayed open (asking about unsaved work)
-        qt.quit.assert_not_called()
-        self.assertIn("still open", self.window.status_gui.message_label.text())
-        tray._after_close(True)
-        qt.quit.assert_called_once()
+    def test_stop_waits_politely_and_force_needs_a_yes(self):
+        done = mock.Mock()
+        with mock.patch.object(self.window, "start_thread"):
+            self.window.stop_logos(on_closed=done)
+        dialog = self.window._close_dialog
+        dialog._show_progress(True, 0)
+        self.assertIn("syncing", dialog.text.text())
+        dialog._show_progress(False, 30)
+        self.assertIn("asking you something", dialog.text.text())
+        with mock.patch.object(QtWidgets.QMessageBox, "warning",
+                               return_value=QtWidgets.QMessageBox.StandardButton.Cancel), \
+                mock.patch.object(self.window, "start_thread") as start:
+            dialog._force()
+        start.assert_not_called()  # no force without a yes
+        done.assert_not_called()
+        dialog._done(True)  # Logos closed by itself
+        done.assert_called_once()
+
+    def test_force_after_yes(self):
+        with mock.patch.object(self.window, "start_thread"):
+            self.window.stop_logos()
+        dialog = self.window._close_dialog
+        with mock.patch.object(QtWidgets.QMessageBox, "warning",
+                               return_value=QtWidgets.QMessageBox.StandardButton.Yes), \
+                mock.patch.object(self.window, "start_thread") as start:
+            dialog._force()
+        start.assert_called_once_with(self.window.logos.stop)
+        self.assertTrue(dialog.cancelled)
 
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:

@@ -117,7 +117,7 @@ class CLI(App):
             self.logos.monitor()
 
     def stop_installed_app(self):
-        self.logos.stop()
+        self.logos.close_or_force()
 
     def winetricks(self):
         system.offer_winetricks_tools(self)

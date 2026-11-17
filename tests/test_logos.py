@@ -215,3 +215,43 @@ class TestPoliteClose(unittest.TestCase):
                 mock.patch.object(manager, "stop") as stop:
             self.assertFalse(manager.close(timeout=0.01))
         stop.assert_not_called()
+
+
+class TestCloseOrForce(unittest.TestCase):
+    def manager(self, assume_yes=False, approve=False):
+        from ou_dedetai import logos as logos_mod
+        app = mock.Mock()
+        app.conf._overrides.assume_yes = assume_yes
+        app.approve.return_value = approve
+        return logos_mod.LogosManager(app)
+
+    def test_closed_politely_never_forces(self):
+        m = self.manager()
+        with mock.patch.object(m, "close", return_value=True), mock.patch.object(m, "stop") as stop:
+            m.close_or_force()
+        stop.assert_not_called()
+        m.app.approve.assert_not_called()
+
+    def test_forces_only_when_the_user_agrees(self):
+        for approve in (False, True):
+            m = self.manager(approve=approve)
+            with mock.patch.object(m, "close", return_value=False), mock.patch.object(m, "stop") as stop:
+                m.close_or_force()
+            self.assertEqual(stop.called, approve)
+
+    def test_unattended_never_forces(self):
+        m = self.manager(assume_yes=True, approve=True)
+        with mock.patch.object(m, "close", return_value=False), mock.patch.object(m, "stop") as stop:
+            m.close_or_force()
+        stop.assert_not_called()
+
+    def test_busy_logos_keeps_the_wait_going(self):
+        m = self.manager()
+        busy = iter([True, True, False, False])
+        clock = iter([0, 0, 100, 100, 100, 200, 300, 400, 500])
+        from ou_dedetai import logos as logos_mod
+        with mock.patch.object(m, "_closed", side_effect=[False, False, False, False, False]), \
+                mock.patch.object(m, "request_close"), \
+                mock.patch.object(m, "busy", side_effect=lambda: next(busy)), \
+                mock.patch.object(logos_mod.time, "monotonic", side_effect=lambda: next(clock)):
+            self.assertFalse(m.close(timeout=150))

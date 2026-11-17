@@ -555,8 +555,10 @@ class TUI(App):
             self.ui._populate_main_menu()
 
         elif self.conf._raw.faithlife_product and choice == f"Stop {self.conf.faithlife_product}":
-            self.logos.stop()
-            self.ui._populate_main_menu()
+            def _close() -> None:
+                self.logos.close_or_force()
+                self.ui.call_from_thread(self.ui.go_to_main_menu)
+            threading.Thread(target=_close, daemon=True).start()
 
         elif choice == "Run Indexing":
             self.logos.index()

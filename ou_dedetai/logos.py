@@ -346,13 +346,15 @@ class LogosManager:
         # The Logos process has exited, if we wait here it hangs
         # wine.wineserver_wait(self.app)
 
-    def close(self, timeout: float = 60) -> bool:
+    # How long a polite close may take before the user is offered a forced one.
+    CLOSE_PATIENCE = 60
+    # Logos counts as busy (probably syncing or saving) above this CPU use or disk writing.
+    BUSY_CPU_PERCENT = 5.0
+    BUSY_WRITE_BYTES = 256 * 1024
+
+    def request_close(self) -> None:
         """Ask Logos to close, as clicking its window's close button does (Wine's taskkill
-        without /F sends WM_CLOSE), and wait for it to go. Returns True once it has closed;
-        False if it's still open, e.g. because it's asking about unsaved work.
-        Unlike stop(), nothing is killed."""
-        if self._closed():
-            return True
+        without /F sends WM_CLOSE), so it can finish syncing and ask about unsaved work."""
         exe = Path(self.app.conf.logos_exe).name if self.app.conf.logos_exe else "Logos.exe"
         logging.info(f"Asking {exe} to close.")
         with open(os.devnull, "w") as devnull:
@@ -363,13 +365,74 @@ class LogosManager:
                 process.wait(timeout=30)
             except subprocess.TimeoutExpired:
                 process.kill()
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            time.sleep(1)
+
+    def _logos_processes(self) -> list:
+        return [p for procs in self.existing_processes.values() for p in procs
+                if isinstance(p, psutil.Process)]
+
+    def busy(self, interval: float = 1.0) -> bool:
+        """Whether Logos appears to be working, e.g. syncing with Faithlife or saving:
+        noticeable CPU use or disk writing over `interval` seconds. A Logos that is only
+        waiting (say on an "unsaved changes?" question) is idle. A guess, not a promise."""
+        processes = self._logos_processes()
+        before: dict[int, int] = {}
+        for p in processes:
+            try:
+                p.cpu_percent(None)
+                before[p.pid] = p.io_counters().write_bytes
+            except (psutil.Error, AttributeError):
+                pass
+        time.sleep(interval)
+        cpu = 0.0
+        written = 0
+        for p in processes:
+            try:
+                cpu += p.cpu_percent(None)
+                written += p.io_counters().write_bytes - before.get(p.pid, 0)
+            except (psutil.Error, AttributeError):
+                pass
+        return cpu > self.BUSY_CPU_PERCENT or written > self.BUSY_WRITE_BYTES
+
+    def close(self, timeout: float = CLOSE_PATIENCE, progress=None) -> bool:
+        """Ask Logos to close and wait while it does. Returns True once it has closed, or
+        False after `timeout` idle seconds (it may be asking a question): nothing is ever
+        forced here. While Logos is busy (probably syncing) the wait goes on.
+        `progress(busy, idle_seconds)` is called about once a second; returning True
+        stops the wait (False is returned)."""
+        if self._closed():
+            return True
+        self.request_close()
+        idle_since = time.monotonic()
+        while True:
+            busy = self.busy()
             if self._closed():
                 return True
-        logging.info("Logos is still open after being asked to close.")
-        return False
+            if busy:
+                idle_since = time.monotonic()
+            idle = time.monotonic() - idle_since
+            if progress and progress(busy, idle):
+                return False
+            if idle > timeout:
+                logging.info("Logos is still open after being asked to close.")
+                return False
+
+    def close_or_force(self) -> None:
+        """Stop for the CLI and TUI: close politely, and force it only if the user agrees."""
+        def progress(busy: bool, _idle: float) -> None:
+            self.app.status("Logos appears to be syncing or saving; waiting for it to finish…" if busy
+                            else "Waiting for Logos to close…")
+        if self.close(progress=progress):
+            self.app.status("Logos has closed.", 100)
+            return
+        if self.app.conf._overrides.assume_yes:
+            self.app.status("Logos is still open; not forcing it to close unattended.")
+            return
+        if self.app.approve(
+            "Force Logos to close?",
+            "Logos hasn't closed. It may be asking you something (check its window). Forcing it to "
+            "close can lose changes that haven't synced to your Faithlife account yet.",
+        ):
+            self.stop()
 
     def _closed(self) -> bool:
         self.monitor()

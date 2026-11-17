@@ -316,6 +316,7 @@ class MainWindow(GuiApp):
         self._layouts: list[str] = []
         self._updates: dict[str, tuple[bool, str]] = {}
         self._tray: Optional["TrayController"] = None
+        self._close_dialog: Optional["CloseLogosDialog"] = None
         self._installing = False
         self._last_state: Optional[State] = None
         self._polling = False
@@ -1377,8 +1378,10 @@ class MainWindow(GuiApp):
             app.setQuitOnLastWindowClosed(False)
             self._tray = TrayController(self, app)
 
-    def stop_logos(self) -> None:
-        self.start_thread(self.logos.stop)
+    def stop_logos(self, on_closed: Optional[Callable[[], None]] = None) -> None:
+        """Close Logos politely; forcing it is offered, with a warning (CloseLogosDialog)."""
+        self._close_dialog = CloseLogosDialog(self, on_closed)
+        self._close_dialog.start()
 
     def run_indexing(self) -> None:
         self.start_thread(self.logos.index)
@@ -1538,9 +1541,84 @@ class MainWindow(GuiApp):
 
 # ── Tray (while Logos runs from its shortcut) ────────────────────────────────
 
+class CloseLogosDialog(QtWidgets.QDialog):
+    """Stop: ask Logos to close politely and wait, showing whether it appears to be syncing.
+    Forcing it is offered, with a warning, but never done without the user."""
+    progressed = QtCore.Signal(bool, float)
+    finished_closing = QtCore.Signal(bool)
+
+    def __init__(self, window: "MainWindow", on_closed: Optional[Callable[[], None]] = None):
+        super().__init__(window.root)
+        self.main = window
+        self.on_closed = on_closed
+        self.cancelled = False
+        self.setWindowTitle(tr("Closing Logos"))
+        self.setWindowIcon(gui_style.app_icon())
+        v = QtWidgets.QVBoxLayout(self)
+        self.text = label(tr("Asking Logos to close…"))
+        self.text.setMinimumWidth(380)
+        v.addWidget(self.text)
+        self.bar = QtWidgets.QProgressBar()
+        self.bar.setRange(0, 0)
+        self.bar.setTextVisible(False)
+        v.addWidget(self.bar)
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.addStretch(1)
+        self.force = button(tr("Force Logos to close…"), "danger", self._force)
+        buttons.addWidget(self.force)
+        self.hide_btn = button(tr("Stop waiting"), None, self.reject)
+        buttons.addWidget(self.hide_btn)
+        v.addLayout(buttons)
+        self.progressed.connect(self._show_progress)
+        self.finished_closing.connect(self._done)
+        self.rejected.connect(self._cancel)
+
+    def start(self) -> None:
+        self.show()
+        self.main.start_thread(self._wait)
+
+    def _wait(self) -> None:
+        def progress(busy: bool, idle: float) -> bool:
+            self.progressed.emit(busy, idle)
+            return self.cancelled
+        closed = self.main.logos.close(timeout=float("inf"), progress=progress)
+        if not self.cancelled:
+            self.finished_closing.emit(closed)
+
+    def _show_progress(self, busy: bool, idle: float) -> None:
+        if busy:
+            self.text.setText(tr("Logos appears to be syncing or saving. Waiting for it to finish…"))
+        elif idle > 10:
+            self.text.setText(tr("Logos hasn't closed. It may be asking you something: check its window."))
+        else:
+            self.text.setText(tr("Waiting for Logos to close…"))
+
+    def _force(self) -> None:
+        answer = QtWidgets.QMessageBox.warning(
+            self, tr("Force Logos to close?"),
+            tr("Forcing Logos to close stops it at once. Changes that haven't synced to your Faithlife "
+               "account yet, or unsaved work, may be lost."),
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.Cancel,
+            QtWidgets.QMessageBox.StandardButton.Cancel)
+        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        self.cancelled = True
+        self.main.start_thread(self.main.logos.stop)
+        self._done(True)
+
+    def _cancel(self) -> None:
+        self.cancelled = True
+
+    def _done(self, closed: bool) -> None:
+        if closed:
+            self.cancelled = True
+            self.accept()
+            if self.on_closed:
+                self.on_closed()
+
+
 class TrayController(QtCore.QObject):
     """Ou Dedetai in the system tray while Logos runs; leaves when Logos closes."""
-    logos_closed = QtCore.Signal(bool)  # after "Close Logos and quit": did Logos close?
 
     def __init__(self, window: MainWindow, qt_app: QtWidgets.QApplication):
         super().__init__()
@@ -1562,7 +1640,6 @@ class TrayController(QtCore.QObject):
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(3000)
-        self.logos_closed.connect(self._after_close)
 
     def _fill(self, menu: QtWidgets.QMenu) -> None:
         menu.clear()
@@ -1583,7 +1660,7 @@ class TrayController(QtCore.QObject):
                 a = layouts.addAction(name)
                 a.triggered.connect(lambda _=False, n=name: w.start_thread(desktop_integrations.open_layout, n))
         stop = menu.addAction(tr("Stop Logos"))
-        stop.triggered.connect(w.stop_logos)
+        stop.triggered.connect(lambda: w.stop_logos())
         menu.addSeparator()
         show = menu.addAction(tr("Ou Dedetai…"))
         show.triggered.connect(lambda: self.show_window(SIMPLE))
@@ -1608,22 +1685,13 @@ class TrayController(QtCore.QObject):
             box.setDefaultButton(stop)
             box.exec()
             if box.clickedButton() is stop:
-                # Politely, as its close button does, so Logos can save and ask about unsaved work.
-                self.window.status(tr("Asking Logos to close…"))
-                self.window.start_thread(lambda: self.logos_closed.emit(self.window.logos.close()))
+                # Politely, as its close button does, so Logos can finish syncing and ask about
+                # unsaved work; the dialog offers forcing it, with a warning.
+                self.window.stop_logos(on_closed=self._leave)
                 return
             if box.clickedButton() is not leave:
                 return
         self._leave()
-
-    def _after_close(self, closed: bool) -> None:
-        if closed:
-            self._leave()
-        else:
-            self.window.status(tr("Logos is still open (it may be asking you something), so Ou Dedetai "
-                                  "is staying in the tray."), 0)
-            if self.tray:
-                self.tray.showMessage(constants.APP_NAME, tr("Logos is still open, so Ou Dedetai is staying."))
 
     def _leave(self) -> None:
         self.timer.stop()
