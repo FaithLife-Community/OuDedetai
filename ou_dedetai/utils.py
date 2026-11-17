@@ -473,6 +473,14 @@ def set_appimage_symlink(app: App):
         logging.debug("No need to set appimage symlink, as it wasn't set")
         return
 
+    # A Wine tarball (such as our builds' .tar.xz) is unpacked and used like at install.
+    if wine.is_wine_tarball(Path(app.conf.wine_appimage_path)):
+        tarball = app.conf.wine_appimage_path
+        app.conf.wine_appimage_path = None
+        app.conf.wine_binary = str(tarball)
+        wine.setup_wine(app)
+        return
+
     logging.debug(f"{app.conf.wine_appimage_path=}")
     logging.debug(f"{app.conf.wine_download_file_name=}")
     appimage_file_path = Path(app.conf.wine_appimage_path)
@@ -497,6 +505,12 @@ def set_appimage_symlink(app: App):
     delete_symlink(appimage_symlink_path)
     os.symlink(destination_file_path, appimage_symlink_path)
     app.conf.wine_appimage_path = destination_file_path
+    # Use it: an install that ran another Wine (e.g. a tarball) would otherwise keep running it.
+    app.conf.wine_binary = str(destination_file_path)
+    for name in ("wine", "wine64", "wineserver", "winetricks"):
+        link = appdir_bindir / name
+        link.unlink(missing_ok=True)
+        link.symlink_to(f"./{appimage_symlink_path.name}")
 
 
 def update_to_latest_lli_release(app: App):
