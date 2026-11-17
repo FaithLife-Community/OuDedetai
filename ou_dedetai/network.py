@@ -438,7 +438,7 @@ class NetworkRequests:
 
         repositories = {
             "stable": ("FaithLife-Community/OuDedetai", "latest"),
-            # Published test builds of the next version (v4.0.0-beta.19.devN). Releases from
+            # Published test builds of the next version (v4.0.0-beta.17.devN). Releases from
             # main follow Latest, which a prerelease never is, so they don't see these.
             "dev": ("FaithLife-Community/OuDedetai", "prerelease"),
         }

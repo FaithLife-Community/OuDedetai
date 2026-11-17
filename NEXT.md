@@ -17,23 +17,29 @@ meant to merge in one go.** The release plan below says what comes first.
 
 ## Latest test build
 
-**[Branch builds of `next`](https://github.com/FaithLife-Community/OuDedetai/actions/workflows/build-branch.yml?query=branch%3Anext)**
-lists them, newest first. Open the top green run and download the artifact at the bottom of the page
-(`oudedetai-x86_64-…`). GitHub asks you to sign in to download artifacts. Then unzip it and run:
+**[Prereleases on the Releases page](https://github.com/FaithLife-Community/OuDedetai/releases)**: the
+newest one titled "next test build" (`v4.0.0-beta.17.devN`). No GitHub sign-in needed. Download
+`oudedetai-x86_64` (`oudedetai-arm` is built but untested), then:
 
 ```
-chmod +x oudedetai-x86_64-*
-DIALOG=tk ./oudedetai-x86_64-*
+chmod +x oudedetai-x86_64
+./oudedetai-x86_64
 ```
+
+- If Ou Dedetai is already installed, it offers to replace the installed copy and remake the
+  shortcuts. It uses your normal configuration (`~/.config/FaithLife-Community/oudedetai.json`) and
+  install. **Back up first** (Troubleshooting → Back up).
+- From then on it follows **Prereleases** (Settings → Updates): new test builds and oinos Wine builds
+  come through the Update button.
+- Switching to **Releases** doesn't take you back: you stay on the test build until a release
+  (beta 17 or later) catches up.
+- Installs on beta 16 and older never see these builds: they follow the release marked Latest (or
+  test-builds on the dev channel), and a prerelease is never Latest.
 
 From a terminal Ou Dedetai opens its TUI unless you set `DIALOG=tk`; opened from a file manager it
-shows the window.
-
-It uses your normal configuration (`~/.config/FaithLife-Community/oudedetai.json`) and install, so it
-can stand in for your usual Ou Dedetai and be swapped back. **Back up first** (Troubleshooting →
-Back up). Builds are made by hand from the
-[Build branch workflow](https://github.com/FaithLife-Community/OuDedetai/actions/workflows/build-branch.yml)
-(branch `next`); ask John if the newest commit has no build yet.
+shows the window. Between prereleases, every commit can also be built with the
+[Build branch workflow](https://github.com/FaithLife-Community/OuDedetai/actions/workflows/build-branch.yml?query=branch%3Anext)
+(GitHub sign-in needed to download).
 
 ## Why: what we were aiming for
 
@@ -73,7 +79,7 @@ Back up). Builds are made by hand from the
   - **Remove everything…** (see `--purge` below)
 - **Updates: Releases / Prereleases** (Settings, TUI *Updates*, `--set-update-channel`): one choice for
   Ou Dedetai and Wine. Prereleases follows OuDedetai prereleases (`next` test builds, numbered
-  `4.0.0-beta.19.devN`) and the oinos Wine prereleases; Releases follows Latest. Nothing ever goes back:
+  `4.0.0-beta.17.devN`) and the oinos Wine prereleases; Releases follows Latest. Nothing ever goes back:
   switching to Releases waits until a release catches up. A development build follows Prereleases
   until the user chooses. (`main`'s dev channel, test-builds, is untouched.)
 - **Running a newer build from elsewhere** (e.g. a downloaded test build from Downloads) offers to put it
@@ -125,7 +131,7 @@ Each is its own commit (see `git log 14e328b..next`), so any can be dropped or r
 | **No system packages during install**; `OUDEDETAI_INSTALL_DEPS=1` brings the old step back; "Install dependencies" still works on request | The bundled Wine tarball installed and ran on Kubuntu 26.04, Ubuntu 26.04 GNOME and Bazzite with none of them | 47e85ed |
 | **Image-based systems** (SteamOS, Bazzite, Silverblue): never install packages there | The root is read-only and replaced on update; the old SteamOS path ran `pacman -Syu` | 5483f6c |
 | **Packages offered only when needed**: FUSE when an AppImage runner is chosen (or the AppImage unpacks itself if FUSE can't be installed); cabextract/7-Zip/unzip when winetricks is opened; wl-clipboard after installing the desktop integrations on Wayland if neither the system nor Akousousin has `wl-paste` (replaces #567) | Keeps AppImages and winetricks working without installing everything up front (Nathan's concern) | ae5cade, dc2ebc7, 3a420f2 |
-| **Default Wine channel = prerelease (oinos)**, choice in Settings and `--set-wine-channel` | Needed until oinos is a full release; to switch back at beta 17 (see release plan) | df73d80 |
+| **Development builds follow Prereleases (oinos)**, choice in Settings → Updates and `--set-update-channel` | Testers get oinos and new test builds; a release build keeps Releases (see release plan) | df73d80 |
 | **One-click install uses "Recommended"** | An old Wine left in the config was reused on the Deck | 5483f6c, f511bfd |
 | **FFmpeg media and Logos self-update settings** applied at install and each start with an oinos Wine | Video didn't play on a fresh prefix (GStreamer path, no system plugins) | 343db43, bce9da1 |
 | **Quiet prefix set-up**: wineboot runs without Wine Mono/Gecko and without a display (falls back to a normal run) | The Mono prompt and "configuration is being updated" window looked untidy | bce9da1, d239e89 |
@@ -169,32 +175,21 @@ Both use the same back end, so everything above applies to them, apart from the 
 
 ## Release plan
 
-1. **Beta 16: main + the small PRs that don't need oinos.** Gets everyone onto the fixed updating code
-   and gives a known-good version to go back to. Candidates: #558, #554, #555, #561, #562, #563, #566,
-   #564, #565.
-2. **Beta 17: the oinos Wine release + #560 (DXVK).**
-   - Until then oinos stays a **prerelease** on wine-appimages.
-   - Ou Dedetai beta 15/16 use the release GitHub marks **Latest** (today `10.8-staging`), so they
-     aren't offered oinos.
-   - Publishing any full release marks it Latest automatically. If oinos is published before beta 17
-     ships, untick "Set as the latest release", or
-     `gh api -X PATCH repos/FaithLife-Community/wine-appimages/releases/<id> -f make_latest=false`.
-3. **Switching the default runner from prerelease to release**, at beta 17:
-   - publish oinos as a full release and let it become Latest
-   - change `next`'s default Wine channel back to `stable` (one line in `config.py`; the choice stays
-     in Settings and `--set-wine-channel`)
-   - keep `10.8-staging` published as the way back
-   - older Ou Dedetai (15/16) will then offer oinos through Update Wine. Logos runs and gets Wine's
-     own fixes (stability, memory). The extras (DXVK, FFmpeg, self-update) need the newer Ou Dedetai,
-     which sets them up by itself on the next start.
-4. **Then `next`, in small PRs** on top of beta 17, in this order:
-   - fixes
-   - removals (system packages, media toggle)
-   - foundations (settings list, offline mode, packages on demand, link handler, purge)
-   - the new window
-   - translations
-
-   Release it as beta 18 or 4.1 after a round of testing.
+1. **Beta 16 (released 17 Nov)**: main with the new updating code; it can tell Latest from prereleases.
+2. **`next` test builds as OuDedetai prereleases**, `v4.0.0-beta.17.devN`: newer than beta 16, older
+   than beta 17, never Latest, so no current install sees them. Testers opt in by downloading one.
+   The first ones are made by hand (draft prerelease, published by a maintainer); a PR adds a
+   workflow for it (`build-next-prerelease.yml`), for the team to review.
+3. **oinos Wine stays a prerelease on wine-appimages until agreed.** Beta 16's default Wine channel
+   follows the **Latest** tarball there, so marking an oinos build Latest changes every beta 16
+   user's recommended Wine. If oinos is published as a full release early, untick "Set as the latest
+   release", or `gh api -X PATCH repos/FaithLife-Community/wine-appimages/releases/<id> -f make_latest=false`.
+4. **When oinos is released**: publish it as Latest, keep `10.8-staging` published as the way back,
+   and release `next`'s work (in the PRs the team prefers) as beta 17 or 4.0.0. Older Ou Dedetai then
+   offers oinos through Update Wine; the extras (DXVK, FFmpeg, self-update) need the newer Ou Dedetai,
+   which sets them up on its next start.
+5. `main`'s dev channel still follows test-builds. `next` points Prereleases at OuDedetai prereleases;
+   whether `main` does the same is the team's call when `next` is merged.
 
 ## How to test
 

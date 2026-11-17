@@ -19,19 +19,19 @@ def fake_conf(chosen=False, app_channel="stable", wine_channel="stable"):
 class TestDefault(unittest.TestCase):
     def test_a_development_build_follows_prereleases_until_the_user_chooses(self):
         conf = fake_conf()
-        with mock.patch.object(constants, "LLI_CURRENT_VERSION", "4.0.0-beta.19.dev3"):
+        with mock.patch.object(constants, "LLI_CURRENT_VERSION", "4.0.0-beta.17.dev3"):
             config.Config._default_to_prereleases(conf)
         self.assertEqual((conf._raw.app_release_channel, conf._raw.wine_release_channel), ("dev", "dev"))
 
     def test_the_users_choice_sticks(self):
         conf = fake_conf(chosen=True)
-        with mock.patch.object(constants, "LLI_CURRENT_VERSION", "4.0.0-beta.19.dev3"):
+        with mock.patch.object(constants, "LLI_CURRENT_VERSION", "4.0.0-beta.17.dev3"):
             config.Config._default_to_prereleases(conf)
         self.assertEqual(conf._raw.app_release_channel, "stable")
 
     def test_a_release_build_keeps_its_channel(self):
         conf = fake_conf()
-        with mock.patch.object(constants, "LLI_CURRENT_VERSION", "4.0.0-beta.19"):
+        with mock.patch.object(constants, "LLI_CURRENT_VERSION", "4.0.0-beta.17"):
             config.Config._default_to_prereleases(conf)
         self.assertEqual(conf._raw.app_release_channel, "stable")
 
@@ -52,16 +52,16 @@ class TestVersions(unittest.TestCase):
         self.assertEqual(repo.call_args.args[0], "FaithLife-Community/OuDedetai")
         self.assertEqual(repo.call_args.kwargs["tag"], "prerelease")
 
-    def test_dev_builds_sit_between_beta_18_and_beta_19(self):
+    def test_dev_builds_sit_between_beta_16_and_beta_17(self):
         from packaging.version import Version
-        self.assertLess(Version("4.0.0-beta.18"), Version("4.0.0-beta.19.dev1"))
-        self.assertLess(Version("4.0.0-beta.19.dev9"), Version("4.0.0-beta.19"))
+        self.assertLess(Version("4.0.0-beta.16"), Version("4.0.0-beta.17.dev1"))
+        self.assertLess(Version("4.0.0-beta.17.dev9"), Version("4.0.0-beta.17"))
 
     def test_version_read_from_a_binary_keeps_dev(self):
         with tempfile.TemporaryDirectory() as d:
             binary = Path(d) / "oudedetai"
-            binary.write_text("#!/bin/sh\necho 'Ou Dedetai, 4.0.0-beta.19.dev12 by FaithLife Community'\n")
-            self.assertEqual(utils.get_lli_release_version(binary), "4.0.0-beta.19.dev12")
+            binary.write_text("#!/bin/sh\necho 'Ou Dedetai, 4.0.0-beta.17.dev12 by FaithLife Community'\n")
+            self.assertEqual(utils.get_lli_release_version(binary), "4.0.0-beta.17.dev12")
 
 
 class TestReplaceInstalled(unittest.TestCase):
@@ -77,7 +77,7 @@ class TestReplaceInstalled(unittest.TestCase):
         self.app.conf.install_dir = str(self.dir)
         self.patches = [
             mock.patch.object(constants, "RUNMODE", "binary"),
-            mock.patch.object(constants, "LLI_CURRENT_VERSION", "4.0.0-beta.19.dev5"),
+            mock.patch.object(constants, "LLI_CURRENT_VERSION", "4.0.0-beta.17.dev5"),
             mock.patch.object(installer.sys, "executable", str(self.running)),
             mock.patch.object(installer, "create_launcher_shortcuts"),
         ]
@@ -104,7 +104,7 @@ class TestReplaceInstalled(unittest.TestCase):
         self.assertEqual(self.launcher.read_text(), "old")
 
     def test_never_goes_back(self):
-        self.assertFalse(self.replace("4.0.0-beta.19.dev9"))
+        self.assertFalse(self.replace("4.0.0-beta.17.dev9"))
         self.app.approve.assert_not_called()
         self.assertEqual(self.launcher.read_text(), "old")
 

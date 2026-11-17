@@ -87,9 +87,9 @@ LEGACY_CONFIG_FILES = [
     os.path.expanduser("~/.config/Logos_on_Linux/Logos_on_Linux.conf")
 ]
 LLI_AUTHOR = "Ferion11, John Goodman, T. H. Wright, N. Marti, N. Shaaban"
-# The next branch: builds are development versions of the release after beta 18. Published test
-# builds are stamped 4.0.0-beta.19.devN, so they count as newer than beta 18 and older than beta 19.
-LLI_CURRENT_VERSION = "4.0.0-beta.19.dev0"
+# The next branch: its builds are development versions of the release after beta 16. Published
+# test builds (prereleases) are 4.0.0-beta.17.devN: newer than beta 16, older than beta 17.
+LLI_CURRENT_VERSION = "4.0.0-beta.17.dev1"
 # This SHOULD match the version of winetricks we ship in the latest appimage
 WINETRICKS_VERSION = '20250102'
 DEFAULT_LOG_LEVEL = logging.WARNING
