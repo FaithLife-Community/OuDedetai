@@ -17,6 +17,10 @@ from . import utils
 from . import wine
 
 
+# How long start() waits for Logos's processes before giving up (a slow first start included)
+STARTING_TIMEOUT = 300
+
+
 class State(Enum):
     RUNNING = 1
     STOPPED = 2
@@ -27,6 +31,8 @@ class State(Enum):
 class LogosManager:
     def __init__(self, app: App):
         self.logos_state = State.STOPPED
+        self.starting_since = 0.0
+        """When start() last ran: how long Logos's processes have had to appear"""
         self.indexing_state = State.STOPPED
         self.app = app
         self.processes: dict[str, subprocess.Popen] = {}
@@ -62,6 +68,10 @@ class LogosManager:
         if self.logos_state == State.STARTING:
             if login_running or cef_running:
                 self.logos_state = State.RUNNING
+            elif (not splash_running and self.starting_since
+                    and time.monotonic() - self.starting_since > STARTING_TIMEOUT):
+                logging.warning(f"Logos didn't start within {STARTING_TIMEOUT} seconds.")
+                self.logos_state = State.STOPPED
         elif self.logos_state == State.RUNNING:
             if not any((splash_running, login_running, cef_running)):
                 self.stop()
@@ -188,6 +198,7 @@ class LogosManager:
 
     def start(self):
         self.logos_state = State.STARTING
+        self.starting_since = time.monotonic()
         wine_release, _ = wine.get_wine_release(self.app.conf.wine_binary)
 
         def run_logos():
@@ -212,7 +223,9 @@ class LogosManager:
             )
             if process is not None:
                 self.processes[self.app.conf.logos_exe] = process
-            self.logos_state = State.RUNNING
+            # Stay STARTING: monitor() moves to RUNNING once Logos's processes appear.
+            # Marking it RUNNING here let a monitor() call that came before Wine had
+            # started Logos.exe see "running, but no processes" and stop it again.
 
         # Ensure wine version is compatible with Logos release version.
         good_wine, reason = wine.check_wine_rules(

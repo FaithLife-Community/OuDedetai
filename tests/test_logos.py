@@ -106,3 +106,77 @@ class TestSettingFlags(unittest.TestCase):
         from ou_dedetai import cli_parser
         with self.assertRaises(SystemExit):
             cli_parser.get_parser().parse_args(["--toggle-media-support"])
+
+
+class TestStartingState(unittest.TestCase):
+    """A monitor() call while Wine is still starting Logos must not stop it."""
+
+    def manager(self):
+        app = mock.Mock()
+        app.conf.logos_exe = "/x/Logos.exe"
+        app.conf.logos_system_exe_windows_path = "C:\\x\\System\\Logos.exe"
+        app.conf.logos_cef_exe_windows_path = "C:\\x\\System\\LogosCEF.exe"
+        app.conf.logos_indexer_exe_windows_path = "C:\\x\\System\\LogosIndexer.exe"
+        manager = logos.LogosManager(app)
+        manager.stop = mock.Mock()
+        return manager
+
+    def processes(self, manager, *exes):
+        running = mock.Mock()
+        running.is_running.return_value = True
+        manager.existing_processes = {exe: [running] for exe in exes}
+
+    def test_no_processes_yet_while_starting(self):
+        manager = self.manager()
+        manager.logos_state = logos.State.STARTING
+        manager.starting_since = logos.time.monotonic()
+        self.processes(manager)  # Wine hasn't started Logos.exe yet
+        manager.monitor_logos()
+        manager.stop.assert_not_called()
+        self.assertEqual(manager.logos_state, logos.State.STARTING)
+
+    def test_running_once_logos_appears(self):
+        manager = self.manager()
+        manager.logos_state = logos.State.STARTING
+        manager.starting_since = logos.time.monotonic()
+        self.processes(manager, manager.app.conf.logos_system_exe_windows_path)
+        manager.monitor_logos()
+        self.assertEqual(manager.logos_state, logos.State.RUNNING)
+
+    def test_gives_up_when_logos_never_appears(self):
+        manager = self.manager()
+        manager.logos_state = logos.State.STARTING
+        manager.starting_since = logos.time.monotonic() - logos.STARTING_TIMEOUT - 1
+        self.processes(manager)
+        manager.monitor_logos()
+        self.assertEqual(manager.logos_state, logos.State.STOPPED)
+        manager.stop.assert_not_called()
+
+    def test_splash_keeps_a_slow_start_going(self):
+        manager = self.manager()
+        manager.logos_state = logos.State.STARTING
+        manager.starting_since = logos.time.monotonic() - logos.STARTING_TIMEOUT - 1
+        self.processes(manager, manager.app.conf.logos_exe)
+        manager.monitor_logos()
+        self.assertEqual(manager.logos_state, logos.State.STARTING)
+
+    def test_start_leaves_logos_starting(self):
+        manager = self.manager()
+        manager.app.start_thread = lambda fn, daemon_bool=True: fn() if fn.__name__ == "run_logos" else None
+        with mock.patch.object(logos.wine, "get_wine_release", return_value=("11.22", None)), \
+                mock.patch.object(logos.wine, "check_wine_rules", return_value=(True, None)), \
+                mock.patch.object(logos.wine, "wineserver_kill"), \
+                mock.patch.object(logos.wine, "wine_supports_logos_updates", return_value=True), \
+                mock.patch.object(logos.wine, "allow_logos_updates"), \
+                mock.patch.object(logos.wine, "run_wine_application", return_value=mock.Mock()), \
+                mock.patch.object(manager, "set_auto_updates"):
+            manager.start()
+        self.assertEqual(manager.logos_state, logos.State.STARTING)
+        self.assertGreater(manager.starting_since, 0)
+
+    def test_running_logos_without_processes_still_stops(self):
+        manager = self.manager()
+        manager.logos_state = logos.State.RUNNING
+        self.processes(manager)
+        manager.monitor_logos()
+        manager.stop.assert_called_once()
