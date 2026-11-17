@@ -192,6 +192,10 @@ def get_parser():
         help='Completely delete the faithlife software from your system',
     )
     cmd.add_argument(
+        '--set-update-channel', choices=['releases', 'prereleases'],
+        help='update Ou Dedetai and Wine to releases, or to prereleases (test builds of the next version)',
+    )
+    cmd.add_argument(
         '--set-wine-channel', choices=['stable', 'dev'],
         help='which Wine builds "Recommended" means: stable (current release) or dev (newest prerelease)',
     )
@@ -450,6 +454,7 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
         'remove_index_files',
         'uninstall',
         'purge',
+        'set_update_channel',
         'set_wine_channel',
         'set_offline',
         'set_renderer',
@@ -475,7 +480,7 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
     run_action = None
     for arg in action_names:
         if getattr(args, arg) or getattr(args, arg) == []:
-            if arg in ("set_wine_channel", "set_offline", "set_renderer"):
+            if arg in ("set_update_channel", "set_wine_channel", "set_offline", "set_renderer"):
                 ephemeral_config.cli_choice = getattr(args, arg)
             if arg == "run_installed_app" and isinstance(getattr(args, arg), str):
                 ephemeral_config.logos_link = getattr(args, arg)

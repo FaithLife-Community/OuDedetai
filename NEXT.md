@@ -71,6 +71,13 @@ Back up). Builds are made by hand from the
   - repair actions
   - backup and restore
   - **Remove everything…** (see `--purge` below)
+- **Updates: Releases / Prereleases** (Settings, TUI *Updates*, `--set-update-channel`): one choice for
+  Ou Dedetai and Wine. Prereleases follows OuDedetai prereleases (`next` test builds, numbered
+  `4.0.0-beta.19.devN`) and the oinos Wine prereleases; Releases follows Latest. Nothing ever goes back:
+  switching to Releases waits until a release catches up. A development build follows Prereleases
+  until the user chooses. (`main`'s dev channel, test-builds, is untouched.)
+- **Running a newer build from elsewhere** (e.g. a downloaded test build from Downloads) offers to put it
+  in place of the installed copy and remake the shortcuts. An older one is never put in place.
 - **Choose a Wine build** (Troubleshooting → More) offers the newest prerelease and newest release
   bundles by name, marks the one in use, and still offers a file. Picking a bundle also sets the Wine
   channel, so later updates follow it. An installed tarball is now compared with the channel's tarball

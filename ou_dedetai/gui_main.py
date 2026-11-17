@@ -373,6 +373,8 @@ class MainWindow(GuiApp):
         if raw.install_dir and raw.faithlife_product and Path(raw.install_dir).is_dir():
             # Shortcuts made by an older release may still point at an old icon.
             self.start_thread(installer.copy_icons, raw.install_dir, raw.faithlife_product)
+            # A newer Ou Dedetai (e.g. a downloaded test build) run from elsewhere: offer to install it.
+            self.start_thread(installer.offer_to_replace_installed, self)
         self.start_thread(desktop_integrations.offer, app=self)
         self.show_view(FULL if self.conf.gui_full_view and self.is_installed() else SIMPLE)
         if show:
@@ -753,6 +755,18 @@ class MainWindow(GuiApp):
         nl.addWidget(label(tr("Logos has its own offline setting: Program Settings › Internet in Logos."),
                            "muted"))
         v.addWidget(net)
+
+        upd, ul = card()
+        ul.addWidget(label(tr("Updates"), "h2"))
+        self.s_releases = QtWidgets.QRadioButton(tr("Releases"))
+        self.s_prereleases = QtWidgets.QRadioButton(tr("Prereleases: help test the next version of "
+                                                        "Ou Dedetai and Wine"))
+        for b in (self.s_releases, self.s_prereleases):
+            ul.addWidget(b)
+        self.s_prereleases.toggled.connect(self.set_update_channel)
+        ul.addWidget(label(tr("Switching back to Releases doesn't take you back: you stay on the version "
+                              "you have until a release catches up."), "muted"))
+        v.addWidget(upd)
 
         ws, self.ws_layout = card()
         self.ws_layout.addWidget(label(tr("Wine settings for Logos"), "h2"))
@@ -1563,6 +1577,22 @@ class MainWindow(GuiApp):
     def _show_channel(self) -> None:
         i = self.channel.findData(self.conf.wine_release_channel)
         self.channel.setCurrentIndex(i if i >= 0 else 0)
+        button = self.s_prereleases if self.conf.update_channel == "dev" else self.s_releases
+        self.s_releases.blockSignals(True)
+        self.s_prereleases.blockSignals(True)
+        button.setChecked(True)
+        self.s_releases.blockSignals(False)
+        self.s_prereleases.blockSignals(False)
+
+    def set_update_channel(self, prereleases: bool) -> None:
+        channel = "dev" if prereleases else "stable"
+        if self.conf.update_channel == channel and self.conf._raw.update_channel_chosen:
+            return
+        self.conf.update_channel = channel
+        self._show_channel()
+        self._updates = {}
+        if not network.is_offline():
+            self.start_thread(self._check_updates)
 
     def apply_channel(self) -> None:
         self.conf.wine_release_channel = self.channel.currentData()

@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from packaging.version import InvalidVersion, Version
+
 from ou_dedetai.app import App, UserExitedFromAsk
 
 from . import constants
@@ -464,6 +466,42 @@ def ensure_launcher_executable(app: App):
         logging.debug(f"> File exists?: {launcher_exe}: {launcher_exe.is_file()}")
     else:
         app.status("Running from source. Skipping launcher copy.")
+
+
+def offer_to_replace_installed(app: App) -> bool:
+    """When a newer Ou Dedetai (e.g. a downloaded test build) is run from somewhere other than
+    the install, offer to put it in place of the installed copy, so the shortcuts, the tray and
+    updates all use it. An older one is never put in place: Ou Dedetai doesn't go back.
+    Returns True if it was replaced."""
+    if constants.RUNMODE != "binary" or not app.conf._raw.install_dir:
+        return False
+    launcher = Path(app.conf.install_dir) / constants.BINARY_NAME
+    running = Path(os.path.realpath(sys.executable))
+    if not launcher.is_file() or running == Path(os.path.realpath(launcher)):
+        return False
+    try:
+        installed = utils.get_lli_release_version(launcher)
+        newer = installed is None or Version(constants.LLI_CURRENT_VERSION) > Version(installed)
+    except (OSError, subprocess.SubprocessError, InvalidVersion) as e:
+        logging.debug(f"Couldn't read the installed Ou Dedetai's version: {e}")
+        return False
+    if not newer:
+        return False
+    if not app.approve(
+        f"Use this {constants.APP_NAME} ({constants.LLI_CURRENT_VERSION}) from now on?",
+        f"It replaces the installed {constants.APP_NAME} ({installed}) in {app.conf.install_dir}, "
+        "so the app menu, the Logos shortcuts and updates all use it. "
+        "There's no going back to the older version.",
+    ):
+        return False
+    temporary = launcher.with_name(f"{constants.BINARY_NAME}.new")
+    shutil.copy(running, temporary)
+    temporary.chmod(0o755)
+    temporary.replace(launcher)  # works even while the old copy is running
+    logging.info(f"Replaced {launcher} ({installed}) with {running} ({constants.LLI_CURRENT_VERSION}).")
+    create_launcher_shortcuts(app)
+    app.status(f"{constants.APP_NAME} {constants.LLI_CURRENT_VERSION} is now the installed copy.", 100)
+    return True
 
 
 def ensure_launcher_shortcuts(app: App):

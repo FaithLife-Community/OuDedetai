@@ -8,6 +8,8 @@ import json
 import logging
 from pathlib import Path
 
+from packaging.version import InvalidVersion, Version
+
 from . import network, utils, constants, wine, system
 from .constants import PROMPT_OPTION_DIRECTORY
 
@@ -345,6 +347,9 @@ class PersistentConfiguration:
     faithlife_product_release_channel: str = "stable"
     # The Installer's release channel. Either "stable" or "dev"
     app_release_channel: str = "stable"
+    # Whether the user has chosen Releases or Prereleases themselves (Settings → Updates).
+    # Until they have, a development build follows Prereleases.
+    update_channel_chosen: bool = False
     # Whether we've offered to install the KDE Plasma desktop integrations (asked once)
     desktop_integrations_offered: bool = False
     # Never connect to the internet (no update checks, no downloads) until switched off
@@ -581,6 +586,7 @@ class Config:
         # Before any network object exists: offline mode keeps the last-known cache.
         network.set_offline(self.offline_mode)
         self._network = self._create_network_requests_with_hook()
+        self._default_to_prereleases()
         logging.debug("Current persistent config:")
         for k, v in self._raw.__dict__.items():
             logging.debug(f"{k}: {v}")
@@ -591,6 +597,32 @@ class Config:
         for k, v in self._network._cache.__dict__.items():
             logging.debug(f"{k}: {v}")
         logging.debug("End config dump")
+
+    def _default_to_prereleases(self) -> None:
+        """A development build (someone downloaded a test build) follows Prereleases, so it
+        keeps getting new test builds, until the user picks Releases or Prereleases themselves."""
+        try:
+            development = Version(constants.LLI_CURRENT_VERSION).is_devrelease
+        except InvalidVersion:
+            development = False
+        if development and not self._raw.update_channel_chosen:
+            self._raw.app_release_channel = "dev"
+            self._raw.wine_release_channel = "dev"
+
+    @property
+    def update_channel(self) -> str:
+        """"stable" (Releases) or "dev" (Prereleases): what Ou Dedetai updates itself to.
+        Wine follows the same choice, unless set apart under the developer options."""
+        return self._raw.app_release_channel
+
+    @update_channel.setter
+    def update_channel(self, value: str) -> None:
+        if value not in ("stable", "dev"):
+            raise ValueError(f"Invalid update channel: {value}")
+        self._raw.app_release_channel = value
+        self._raw.wine_release_channel = value
+        self._raw.update_channel_chosen = True
+        self._write()
 
     def _create_network_requests_with_hook(self) -> network.NetworkRequests:
         def _network_cache_hook():
@@ -844,9 +876,10 @@ class Config:
     def app_release_channel(self, value: str):
         if value not in ("stable", "dev"):
             raise ValueError(f"Invalid app release channel: {value}")
+        self._raw.update_channel_chosen = True
         if self._raw.app_release_channel != value:
             self._raw.app_release_channel = value
-            self._write()
+        self._write()
 
     @property
     def winetricks_binary(self) -> str:
@@ -964,9 +997,11 @@ class Config:
     def wine_release_channel(self, value: str) -> None:
         if value not in ("stable", "dev"):
             raise ValueError("Wine release channel must be 'stable' or 'dev'")
+        # A choice made here (developer options) sticks, like the Updates choice.
+        self._raw.update_channel_chosen = True
         if self._raw.wine_release_channel != value:
             self._raw.wine_release_channel = value
-            self._write()
+        self._write()
 
     def toggle_wine_release_channel(self) -> None:
         self.wine_release_channel = (

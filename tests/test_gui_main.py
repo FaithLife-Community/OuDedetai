@@ -246,6 +246,16 @@ class TestBackgroundWork(GuiTestCase):
             self.window.use_wine_release("stable")
         use.assert_called_once_with(self.window, "stable")
 
+    def test_updates_choice_sets_both_channels(self):
+        with mock.patch.object(self.window, "start_thread"):
+            self.window.s_prereleases.setChecked(True)
+        self.assertEqual(self.window.conf.update_channel, "dev")
+        self.assertEqual(self.window.conf.wine_release_channel, "dev")
+        with mock.patch.object(self.window, "start_thread"):
+            self.window.s_releases.setChecked(True)
+        self.assertEqual(self.window.conf.update_channel, "stable")
+        self.assertEqual(self.window.conf.wine_release_channel, "stable")
+
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:
             self.window._logos_state_changed(gui_main.State.RUNNING)

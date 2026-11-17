@@ -83,6 +83,13 @@ class CLI(App):
     def purge(self):
         control.purge(self)
 
+    def set_update_channel(self):
+        prereleases = self.conf._overrides.cli_choice == "prereleases"
+        self.conf.update_channel = "dev" if prereleases else "stable"
+        print("Updates: prereleases (test builds of the next version)." if prereleases else
+              "Updates: releases. Ou Dedetai never goes back: you stay on this version until a release "
+              "catches up.")
+
     def set_wine_channel(self):
         self.conf.wine_release_channel = self.conf._overrides.cli_choice or "stable"
         print(f"Wine builds: {self.conf.wine_release_channel} ('Recommended' and Update Wine use this).")

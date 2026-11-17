@@ -267,6 +267,7 @@ class TextualUI(TextualApp[None]):
         self.domain.status("TUI ready")
         # Once, on KDE Plasma: offer the Logos desktop integrations
         self.domain.start_thread(desktop_integrations.offer_or_notice_update, app=self.domain)
+        self.domain.start_thread(installer.offer_to_replace_installed, self.domain)
 
     def _monitor_tick(self) -> None:
         try:
@@ -636,6 +637,11 @@ class TUI(App):
                 self.conf.toggle_faithlife_product_release_channel()
             elif choice.startswith(f"Change {constants.APP_NAME} Release Channel"):
                 self.conf.toggle_installer_release_channel()
+            elif choice.startswith("Updates ("):
+                self.conf.update_channel = "stable" if self.conf.update_channel == "dev" else "dev"
+                self.status("Updates: prereleases (test builds of the next version)."
+                            if self.conf.update_channel == "dev" else
+                            "Updates: releases. You stay on this version until a release catches up.")
             elif choice.startswith("Wine Builds"):
                 self.conf.toggle_wine_release_channel()
                 self.status(f"Wine builds: {WINE_CHANNELS.get(self.conf.wine_release_channel)}")
@@ -725,6 +731,7 @@ class TUI(App):
                 labels.append("Update Desktop Integrations" if desktop_integrations.is_installed()
                               else "Install Desktop Integrations")
         channel = self.conf.wine_release_channel
+        labels.append(f"Updates (Current: {'Prereleases' if self.conf.update_channel == 'dev' else 'Releases'})")
         labels.append(f"Wine Builds (Current: {WINE_CHANNELS.get(channel, channel)})")
         labels.append(f"Work Offline (Current: {'On' if self.conf.offline_mode else 'Off'})")
         labels.extend(["Edit Config", "Reload Config"])

@@ -152,6 +152,14 @@
       <translation>Trabajar sin conexión</translation>
     </message>
     <message>
+      <source>Releases</source>
+      <translation>Versiones</translation>
+    </message>
+    <message>
+      <source>Prereleases: help test the next version of Ou Dedetai and Wine</source>
+      <translation>Prelanzamientos: ayude a probar la próxima versión de Ou Dedetai y Wine</translation>
+    </message>
+    <message>
       <source>Open the full view when Ou Dedetai starts (reading plan, layouts, status)</source>
       <translation>Abrir la vista completa al iniciar Ou Dedetai (plan de lectura, diseños, estado)</translation>
     </message>
@@ -370,6 +378,14 @@
     <message>
       <source>Logos has its own offline setting: Program Settings › Internet in Logos.</source>
       <translation>Logos tiene su propia opción sin conexión: Configuración del programa › Internet, en Logos.</translation>
+    </message>
+    <message>
+      <source>Updates</source>
+      <translation>Actualizaciones</translation>
+    </message>
+    <message>
+      <source>Switching back to Releases doesn't take you back: you stay on the version you have until a release catches up.</source>
+      <translation>Volver a Versiones no le devuelve a la anterior: se queda con la versión que tiene hasta que una versión la alcance.</translation>
     </message>
     <message>
       <source>Ou Dedetai window</source>
