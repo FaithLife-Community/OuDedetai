@@ -71,6 +71,10 @@ Back up). Builds are made by hand from the
   - repair actions
   - backup and restore
   - **Remove everything…** (see `--purge` below)
+- **Choose a Wine build** (Troubleshooting → More) offers the newest prerelease and newest release
+  bundles by name, marks the one in use, and still offers a file. Picking a bundle also sets the Wine
+  channel, so later updates follow it. An installed tarball is now compared with the channel's tarball
+  (it was compared with the AppImage release, so new rcs weren't offered).
 - **Stop closes Logos politely** (window, tray, TUI, `--stop-installed-app`): Ou Dedetai asks Logos to
   close as its close button does (Wine's `taskkill` without `/F`) and waits. While Logos looks busy
   (CPU or disk writing: probably syncing or saving) it keeps waiting and says so; if it sits idle it

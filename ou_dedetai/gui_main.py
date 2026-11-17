@@ -301,6 +301,7 @@ class Signals(QtCore.QObject):
     failed = QtCore.Signal(str)                 # an unexpected error in a background task
     task_done = QtCore.Signal()                 # a background task returned
     tray = QtCore.Signal()                      # Logos is being started: show the tray
+    wine_builds = QtCore.Signal(dict)           # channel → newest Wine bundle's name
 HOME, SETTINGS, TROUBLE = 0, 1, 2
 
 
@@ -317,6 +318,7 @@ class MainWindow(GuiApp):
         self._updates: dict[str, tuple[bool, str]] = {}
         self._tray: Optional["TrayController"] = None
         self._close_dialog: Optional["CloseLogosDialog"] = None
+        self._wine_builds_known = False
         self._installing = False
         self._last_state: Optional[State] = None
         self._polling = False
@@ -356,6 +358,7 @@ class MainWindow(GuiApp):
         sig.failed.connect(self._task_failed)
         sig.task_done.connect(self._task_done)
         sig.tray.connect(self.show_tray)
+        sig.wine_builds.connect(self._show_wine_builds)
 
         self.config_updated_hooks.append(self._refresh_later)
         self.refresh()
@@ -874,7 +877,7 @@ class MainWindow(GuiApp):
             button(tr("Restore…"), None, self.run_restore),
         ], 3, columns=2)
         section(tr("More"), [
-            button(tr("Choose a Wine build (AppImage or tarball)…"), None, self.set_appimage),
+            self._wine_build_button(),
             button(tr("Check for updates now"), None, self.check_updates_now),
             button(tr("Edit the config file…"), None, self.edit_config),
             button(tr("Remove everything…"), "danger", self.purge),
@@ -1196,7 +1199,10 @@ class MainWindow(GuiApp):
         updates: dict[str, tuple[bool, str]] = {}
         try:
             status, _ = utils.compare_recommended_wine_version(self)
-            updates["wine"] = (status == 0, tr("Update Wine to the recommended build") if status == 0
+            build = utils.recommended_wine_build_name(self) if status == 0 else None
+            updates["wine"] = (status == 0,
+                               tr("Update Wine to {build}").format(build=build) if build
+                               else tr("Update Wine to the recommended build") if status == 0
                                else tr("Wine is up to date"))
         except UPDATE_CHECK_ERRORS:
             logging.debug("Wine update check failed", exc_info=True)
@@ -1457,6 +1463,66 @@ class MainWindow(GuiApp):
         def run():
             installer.update_to_latest_wine(self)
             self._check_updates()  # so the Update button stops highlighting it
+        self.start_thread(run)
+
+    def _wine_build_button(self) -> QtWidgets.QPushButton:
+        """Choose a Wine build: our newest prerelease or release bundle, or a file."""
+        b = button(tr("Choose a Wine build…"), None, lambda: None)
+        menu = QtWidgets.QMenu(b)
+        self.wine_build_actions: dict[str, QtGui.QAction] = {}
+        for channel, text in (("dev", tr("Newest prerelease")), ("stable", tr("Newest release"))):
+            action = menu.addAction(text)
+            action.setData(text)
+            action.triggered.connect(lambda _=False, c=channel: self.use_wine_release(c))
+            self.wine_build_actions[channel] = action
+        menu.addSeparator()
+        menu.addAction(tr("A file on this computer (AppImage or tarball)…")).triggered.connect(self.set_appimage)
+        menu.aboutToShow.connect(self._wine_build_menu_shown)
+        b.setMenu(menu)
+        return b
+
+    def _wine_build_menu_shown(self) -> None:
+        offline = network.is_offline()
+        for action in self.wine_build_actions.values():
+            action.setEnabled(not offline)
+        if not offline and not self._wine_builds_known:
+            self.start_thread(self._find_wine_builds)
+
+    def _find_wine_builds(self) -> None:
+        names = {}
+        for channel in self.wine_build_actions:
+            try:
+                release = self.conf._network.wine_tarball_release(channel)
+                names[channel] = (release.version, utils.wine_build_name(os.path.basename(release.download_url)))
+            except UPDATE_CHECK_ERRORS:
+                logging.debug(f"Couldn't look up the {channel} Wine build", exc_info=True)
+        self.signals.wine_builds.emit(names)
+
+    def _show_wine_builds(self, names: dict) -> None:
+        self._wine_builds_known = bool(names)
+        installed = utils.installed_wine_build_name(self) or ""
+        for channel, action in self.wine_build_actions.items():
+            text = action.data()
+            if channel in names:
+                name, build = names[channel]
+                text = f"{text}: {name}" + (tr(" (in use)") if build == installed else "")
+            action.setText(text)
+
+    def use_wine_release(self, channel: str) -> None:
+        if self.logos.logos_state in (State.RUNNING, State.STARTING):
+            self.status(tr("Close Logos before changing its Wine."), 0)
+            return
+        if not self.approve(tr("Switch Wine?"), tr(
+                "Ou Dedetai downloads this Wine build and uses it from now on. Wine updates will "
+                "then follow the same kind of build (prereleases or releases).")):
+            return
+
+        def run():
+            installer.use_wine_release(self, channel)
+            self.status(tr("Wine switched."), 0)
+            self._wine_builds_known = False  # "(in use)" moves
+            self.signals.refresh.emit()
+            self._check_updates()
         self.start_thread(run)
 
     def set_appimage(self) -> None:

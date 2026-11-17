@@ -200,6 +200,10 @@
       <translation>Aún no instalado</translation>
     </message>
     <message>
+      <source>Choose a Wine build…</source>
+      <translation>Elegir una compilación de Wine…</translation>
+    </message>
+    <message>
       <source>Choose a Wine build</source>
       <translation>Elegir una versión de Wine</translation>
     </message>
@@ -492,6 +496,30 @@
       <translation>Accesos directos del menú y gestor de enlaces de Logos recreados para esta instalación.</translation>
     </message>
     <message>
+      <source>Newest prerelease</source>
+      <translation>Prelanzamiento más reciente</translation>
+    </message>
+    <message>
+      <source>Newest release</source>
+      <translation>Versión más reciente</translation>
+    </message>
+    <message>
+      <source>Close Logos before changing its Wine.</source>
+      <translation>Cierre Logos antes de cambiar su Wine.</translation>
+    </message>
+    <message>
+      <source>Switch Wine?</source>
+      <translation>¿Cambiar de Wine?</translation>
+    </message>
+    <message>
+      <source>Ou Dedetai downloads this Wine build and uses it from now on. Wine updates will then follow the same kind of build (prereleases or releases).</source>
+      <translation>Ou Dedetai descarga esta compilación de Wine y la usa a partir de ahora. Las actualizaciones de Wine seguirán el mismo tipo de compilación (prelanzamientos o versiones).</translation>
+    </message>
+    <message>
+      <source>Wine switched.</source>
+      <translation>Wine cambiado.</translation>
+    </message>
+    <message>
       <source>Logos appears to be syncing or saving. Waiting for it to finish…</source>
       <translation>Parece que Logos está sincronizando o guardando. Esperando a que termine…</translation>
     </message>
@@ -600,10 +628,6 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Restaurar…</translation>
     </message>
     <message>
-      <source>Choose a Wine build (AppImage or tarball)…</source>
-      <translation>Elegir una versión de Wine (AppImage o tarball)…</translation>
-    </message>
-    <message>
       <source>Check for updates now</source>
       <translation>Buscar actualizaciones ahora</translation>
     </message>
@@ -680,14 +704,6 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Marque las lecturas como hechas en Logos.</translation>
     </message>
     <message>
-      <source>Update Wine to the recommended build</source>
-      <translation>Actualizar Wine a la versión recomendada</translation>
-    </message>
-    <message>
-      <source>Wine is up to date</source>
-      <translation>Wine está al día</translation>
-    </message>
-    <message>
       <source>Ou Dedetai is up to date</source>
       <translation>Ou Dedetai está al día</translation>
     </message>
@@ -752,6 +768,14 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>No instalado</translation>
     </message>
     <message>
+      <source>Update Wine to the recommended build</source>
+      <translation>Actualizar Wine a la versión recomendada</translation>
+    </message>
+    <message>
+      <source>Wine is up to date</source>
+      <translation>Wine está al día</translation>
+    </message>
+    <message>
       <source>Update Logos</source>
       <translation>Actualizar Logos</translation>
     </message>
@@ -762,6 +786,14 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Update ({count})</source>
       <translation>Actualizar ({count})</translation>
+    </message>
+    <message>
+      <source>A file on this computer (AppImage or tarball)…</source>
+      <translation>Un archivo de este equipo (AppImage o tarball)…</translation>
+    </message>
+    <message>
+      <source> (in use)</source>
+      <translation> (en uso)</translation>
     </message>
     <message>
       <source>Quit Ou Dedetai</source>
@@ -806,6 +838,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>OpenGL 3.2 or newer is needed</source>
       <translation>Se necesita OpenGL 3.2 o posterior</translation>
+    </message>
+    <message>
+      <source>Update Wine to {build}</source>
+      <translation>Actualizar Wine a {build}</translation>
     </message>
     <message>
       <source>Update Ou Dedetai to {version}</source>

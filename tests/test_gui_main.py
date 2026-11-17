@@ -219,6 +219,33 @@ class TestBackgroundWork(GuiTestCase):
         start.assert_called_once_with(self.window.logos.stop)
         self.assertTrue(dialog.cancelled)
 
+    def test_choose_a_wine_build_offers_our_bundles_and_a_file(self):
+        menu = self.window.wine_build_actions["dev"].associatedObjects()[0]
+        texts = [a.text() for a in menu.actions() if a.text()]
+        self.assertEqual(texts, ["Newest prerelease", "Newest release",
+                                 "A file on this computer (AppImage or tarball)…"])
+        with mock.patch.object(gui_main.utils, "installed_wine_build_name",
+                               return_value="wine-custom_11.22_oinos-pre-b1e3dff-x86_64"):
+            self.window._show_wine_builds({
+                "dev": ("11.22-oinos-pre-b1e3dff", "wine-custom_11.22_oinos-pre-b1e3dff-x86_64"),
+                "stable": ("11.21-logoswt20261103", "wine-custom_11.21_logoswt20261103-x86_64")})
+        self.assertEqual(self.window.wine_build_actions["dev"].text(),
+                         "Newest prerelease: 11.22-oinos-pre-b1e3dff (in use)")
+        self.assertEqual(self.window.wine_build_actions["stable"].text(), "Newest release: 11.21-logoswt20261103")
+
+    def test_switching_to_a_bundle_needs_logos_closed_and_a_yes(self):
+        self.window.logos.logos_state = gui_main.State.RUNNING
+        with mock.patch.object(self.window, "approve") as approve:
+            self.window.use_wine_release("stable")
+        approve.assert_not_called()
+        self.window.logos.logos_state = gui_main.State.STOPPED
+        with mock.patch.object(self.window, "approve", return_value=True), \
+                mock.patch.object(self.window, "start_thread", side_effect=lambda f: f()), \
+                mock.patch.object(gui_main.installer, "use_wine_release") as use, \
+                mock.patch.object(self.window, "_check_updates"):
+            self.window.use_wine_release("stable")
+        use.assert_called_once_with(self.window, "stable")
+
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:
             self.window._logos_state_changed(gui_main.State.RUNNING)

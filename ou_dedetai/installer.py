@@ -218,6 +218,15 @@ def update_to_latest_wine(app: App):
     setup_wine(app)
 
 
+def use_wine_release(app: App, channel: str) -> None:
+    """Switch to the newest Wine bundle (tarball) on a release channel: "dev" for the newest
+    oinos prerelease, "stable" for the newest full release. Later updates follow that channel."""
+    app.conf.wine_release_channel = channel
+    app.conf.wine_appimage_path = None
+    app.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL
+    setup_wine(app)
+
+
 def download_wine(app: App) -> Optional[Path]:
     if app.conf.faithlife_product_version != "9" and app.conf.wine_binary not in [
         constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,

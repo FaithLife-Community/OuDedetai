@@ -145,3 +145,16 @@ class TestRecommendedWineIsResolved(unittest.TestCase):
             conf._raw.wine_binary = "Recommended"
             with mock.patch.object(Config, "_write"):
                 self.assertEqual(conf.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
+
+
+class TestUseWineRelease(unittest.TestCase):
+    def test_switches_channel_and_installs_the_bundle(self):
+        from ou_dedetai import constants, installer
+        app = mock.Mock()
+        app.conf.wine_appimage_path = "/x/wine.AppImage"
+        with mock.patch.object(installer, "setup_wine") as setup:
+            installer.use_wine_release(app, "stable")
+        self.assertEqual(app.conf.wine_release_channel, "stable")
+        self.assertIsNone(app.conf.wine_appimage_path)
+        self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
+        setup.assert_called_once_with(app)
