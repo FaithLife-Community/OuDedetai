@@ -1540,6 +1540,7 @@ class MainWindow(GuiApp):
 
 class TrayController(QtCore.QObject):
     """Ou Dedetai in the system tray while Logos runs; leaves when Logos closes."""
+    logos_closed = QtCore.Signal(bool)  # after "Close Logos and quit": did Logos close?
 
     def __init__(self, window: MainWindow, qt_app: QtWidgets.QApplication):
         super().__init__()
@@ -1561,6 +1562,7 @@ class TrayController(QtCore.QObject):
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(3000)
+        self.logos_closed.connect(self._after_close)
 
     def _fill(self, menu: QtWidgets.QMenu) -> None:
         menu.clear()
@@ -1599,16 +1601,31 @@ class TrayController(QtCore.QObject):
                                         tr("Logos is still running."))
             box.setInformativeText(tr(
                 "Ou Dedetai looks after Logos while it runs and tidies up when Logos closes. "
-                "Without it, Logos keeps running with no tray icon to stop it. It's safest to stop Logos first."))
-            stop = box.addButton(tr("Stop Logos and quit"), QtWidgets.QMessageBox.ButtonRole.AcceptRole)
+                "Without it, Logos keeps running with no tray icon to stop it. It's safest to close Logos first."))
+            stop = box.addButton(tr("Close Logos and quit"), QtWidgets.QMessageBox.ButtonRole.AcceptRole)
             leave = box.addButton(tr("Quit anyway"), QtWidgets.QMessageBox.ButtonRole.DestructiveRole)
             box.addButton(QtWidgets.QMessageBox.StandardButton.Cancel)
             box.setDefaultButton(stop)
             box.exec()
             if box.clickedButton() is stop:
-                self.window.logos.stop()
-            elif box.clickedButton() is not leave:
+                # Politely, as its close button does, so Logos can save and ask about unsaved work.
+                self.window.status(tr("Asking Logos to close…"))
+                self.window.start_thread(lambda: self.logos_closed.emit(self.window.logos.close()))
                 return
+            if box.clickedButton() is not leave:
+                return
+        self._leave()
+
+    def _after_close(self, closed: bool) -> None:
+        if closed:
+            self._leave()
+        else:
+            self.window.status(tr("Logos is still open (it may be asking you something), so Ou Dedetai "
+                                  "is staying in the tray."), 0)
+            if self.tray:
+                self.tray.showMessage(constants.APP_NAME, tr("Logos is still open, so Ou Dedetai is staying."))
+
+    def _leave(self) -> None:
         self.timer.stop()
         if self.tray:
             self.tray.hide()

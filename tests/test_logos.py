@@ -180,3 +180,38 @@ class TestStartingState(unittest.TestCase):
         self.processes(manager)
         manager.monitor_logos()
         manager.stop.assert_called_once()
+
+
+class TestPoliteClose(unittest.TestCase):
+    def test_close_asks_logos_and_never_kills(self):
+        from ou_dedetai import logos as logos_mod
+        app = mock.Mock()
+        app.conf.logos_exe = "/x/Logos.exe"
+        manager = logos_mod.LogosManager(app)
+        manager.logos_state = logos_mod.State.RUNNING
+        states = iter([logos_mod.State.RUNNING, logos_mod.State.STOPPED])
+
+        def monitor():
+            manager.logos_state = next(states)
+        process = mock.Mock()
+        with mock.patch.object(manager, "monitor", side_effect=monitor), \
+                mock.patch.object(logos_mod.wine, "run_wine_process", return_value=process) as run, \
+                mock.patch.object(logos_mod.time, "sleep"), \
+                mock.patch.object(manager, "stop") as stop:
+            self.assertTrue(manager.close())
+        self.assertEqual(run.call_args.kwargs["exe"], "taskkill")
+        self.assertEqual(run.call_args.kwargs["exe_args"], ["/IM", "Logos.exe"])
+        stop.assert_not_called()
+
+    def test_close_gives_up_without_forcing(self):
+        from ou_dedetai import logos as logos_mod
+        app = mock.Mock()
+        app.conf.logos_exe = "/x/Logos.exe"
+        manager = logos_mod.LogosManager(app)
+        manager.logos_state = logos_mod.State.RUNNING
+        with mock.patch.object(manager, "monitor"), \
+                mock.patch.object(logos_mod.wine, "run_wine_process"), \
+                mock.patch.object(logos_mod.time, "sleep"), \
+                mock.patch.object(manager, "stop") as stop:
+            self.assertFalse(manager.close(timeout=0.01))
+        stop.assert_not_called()

@@ -346,6 +346,35 @@ class LogosManager:
         # The Logos process has exited, if we wait here it hangs
         # wine.wineserver_wait(self.app)
 
+    def close(self, timeout: float = 60) -> bool:
+        """Ask Logos to close, as clicking its window's close button does (Wine's taskkill
+        without /F sends WM_CLOSE), and wait for it to go. Returns True once it has closed;
+        False if it's still open, e.g. because it's asking about unsaved work.
+        Unlike stop(), nothing is killed."""
+        if self._closed():
+            return True
+        exe = Path(self.app.conf.logos_exe).name if self.app.conf.logos_exe else "Logos.exe"
+        logging.info(f"Asking {exe} to close.")
+        with open(os.devnull, "w") as devnull:
+            process = wine.run_wine_process(self.app, self.app.conf.wine_binary, devnull, devnull,
+                                            exe="taskkill", exe_args=["/IM", exe])
+        if process is not None:
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            time.sleep(1)
+            if self._closed():
+                return True
+        logging.info("Logos is still open after being asked to close.")
+        return False
+
+    def _closed(self) -> bool:
+        self.monitor()
+        return self.logos_state == State.STOPPED
+
     def end_processes(self):
         for process_name, process in self.processes.items():
             if isinstance(process, subprocess.Popen):

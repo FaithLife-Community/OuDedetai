@@ -190,6 +190,15 @@ class TestBackgroundWork(GuiTestCase):
         tray.quit()
         qt.quit.assert_called_once()
 
+    def test_tray_close_logos_and_quit_is_polite(self):
+        qt = mock.Mock()
+        tray = gui_main.TrayController(self.window, qt)
+        tray._after_close(False)  # Logos stayed open (asking about unsaved work)
+        qt.quit.assert_not_called()
+        self.assertIn("still open", self.window.status_gui.message_label.text())
+        tray._after_close(True)
+        qt.quit.assert_called_once()
+
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:
             self.window._logos_state_changed(gui_main.State.RUNNING)

@@ -484,16 +484,20 @@
       <translation>Logos sigue abierto.</translation>
     </message>
     <message>
-      <source>Ou Dedetai looks after Logos while it runs and tidies up when Logos closes. Without it, Logos keeps running with no tray icon to stop it. It's safest to stop Logos first.</source>
-      <translation>Ou Dedetai cuida de Logos mientras está abierto y pone orden cuando se cierra. Sin él, Logos sigue abierto sin icono en la bandeja para detenerlo. Lo más seguro es detener Logos primero.</translation>
+      <source>Ou Dedetai looks after Logos while it runs and tidies up when Logos closes. Without it, Logos keeps running with no tray icon to stop it. It's safest to close Logos first.</source>
+      <translation>Ou Dedetai cuida de Logos mientras está abierto y pone orden cuando se cierra. Sin él, Logos sigue abierto sin icono en la bandeja para detenerlo. Lo más seguro es cerrar Logos primero.</translation>
     </message>
     <message>
-      <source>Stop Logos and quit</source>
-      <translation>Detener Logos y salir</translation>
+      <source>Close Logos and quit</source>
+      <translation>Cerrar Logos y salir</translation>
     </message>
     <message>
       <source>Quit anyway</source>
       <translation>Salir de todos modos</translation>
+    </message>
+    <message>
+      <source>Logos is still open (it may be asking you something), so Ou Dedetai is staying in the tray.</source>
+      <translation>Logos sigue abierto (quizá le esté preguntando algo), así que Ou Dedetai se queda en la bandeja.</translation>
     </message>
     <message>
       <source>Installing {product}</source>
@@ -678,6 +682,14 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>winetricks isn't available with this Wine build.</source>
       <translation>winetricks no está disponible con esta versión de Wine.</translation>
+    </message>
+    <message>
+      <source>Asking Logos to close…</source>
+      <translation>Pidiendo a Logos que se cierre…</translation>
+    </message>
+    <message>
+      <source>Logos is still open, so Ou Dedetai is staying.</source>
+      <translation>Logos sigue abierto, así que Ou Dedetai se queda.</translation>
     </message>
     <message>
       <source>In progress</source>
