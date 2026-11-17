@@ -136,13 +136,15 @@ class TestAppImageInstallsOnPrereleases(unittest.TestCase):
         app = mock.Mock()
         app.conf.wine_appimage_path = "/x/wine.AppImage"
         app.conf.wine_release_channel = "dev"
-        with mock.patch.object(installer, "setup_wine"), mock.patch.object(installer, "_finish_wine_switch"):
+        with mock.patch.object(installer, "setup_wine"), mock.patch.object(installer, "_finish_wine_switch"), \
+                mock.patch.object(installer, "_running_oinos", return_value=False):
             installer.update_to_latest_wine(app)
         self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
         self.assertIsNone(app.conf.wine_appimage_path)
         app.conf.wine_release_channel = "stable"
         app.conf.wine_appimage_path = "/x/wine.AppImage"
-        with mock.patch.object(installer, "setup_wine"), mock.patch.object(installer, "_finish_wine_switch"):
+        with mock.patch.object(installer, "setup_wine"), mock.patch.object(installer, "_finish_wine_switch"), \
+                mock.patch.object(installer, "_running_oinos", return_value=False):
             installer.update_to_latest_wine(app)
         self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_APPIMAGE_SIGIL)
 
@@ -181,3 +183,26 @@ class TestSavedSettingsSurviveLoading(unittest.TestCase):
                 loaded = config.PersistentConfiguration.load_from_path(str(path))
         for key, value in saved.items():
             self.assertEqual(getattr(loaded, key), value, key)
+
+
+class TestRendererWhenMovingOntoOinos(unittest.TestCase):
+    def run_finish(self, was_oinos, now_oinos):
+        with tempfile.TemporaryDirectory() as prefix:
+            (Path(prefix) / "system.reg").touch()
+            app = mock.Mock()
+            app.conf.wine_prefix = prefix
+            with mock.patch.object(installer, "apply_wine_config"), \
+                    mock.patch.object(installer, "_running_oinos", return_value=now_oinos), \
+                    mock.patch.object(installer.wine, "set_default_renderer") as renderer, \
+                    mock.patch.object(installer.utils, "installed_wine_build_name", return_value="x"):
+                installer._finish_wine_switch(app, was_oinos)
+        return renderer.called
+
+    def test_moving_onto_oinos_chooses_dxvk_or_gl(self):
+        self.assertTrue(self.run_finish(was_oinos=False, now_oinos=True))
+
+    def test_oinos_to_oinos_keeps_the_users_renderer(self):
+        self.assertFalse(self.run_finish(was_oinos=True, now_oinos=True))
+
+    def test_other_wine_keeps_the_renderer(self):
+        self.assertFalse(self.run_finish(was_oinos=False, now_oinos=False))

@@ -221,8 +221,9 @@ def update_to_latest_wine(app: App):
         logging.debug("System wine detected - cowardly refusing to upgrade")
         return
 
+    was_oinos = _running_oinos(app)
     setup_wine(app)
-    _finish_wine_switch(app)
+    _finish_wine_switch(app, was_oinos)
 
 
 def use_wine_release(app: App, channel: str) -> None:
@@ -231,15 +232,31 @@ def use_wine_release(app: App, channel: str) -> None:
     app.conf.wine_release_channel = channel
     app.conf.wine_appimage_path = None
     app.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL
+    was_oinos = _running_oinos(app)
     setup_wine(app)
-    _finish_wine_switch(app)
+    _finish_wine_switch(app, was_oinos)
 
 
-def _finish_wine_switch(app: App) -> None:
+def _running_oinos(app: App) -> bool:
+    try:
+        release, _ = wine.get_wine_release(app.conf.wine_binary)
+    except Exception as e:  # no Wine yet, or one that won't run
+        logging.debug(f"Couldn't read the Wine version: {e}")
+        return False
+    return wine.wine_supports_logos_updates(release)
+
+
+def _finish_wine_switch(app: App, was_oinos: bool = True) -> None:
     """After a new Wine build is in place: apply Ou Dedetai's settings for it (e.g. an
     AppImage install moving onto oinos gets FFmpeg media and Logos self-updates), and say
-    plainly that Logos can be started."""
+    plainly that Logos can be started.
+
+    Moving onto oinos from another Wine also sets the renderer oinos installs get (DXVK, or
+    OpenGL where the GPU can't run it): the old renderer was chosen for the old Wine."""
     if (Path(app.conf.wine_prefix) / "system.reg").is_file():
+        if not was_oinos and _running_oinos(app):
+            app.status("Choosing the renderer for this Wine build…")
+            wine.set_default_renderer(app)
         app.status("Applying Ou Dedetai's settings for this Wine build…")
         apply_wine_config(app)
     build = utils.installed_wine_build_name(app) or "the new build"
