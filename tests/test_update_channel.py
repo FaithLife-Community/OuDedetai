@@ -162,3 +162,22 @@ class TestFinishWineSwitch(unittest.TestCase):
         last = app.status.call_args
         self.assertIn("You can start Logos", last.args[0])
         self.assertEqual(last.args[1], 100)
+
+
+class TestSavedSettingsSurviveLoading(unittest.TestCase):
+    """Settings with a non-None default (Open the full view, offline mode, the update channel…)
+    were reset to their default on every start by the environment override."""
+
+    def test_saved_values_are_kept(self):
+        import json
+        import os
+        saved = {"gui_full_view": True, "offline_mode": True, "update_channel_chosen": True,
+                 "app_release_channel": "stable", "wine_release_channel": "stable",
+                 "desktop_integrations_offered": True, "faithlife_product_release_channel": "beta"}
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "oudedetai.json"
+            path.write_text(json.dumps(saved))
+            with mock.patch.dict(os.environ, {}, clear=False):
+                loaded = config.PersistentConfiguration.load_from_path(str(path))
+        for key, value in saved.items():
+            self.assertEqual(getattr(loaded, key), value, key)

@@ -146,7 +146,8 @@ class TestBackgroundWork(GuiTestCase):
         with mock.patch.object(network, "is_offline", return_value=False), \
                 mock.patch.object(self.window.conf._network, "clear_cache") as clear, \
                 mock.patch.object(self.window, "_check_updates") as check:
-            self.window._updates = {"aks": (True, "Update Akousousin to 0.9.0")}
+            check.return_value = {"aks": (True, "Update Akousousin to 0.9.0")}
+            self.window._updates = {}  # the signal hasn't reached the window yet
             self.window.start_thread = lambda f: f()  # type: ignore[method-assign]
             self.window.check_updates_now()
         clear.assert_called_once()

@@ -1219,9 +1219,11 @@ class MainWindow(GuiApp):
         self._plans, self._layouts = plans, layouts
         self._render_reading()
 
-    def _check_updates(self) -> None:
+    def _check_updates(self) -> dict:
+        """Look for updates (background thread); the window shows them via the updates signal.
+        Returns what was found, for callers that report it straight away."""
         if network.is_offline() or not self.is_installed():
-            return
+            return {}
         updates: dict[str, tuple[bool, str]] = {}
         try:
             status, _ = utils.compare_recommended_wine_version(self)
@@ -1257,6 +1259,7 @@ class MainWindow(GuiApp):
                                   tr("Update the desktop integrations to {version}").format(version=newer)
                                   if newer else tr("Desktop integrations are up to date"))
         self.signals.updates.emit(updates)
+        return updates
 
     def _updates_checked(self, updates: dict) -> None:
         self._updates = updates
@@ -1390,8 +1393,8 @@ class MainWindow(GuiApp):
         def run():
             self.status(tr("Checking for updates…"))
             self.conf._network.clear_cache()
-            self._check_updates()
-            available = [text for can, text in self._updates.values() if can]
+            # What this check found: self._updates is only set once the signal reaches the window.
+            available = [text for can, text in self._check_updates().values() if can]
             self.status(tr("Updates available: {names}").format(names="; ".join(available)) if available
                         else tr("Everything is up to date."), 0)
         self.start_thread(run)

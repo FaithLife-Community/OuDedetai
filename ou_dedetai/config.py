@@ -1,4 +1,5 @@
 import copy
+import dataclasses
 import os
 import re
 import subprocess
@@ -394,8 +395,11 @@ class PersistentConfiguration:
         # Now override with values from ENV
         legacy_env = LegacyConfiguration.load_from_env()
         config_env = PersistentConfiguration.from_legacy(legacy_env)
-        config_env.faithlife_product_release_channel = config_dict["faithlife_product_release_channel"]
-        config_env.app_release_channel = config_dict["app_release_channel"]
+        # Fields the environment can't set keep their dataclass default in config_env (e.g.
+        # gui_full_view=False), which would overwrite the saved value; keep the saved ones.
+        for field in dataclasses.fields(PersistentConfiguration):
+            if field.default is not None and field.name in config_dict:
+                setattr(config_env, field.name, config_dict[field.name])
         config_env._legacy = None
         for k, v in config_env.__dict__.items():
             if v is not None:
