@@ -18,44 +18,25 @@ from . import system
 from . import utils
 
 
-def check_wineserver(app: App) -> bool:
-    # FIXME: if the wine version changes, we may need to restart the wineserver
-    # (or at least kill it). Gotten into several states in dev where this happend
-    # Normally when an msi install failed
-    try:
-        process = run_wine_during_install(app, app.conf.wineserver_binary)
-        if not process:
-            logging.debug("Failed to spawn wineserver to check it")
-            return False
-        # We already check the return code in run_wine_during_install.
-        # If there is a non-zero exit code subprocess.CalledProcessError will be raised
-        return True
-    except subprocess.CalledProcessError:
-        return False
-
-
 def wineserver_kill(app: App):
-    if check_wineserver(app):
-        process = run_wine_during_install(
-            app,
-            app.conf.wineserver_binary,
-            exe_args=["-k"]
-        )
-        if not process:
-            logging.debug("Failed to spawn wineserver to kill it")
-            return False
+    """Stops the prefix's wineserver and every Wine process in it, if one is running."""
+    try:
+        run_wine_during_install(app, app.conf.wineserver_binary, exe_args=["-k"])
+    except subprocess.CalledProcessError:
+        # Exit code 1: no wineserver was running in this prefix; nothing to stop.
+        logging.debug("No wineserver running to kill.")
 
 
 def wineserver_wait(app: App):
-    if check_wineserver(app):
-        process = run_wine_during_install(
-            app,
-            app.conf.wineserver_binary,
-            exe_args=["-w"]
-        )
-        if not process:
-            logging.debug("Failed to spawn wineserver to wait for it")
-            return False
+    """Waits until every Wine process in the prefix has exited.
+
+    "wineserver -w" returns at once when no wineserver is running. Don't start one
+    first (a bare "wineserver"): a server no process has connected to never shuts
+    down by itself, so "-w" would then wait forever."""
+    try:
+        run_wine_during_install(app, app.conf.wineserver_binary, exe_args=["-w"])
+    except subprocess.CalledProcessError as e:
+        logging.debug(f"wineserver -w failed: {e}")
 
 
 @dataclass
