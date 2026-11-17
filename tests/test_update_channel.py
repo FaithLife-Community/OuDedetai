@@ -136,12 +136,29 @@ class TestAppImageInstallsOnPrereleases(unittest.TestCase):
         app = mock.Mock()
         app.conf.wine_appimage_path = "/x/wine.AppImage"
         app.conf.wine_release_channel = "dev"
-        with mock.patch.object(installer, "setup_wine"):
+        with mock.patch.object(installer, "setup_wine"), mock.patch.object(installer, "_finish_wine_switch"):
             installer.update_to_latest_wine(app)
         self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
         self.assertIsNone(app.conf.wine_appimage_path)
         app.conf.wine_release_channel = "stable"
         app.conf.wine_appimage_path = "/x/wine.AppImage"
-        with mock.patch.object(installer, "setup_wine"):
+        with mock.patch.object(installer, "setup_wine"), mock.patch.object(installer, "_finish_wine_switch"):
             installer.update_to_latest_wine(app)
         self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_APPIMAGE_SIGIL)
+
+
+class TestFinishWineSwitch(unittest.TestCase):
+    def test_applies_settings_and_says_logos_can_start(self):
+        with tempfile.TemporaryDirectory() as prefix:
+            (Path(prefix) / "system.reg").touch()
+            app = mock.Mock()
+            app.conf.wine_prefix = prefix
+            app.conf.faithlife_product = "Logos"
+            with mock.patch.object(installer, "apply_wine_config") as apply, \
+                    mock.patch.object(installer.utils, "installed_wine_build_name",
+                                      return_value="wine-custom_11.22_oinos-pre-b1e3dff-x86_64"):
+                installer._finish_wine_switch(app)
+        apply.assert_called_once_with(app)
+        last = app.status.call_args
+        self.assertIn("You can start Logos", last.args[0])
+        self.assertEqual(last.args[1], 100)

@@ -683,6 +683,7 @@ class MainWindow(GuiApp):
         self.t_updates = self._tile(tiles, 0, tr("Logos updates"))
         self.t_wine = self._tile(tiles, 1, tr("Wine"))
         self.t_settings = self._tile(tiles, 2, tr("Wine settings for Logos"))
+        self.t_settings.setTextFormat(QtCore.Qt.TextFormat.RichText)  # "Not yet: …" on a smaller line
         see = button(tr("See the list…"), "link", lambda: self.show_page(SETTINGS))
         tile = self.t_settings.parentWidget()
         tile_layout = tile.layout() if tile is not None else None

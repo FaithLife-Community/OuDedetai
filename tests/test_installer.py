@@ -152,7 +152,7 @@ class TestUseWineRelease(unittest.TestCase):
         from ou_dedetai import constants, installer
         app = mock.Mock()
         app.conf.wine_appimage_path = "/x/wine.AppImage"
-        with mock.patch.object(installer, "setup_wine") as setup:
+        with mock.patch.object(installer, "setup_wine") as setup, mock.patch.object(installer, "_finish_wine_switch"):
             installer.use_wine_release(app, "stable")
         self.assertEqual(app.conf.wine_release_channel, "stable")
         self.assertIsNone(app.conf.wine_appimage_path)

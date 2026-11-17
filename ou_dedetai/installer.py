@@ -222,6 +222,7 @@ def update_to_latest_wine(app: App):
         return
 
     setup_wine(app)
+    _finish_wine_switch(app)
 
 
 def use_wine_release(app: App, channel: str) -> None:
@@ -231,6 +232,18 @@ def use_wine_release(app: App, channel: str) -> None:
     app.conf.wine_appimage_path = None
     app.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL
     setup_wine(app)
+    _finish_wine_switch(app)
+
+
+def _finish_wine_switch(app: App) -> None:
+    """After a new Wine build is in place: apply Ou Dedetai's settings for it (e.g. an
+    AppImage install moving onto oinos gets FFmpeg media and Logos self-updates), and say
+    plainly that Logos can be started."""
+    if (Path(app.conf.wine_prefix) / "system.reg").is_file():
+        app.status("Applying Ou Dedetai's settings for this Wine build…")
+        apply_wine_config(app)
+    build = utils.installed_wine_build_name(app) or "the new build"
+    app.status(f"Wine is ready ({build}). You can start {app.conf.faithlife_product}.", 100)
 
 
 def download_wine(app: App) -> Optional[Path]:

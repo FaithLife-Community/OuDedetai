@@ -256,6 +256,9 @@ class TestBackgroundWork(GuiTestCase):
         self.assertEqual(self.window.conf.update_channel, "stable")
         self.assertEqual(self.window.conf.wine_release_channel, "stable")
 
+    def test_settings_tile_shows_formatted_text_not_markup(self):
+        self.assertEqual(self.window.t_settings.textFormat(), QtCore.Qt.TextFormat.RichText)
+
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:
             self.window._logos_state_changed(gui_main.State.RUNNING)
