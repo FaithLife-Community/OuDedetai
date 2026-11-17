@@ -464,6 +464,10 @@
       <translation>El modo sin conexión está activado, así que Ou Dedetai no buscará actualizaciones.</translation>
     </message>
     <message>
+      <source>App menu shortcuts and the Logos link handler recreated for this install.</source>
+      <translation>Accesos directos del menú y gestor de enlaces de Logos recreados para esta instalación.</translation>
+    </message>
+    <message>
       <source>Logos is running</source>
       <translation>Logos está abierto</translation>
     </message>
@@ -474,6 +478,22 @@
     <message>
       <source>Open layout</source>
       <translation>Abrir diseño</translation>
+    </message>
+    <message>
+      <source>Logos is still running.</source>
+      <translation>Logos sigue abierto.</translation>
+    </message>
+    <message>
+      <source>Ou Dedetai looks after Logos while it runs and tidies up when Logos closes. Without it, Logos keeps running with no tray icon to stop it. It's safest to stop Logos first.</source>
+      <translation>Ou Dedetai cuida de Logos mientras está abierto y pone orden cuando se cierra. Sin él, Logos sigue abierto sin icono en la bandeja para detenerlo. Lo más seguro es detener Logos primero.</translation>
+    </message>
+    <message>
+      <source>Stop Logos and quit</source>
+      <translation>Detener Logos y salir</translation>
+    </message>
+    <message>
+      <source>Quit anyway</source>
+      <translation>Salir de todos modos</translation>
     </message>
     <message>
       <source>Installing {product}</source>
@@ -706,6 +726,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Update ({count})</source>
       <translation>Actualizar ({count})</translation>
+    </message>
+    <message>
+      <source>Quit Ou Dedetai</source>
+      <translation>Salir de Ou Dedetai</translation>
     </message>
     <message>
       <source>All {total} needed are applied</source>

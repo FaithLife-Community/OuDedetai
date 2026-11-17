@@ -1428,7 +1428,10 @@ class MainWindow(GuiApp):
         self.start_thread(run)
 
     def recreate_shortcuts(self) -> None:
-        self.start_thread(installer.create_launcher_shortcuts, self)
+        def run():
+            installer.create_launcher_shortcuts(self)
+            self.status(tr("App menu shortcuts and the Logos link handler recreated for this install."), 0)
+        self.start_thread(run)
 
     def install_integrations(self) -> None:
         def run():
@@ -1584,6 +1587,32 @@ class TrayController(QtCore.QObject):
         show.triggered.connect(lambda: self.show_window(SIMPLE))
         trouble = menu.addAction(tr("Troubleshooting…"))
         trouble.triggered.connect(lambda: self.show_window(FULL, TROUBLE))
+        menu.addSeparator()
+        menu.addAction(tr("Quit Ou Dedetai")).triggered.connect(self.quit)
+
+    def quit(self) -> None:
+        """Leave the tray. While Logos runs, warn first: Ou Dedetai is what notices Logos
+        closing and tidies up after it."""
+        state = self.window.logos.logos_state
+        if state in (State.RUNNING, State.STARTING):
+            box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Icon.Warning, constants.APP_NAME,
+                                        tr("Logos is still running."))
+            box.setInformativeText(tr(
+                "Ou Dedetai looks after Logos while it runs and tidies up when Logos closes. "
+                "Without it, Logos keeps running with no tray icon to stop it. It's safest to stop Logos first."))
+            stop = box.addButton(tr("Stop Logos and quit"), QtWidgets.QMessageBox.ButtonRole.AcceptRole)
+            leave = box.addButton(tr("Quit anyway"), QtWidgets.QMessageBox.ButtonRole.DestructiveRole)
+            box.addButton(QtWidgets.QMessageBox.StandardButton.Cancel)
+            box.setDefaultButton(stop)
+            box.exec()
+            if box.clickedButton() is stop:
+                self.window.logos.stop()
+            elif box.clickedButton() is not leave:
+                return
+        self.timer.stop()
+        if self.tray:
+            self.tray.hide()
+        self.qt_app.quit()
 
     def _activated(self, reason) -> None:
         if reason == QtWidgets.QSystemTrayIcon.ActivationReason.Trigger:

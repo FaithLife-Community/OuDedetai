@@ -178,6 +178,18 @@ class TestBackgroundWork(GuiTestCase):
         self.assertIsNone(self.window.s_update.property("kind"))
         self.assertEqual(self.window.s_update.text(), "Update")
 
+    def test_tray_quit_warns_while_logos_runs(self):
+        qt = mock.Mock()
+        tray = gui_main.TrayController(self.window, qt)
+        self.window.logos.logos_state = gui_main.State.RUNNING
+        with mock.patch.object(QtWidgets.QMessageBox, "exec"), \
+                mock.patch.object(QtWidgets.QMessageBox, "clickedButton", return_value=None):
+            tray.quit()  # Cancel
+        qt.quit.assert_not_called()
+        self.window.logos.logos_state = gui_main.State.STOPPED
+        tray.quit()
+        qt.quit.assert_called_once()
+
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:
             self.window._logos_state_changed(gui_main.State.RUNNING)
