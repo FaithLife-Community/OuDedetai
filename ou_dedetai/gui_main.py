@@ -83,6 +83,14 @@ def set_pill(w: QtWidgets.QLabel, text: str, kind: str) -> None:
     w.style().polish(w)
 
 
+def set_kind(w: QtWidgets.QWidget, kind: Optional[str]) -> None:
+    """Restyle a button, e.g. "available" (light blue) when it has an update to offer."""
+    if w.property("kind") != kind:
+        w.setProperty("kind", kind)
+        w.style().unpolish(w)
+        w.style().polish(w)
+
+
 def button(text: str, kind: Optional[str] = None, slot: Optional[Callable] = None) -> QtWidgets.QPushButton:
     b = QtWidgets.QPushButton(text)
     if kind:
@@ -982,6 +990,7 @@ class MainWindow(GuiApp):
         self.h_install.setEnabled(not offline and not self._installing)
         self.s_options.setEnabled(not offline and not self._installing)
         self.s_update.setEnabled(installed)
+        self._show_update_button()
         # Home tiles
         oinos = self._oinos()
         if not installed:
@@ -1220,28 +1229,41 @@ class MainWindow(GuiApp):
         self._updates = updates
         self._show_akousousin()
         self._show_desktop_integrations()
+        self._show_update_button()
+
+    def _show_update_button(self) -> None:
+        """Light blue, with a count and the list as a tooltip, when something can be updated."""
+        available = [text for can, text in self._updates.values() if can] if not network.is_offline() else []
+        self.s_update.setText(tr("Update ({count})").format(count=len(available)) if available else tr("Update"))
+        self.s_update.setToolTip("\n".join(available))
+        set_kind(self.s_update, "available" if available else None)
 
     def _show_desktop_integrations(self) -> None:
         offline = network.is_offline()
         if not desktop_integrations.is_installed():
+            set_kind(self.p_desktop, None)
             self.p_desktop.setText(tr("Install"))
             self.p_desktop.setEnabled(not offline)
             return
         can, _ = self._updates.get("desktop", (False, ""))
         self.p_desktop.setText(tr("Update") if can else tr("Installed"))
         self.p_desktop.setEnabled(can and not offline)
+        set_kind(self.p_desktop, "available" if can and not offline else None)
 
     def _show_akousousin(self) -> None:
         if not self.is_installed() or network.is_offline():
             self.p_speech.setEnabled(False)
+            set_kind(self.p_speech, None)
             return
         if not system.akousousin_installed():
+            set_kind(self.p_speech, None)
             self.p_speech.setText(tr("Install"))
             self.p_speech.setEnabled(not network.is_offline())
             return
         can, _ = self._updates.get("aks", (False, ""))
         self.p_speech.setText(tr("Update") if can else tr("Up to date"))
         self.p_speech.setEnabled(can)
+        set_kind(self.p_speech, "available" if can else None)
 
     def open_in_logos(self, action: Callable[[], object], wait_for_com: bool = False) -> None:
         """Start Logos if needed, then do something in it (open a link or layout)."""
@@ -1417,13 +1439,19 @@ class MainWindow(GuiApp):
         self.start_thread(run)
 
     def update_faithlife_product(self) -> None:
-        self.start_thread(utils.update_faithlife_product, app=self)
+        def run():
+            utils.update_faithlife_product(app=self)
+            self._check_updates()
+        self.start_thread(run)
 
     def update_to_latest_lli_release(self) -> None:
         self.start_thread(utils.update_to_latest_lli_release, app=self)
 
     def update_wine(self) -> None:
-        self.start_thread(installer.update_to_latest_wine, self)
+        def run():
+            installer.update_to_latest_wine(self)
+            self._check_updates()  # so the Update button stops highlighting it
+        self.start_thread(run)
 
     def set_appimage(self) -> None:
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(

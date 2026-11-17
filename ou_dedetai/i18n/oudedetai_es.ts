@@ -704,6 +704,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Logos está al día</translation>
     </message>
     <message>
+      <source>Update ({count})</source>
+      <translation>Actualizar ({count})</translation>
+    </message>
+    <message>
       <source>All {total} needed are applied</source>
       <translation>Los {total} necesarios están aplicados</translation>
     </message>

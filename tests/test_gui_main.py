@@ -167,6 +167,17 @@ class TestBackgroundWork(GuiTestCase):
             self.window._updates_checked({"desktop": (False, "Desktop integrations are up to date")})
             self.assertFalse(self.window.p_desktop.isEnabled())
 
+    def test_update_button_highlights_available_updates(self):
+        with mock.patch.object(gui_main.network, "is_offline", return_value=False):
+            self.window._updates_checked({"aks": (True, "Update Akousousin to 0.9.0"),
+                                          "wine": (False, "Wine is up to date")})
+            self.assertEqual(self.window.s_update.property("kind"), "available")
+            self.assertEqual(self.window.s_update.text(), "Update (1)")
+            self.assertIn("Akousousin", self.window.s_update.toolTip())
+            self.window._updates_checked({"aks": (False, "Akousousin is up to date")})
+        self.assertIsNone(self.window.s_update.property("kind"))
+        self.assertEqual(self.window.s_update.text(), "Update")
+
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:
             self.window._logos_state_changed(gui_main.State.RUNNING)

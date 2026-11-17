@@ -55,6 +55,9 @@ QPushButton[kind="primary"], QToolButton[kind="primary"] {{
 QPushButton[kind="primary"]:hover, QToolButton[kind="primary"]:hover {{ background: {BLUE_DARK}; }}
 QPushButton[kind="primary"]:disabled, QToolButton[kind="primary"]:disabled {{
     background: {PANEL}; border-color: {BORDER_STRONG}; color: #6b6b6b; }}
+QPushButton[kind="available"], QToolButton[kind="available"] {{
+    background: {BLUE_LIGHTEST}; border-color: {BLUE}; color: {BLUE_DARK}; font-weight: 600; }}
+QPushButton[kind="available"]:hover, QToolButton[kind="available"]:hover {{ background: {BLUE_LIGHT}; }}
 QPushButton[kind="danger"] {{ background: white; color: {RED}; border-color: #e3b4ae; }}
 QPushButton[kind="link"] {{ background: transparent; border: none; color: {BLUE}; padding: 2px 0;
     font-weight: 400; text-align: left; }}
