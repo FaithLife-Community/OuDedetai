@@ -1,5 +1,16 @@
 # Changelog
 
+- 4.0.0-beta.16
+	- Allow Ou Dedetai to update itself and Wine and distinguish latest use from prerelease
+	- Allow using a Wine tarball
+	- Implement a new Logos to Markdown Notes Exporter
+	- Fix how Ou Dedetai finds Steam Proton
+	- Fix installation of ICU
+	- Permit Logos printing via Wine prefix
+	- Allow use of GitHub personal access tokens
+	- Fix GUI popup errors
+	- TUI improvements and bug fixes
+	- Various bug fixes
 - 4.0.0-beta.15
 	- Fix issues with TUI [J. Bellars, T. H. Wright]
 	- Switch TUI to Textual [T. H. Wright]
