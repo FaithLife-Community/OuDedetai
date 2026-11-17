@@ -112,3 +112,36 @@ class TestReplaceInstalled(unittest.TestCase):
         with mock.patch.object(installer.sys, "executable", str(self.launcher)):
             self.assertFalse(self.replace("4.0.0-beta.15"))
         self.app.approve.assert_not_called()
+
+
+class TestAppImageInstallsOnPrereleases(unittest.TestCase):
+    """An install upgraded from beta 15 (Wine 10.8 AppImage) is offered the oinos tarball."""
+
+    def conf(self, channel):
+        conf = mock.Mock()
+        conf.wine_binary = "/x/data/bin/wine-staging_10.8-x86_64.AppImage"
+        conf.is_wine_binary_in_distribution = False
+        conf.wine_release_channel = channel
+        conf._wine_tarball_release.version = "11.22-oinos-pre-b1e3dff"
+        conf.wine_download_file_name = "wine-staging_10.8-x86_64.AppImage"
+        return conf
+
+    def test_prereleases_recommend_oinos(self):
+        self.assertEqual(config.Config.wine_recommended_version.fget(self.conf("dev")), "11.22")
+
+    def test_releases_keep_the_appimage(self):
+        self.assertEqual(config.Config.wine_recommended_version.fget(self.conf("stable")), "10.8")
+
+    def test_update_moves_the_appimage_install_onto_the_tarball(self):
+        app = mock.Mock()
+        app.conf.wine_appimage_path = "/x/wine.AppImage"
+        app.conf.wine_release_channel = "dev"
+        with mock.patch.object(installer, "setup_wine"):
+            installer.update_to_latest_wine(app)
+        self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
+        self.assertIsNone(app.conf.wine_appimage_path)
+        app.conf.wine_release_channel = "stable"
+        app.conf.wine_appimage_path = "/x/wine.AppImage"
+        with mock.patch.object(installer, "setup_wine"):
+            installer.update_to_latest_wine(app)
+        self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_APPIMAGE_SIGIL)

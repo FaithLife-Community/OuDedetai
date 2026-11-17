@@ -209,7 +209,11 @@ def check_system_compatibility(app: App):
 
 def update_to_latest_wine(app: App):
     """Update a managed Wine installation to the currently recommended build."""
-    if app.conf.wine_appimage_path is not None:
+    if app.conf.wine_appimage_path is not None and app.conf.wine_release_channel == "dev":
+        # Prereleases: an AppImage install moves onto the oinos tarball.
+        app.conf.wine_appimage_path = None
+        app.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL
+    elif app.conf.wine_appimage_path is not None:
         app.conf.wine_binary = constants.WINE_RECOMMENDED_APPIMAGE_SIGIL
     elif app.conf.is_wine_binary_in_distribution:
         app.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL

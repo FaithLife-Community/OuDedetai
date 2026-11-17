@@ -308,7 +308,7 @@ def installed_wine_build_name(app: App) -> Optional[str]:
 def recommended_wine_build_name(app: App) -> Optional[str]:
     """Name of the build "Update to Latest" would install for this kind of install."""
     try:
-        if app.conf.is_wine_binary_in_distribution:
+        if app.conf.is_wine_binary_in_distribution or app.conf.wine_release_channel == "dev":
             url = app.conf._wine_tarball_release.download_url
         else:
             url = app.conf.wine_download_url

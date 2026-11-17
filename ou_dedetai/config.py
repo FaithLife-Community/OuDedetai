@@ -1269,7 +1269,10 @@ class Config:
     def wine_recommended_version(self) -> str:
         """The recommended Wine's version number ("11.22"), for comparing with the installed one."""
         if (self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL
-                or self.is_wine_binary_in_distribution):
+                or self.is_wine_binary_in_distribution
+                or self.wine_release_channel == "dev"):
+            # Prereleases recommend the oinos tarball even to an AppImage install (e.g. one
+            # upgraded from beta 15), so "Update Wine" moves it onto oinos.
             # An unpacked tarball is updated from the release channel's tarball, not the AppImage.
             # Its tag ("11.22-oinos-pre-b1e3dff") carries the version first.
             version = self._wine_tarball_release.version
