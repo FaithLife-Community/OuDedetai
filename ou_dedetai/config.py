@@ -945,6 +945,9 @@ class Config:
 
     @property
     def wine_path_in_distribution(self) -> str:
+        # The configured build: older builds may still be unpacked next to it.
+        if self.is_wine_binary_in_distribution and Path(self.wine_binary).is_file():
+            return str(Path(self.wine_binary).absolute())
         return str(next(Path(self.wine_distribution_dir).glob("*/bin/wine")).absolute())
 
     @property
