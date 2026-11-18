@@ -355,6 +355,7 @@ class TUI(App):
         super().__init__(ephemeral_config)
         self.is_running = True
         self._installer_thread: Optional[threading.Thread] = None
+        self._wine_setting_thread: Optional[threading.Thread] = None
         self.console_log: list[str] = []
         self.tmp = ""
         self.ui = TextualUI(self)
@@ -657,40 +658,62 @@ class TUI(App):
             pass
         self.go_to_main_menu()
 
+    def _run_wine_setting(self, description: str, action, *args) -> None:
+        """Run Wine configuration writes without blocking the Textual UI."""
+        if self._wine_setting_thread and self._wine_setting_thread.is_alive():
+            self.status("Another Wine configuration change is still running")
+            self.go_to_main_menu()
+            return
+
+        def _run() -> None:
+            try:
+                action(*args)
+            except Exception:
+                logging.exception("Failed to %s", description)
+                self.status(f"Failed to {description}; see application log")
+            else:
+                self.status(f"Completed: {description}")
+
+        self.status(f"Applying: {description}…")
+        self._wine_setting_thread = self.start_thread(_run)
+        self.go_to_main_menu()
+
     def renderer_select(self, choice: str | None) -> None:
         if choice in ("gdi", "gl", "dxvk", "vulkan"):
-            self.status(f"Changing renderer to {choice}…")
-            wine.set_renderer(self, self.conf.wine64_binary, choice)
-            self.status(f"Renderer set to {choice}")
-        self.go_to_main_menu()
+            self._run_wine_setting(
+                f"set renderer to {choice}", wine.set_renderer,
+                self, self.conf.wine64_binary, choice
+            )
+        else:
+            self.go_to_main_menu()
 
     def win_ver_logos_select(self, choice: str | None) -> None:
         if choice in ("vista", "win7", "win8", "win10", "win11"):
-            self.status(f"Setting Logos Windows version to {choice}…")
-            wine.set_win_version(self, "logos", choice)
-            self.status(f"Logos Windows version set to {choice}")
-        self.go_to_main_menu()
+            self._run_wine_setting(
+                f"set Logos Windows version to {choice}",
+                wine.set_win_version, self, "logos", choice
+            )
+        else:
+            self.go_to_main_menu()
 
     def win_ver_index_select(self, choice: str | None) -> None:
         if choice in ("vista", "win7", "win8", "win10", "win11"):
-            self.status(f"Setting Indexer Windows version to {choice}…")
-            wine.set_win_version(self, "indexer", choice)
-            self.status(f"Indexer Windows version set to {choice}")
-        self.go_to_main_menu()
+            self._run_wine_setting(
+                f"set Indexer Windows version to {choice}",
+                wine.set_win_version, self, "indexer", choice
+            )
+        else:
+            self.go_to_main_menu()
 
     def set_wineconfig_menu_options(self) -> list[str]:
-        renderer = wine.get_renderer(self)
-        renderer_label = renderer or "Unknown"
-        logos_win_version = wine.get_win_version(self, "logos") or "Unknown"
-        indexer_win_version = wine.get_win_version(self, "indexer") or "Default"
-
+        renderer, logos_version, indexer_version = wine.read_wine_config(self)
         return [
-            f"Set Renderer (Current: {renderer_label})",
+            f"Set Renderer (Current: {renderer or 'Unknown'})",
             "Set Runner (AppImage or tarball)",
             "Update to Latest Wine",
             "Toggle experimental media support",
-            f"Set Windows Version for Logos (Current: {logos_win_version})",
-            f"Set Windows Version for Indexer (Current: {indexer_win_version})",
+            f"Set Windows Version for Logos (Current: {logos_version or 'Default'})",
+            f"Set Windows Version for Indexer (Current: {indexer_version or 'Default'})",
             "Return to Main Menu",
         ]
 
