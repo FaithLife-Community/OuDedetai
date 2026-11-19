@@ -183,6 +183,16 @@ class TestStartingState(unittest.TestCase):
 
 
 class TestPoliteClose(unittest.TestCase):
+    def test_force_close_also_ends_the_rest_of_wine(self):
+        # #412: forcing Logos closed used to leave wineserver and helpers running
+        app = mock.Mock()
+        manager = logos.LogosManager(app)
+        calls = []
+        with mock.patch.object(manager, "stop", side_effect=lambda: calls.append("stop")), \
+                mock.patch.object(logos.wine, "wineserver_kill", side_effect=lambda a: calls.append("kill")):
+            manager.force_close()
+        self.assertEqual(calls, ["stop", "kill"])
+
     def test_close_asks_logos_and_never_kills(self):
         from ou_dedetai import logos as logos_mod
         app = mock.Mock()
@@ -235,15 +245,15 @@ class TestCloseOrForce(unittest.TestCase):
     def test_forces_only_when_the_user_agrees(self):
         for approve in (False, True):
             m = self.manager(approve=approve)
-            with mock.patch.object(m, "close", return_value=False), mock.patch.object(m, "stop") as stop:
+            with mock.patch.object(m, "close", return_value=False), mock.patch.object(m, "force_close") as force:
                 m.close_or_force()
-            self.assertEqual(stop.called, approve)
+            self.assertEqual(force.called, approve)
 
     def test_unattended_never_forces(self):
         m = self.manager(assume_yes=True, approve=True)
-        with mock.patch.object(m, "close", return_value=False), mock.patch.object(m, "stop") as stop:
+        with mock.patch.object(m, "close", return_value=False), mock.patch.object(m, "force_close") as force:
             m.close_or_force()
-        stop.assert_not_called()
+        force.assert_not_called()
 
     def test_busy_logos_keeps_the_wait_going(self):
         m = self.manager()

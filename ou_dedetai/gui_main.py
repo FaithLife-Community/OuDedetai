@@ -315,6 +315,8 @@ class MainWindow(GuiApp):
         self.root.setWindowIcon(gui_style.app_icon())
         self._plans: list[dict] = []
         self._layouts: list[str] = []
+        # Buttons that change Logos's files or its Wine prefix: greyed out while Logos runs.
+        self.while_closed: list[QtWidgets.QWidget] = []
         self._updates: dict[str, tuple[bool, str]] = {}
         self._tray: Optional["TrayController"] = None
         self._close_dialog: Optional["CloseLogosDialog"] = None
@@ -725,7 +727,7 @@ class MainWindow(GuiApp):
         ll.addWidget(row(tr("Sign-in and Bible links"), tr("Sent to Logos by Ou Dedetai's link handler"),
                          self.p_links))
         ll.addWidget(row(tr("Graphics"), tr("Chosen automatically for this computer"), self.p_graphics))
-        ll.addWidget(row(tr("Tidy up when Logos closes"), tr("Stops leftover Wine processes"), self.p_tidy))
+        ll.addWidget(row(tr("Tidy up before Logos starts"), tr("Stops Wine left running from earlier"), self.p_tidy))
         self.r_net = row(tr("Internet"), tr("Checks for updates when opened"), self.p_net)
         ll.addWidget(self.r_net)
         ll.addStretch(1)
@@ -765,7 +767,7 @@ class MainWindow(GuiApp):
         titles.addWidget(label(tr("Settings"), "title"))
         titles.addWidget(label(tr("What Ou Dedetai sets in Wine for Logos, and why."), "muted"))
         head.addLayout(titles, 1)
-        head.addWidget(button(tr("Re-apply settings"), None, self.update_wine_config))
+        head.addWidget(self.closed_only(button(tr("Re-apply settings"), None, self.update_wine_config)))
         v.addLayout(head)
 
         net, nl = card()
@@ -820,7 +822,7 @@ class MainWindow(GuiApp):
                             ("gdi", tr("GDI (no 3D)"))):
             self.renderer.addItem(text, value)
         grid.addWidget(self.renderer, 0, 1)
-        grid.addWidget(button(tr("Apply"), None, self.apply_renderer), 0, 2)
+        grid.addWidget(self.closed_only(button(tr("Apply"), None, self.apply_renderer)), 0, 2)
         self.renderer_now = label("", "muted")
         grid.addWidget(self.renderer_now, 0, 3)
         grid.addWidget(label(tr("Wine builds to use")), 3, 0)
@@ -833,12 +835,13 @@ class MainWindow(GuiApp):
         grid.addWidget(label(tr("Windows version for Logos")), 1, 0)
         self.winver_logos = QtWidgets.QComboBox()
         grid.addWidget(self.winver_logos, 1, 1)
-        grid.addWidget(button(tr("Apply"), None, lambda: self.apply_winver("logos", self.winver_logos)), 1, 2)
+        grid.addWidget(self.closed_only(button(tr("Apply"), None,
+                                               lambda: self.apply_winver("logos", self.winver_logos))), 1, 2)
         grid.addWidget(label(tr("Windows version for the indexer")), 2, 0)
         self.winver_indexer = QtWidgets.QComboBox()
         grid.addWidget(self.winver_indexer, 2, 1)
-        grid.addWidget(button(tr("Apply"), None, lambda: self.apply_winver("indexer", self.winver_indexer)),
-                       2, 2)
+        grid.addWidget(self.closed_only(button(tr("Apply"), None,
+                                               lambda: self.apply_winver("indexer", self.winver_indexer))), 2, 2)
         for combo in (self.winver_logos, self.winver_indexer):
             combo.addItem(tr("Wine default"), "")
             for version in constants.WINDOWS_VERSIONS:
@@ -856,7 +859,10 @@ class MainWindow(GuiApp):
             (tr("Run a Windows program…"), self.run_windows_program),
             (tr("Open the prefix folder"), lambda: open_path(self.conf.wine_prefix)),
         )):
-            tools.addWidget(button(text, None, slot), i // 3, i % 3)
+            tool = button(text, None, slot)
+            if text == "winetricks":  # installs into the prefix
+                self.closed_only(tool)
+            tools.addWidget(tool, i // 3, i % 3)
         dl.addLayout(tools)
         dl.addWidget(label(tr("Command line: oudedetai --show-wine-config, oudedetai --wine winecfg"), "muted"))
         self.dev.setVisible(False)
@@ -899,31 +905,32 @@ class MainWindow(GuiApp):
             button(tr("Save a support report…"), "primary", self.get_support),
             button(tr("Open the logs folder"), None, self.open_logs),
         ], 1, accent="true")
-        self.logging = QtWidgets.QCheckBox(tr("Logos's own logging (for Faithlife support)"))
+        # Changing it waits for Wine to finish, which with Logos open means until Logos closes.
+        self.logging = self.closed_only(QtWidgets.QCheckBox(tr("Logos's own logging (for Faithlife support)")))
         self.logging.clicked.connect(lambda _=False: self.switch_logging())
         help_.addWidget(self.logging)
         # An OS update (seen on Bazzite and SteamOS) can leave KRunner and the look-up
         # shortcut not working; reinstalling them puts their files and settings back (#581).
         self.t_integrations = button(tr("Reinstall desktop integrations"), None, self.install_integrations)
-        self.t_reindex = button(tr("Rebuild the index"), None, self.run_indexing)
+        self.t_reindex = self.closed_only(button(tr("Rebuild the index"), None, self.run_indexing))
         section(tr("Repair"), [
-            button(tr("Re-apply settings"), None, self.update_wine_config),
+            self.closed_only(button(tr("Re-apply settings"), None, self.update_wine_config)),
             self.t_integrations,
             self.t_reindex,
-            button(tr("Remove the library catalog"), None, self.remove_library_catalog),
-            button(tr("Remove all index files"), None, self.remove_indexes),
-            button(tr("Reinstall language data (ICU)"), None, self.install_icu),
+            self.closed_only(button(tr("Remove the library catalog"), None, self.remove_library_catalog)),
+            self.closed_only(button(tr("Remove all index files"), None, self.remove_indexes)),
+            self.closed_only(button(tr("Reinstall language data (ICU)"), None, self.install_icu)),
             button(tr("Install dependencies"), None, self.install_deps),
         ], 2)
         section(tr("Your data"), [
-            button(tr("Back up…"), None, self.run_backup),
-            button(tr("Restore…"), None, self.run_restore),
+            self.closed_only(button(tr("Back up…"), None, self.run_backup)),
+            self.closed_only(button(tr("Restore…"), None, self.run_restore)),
         ], 3, columns=2)
         section(tr("More"), [
-            self._wine_build_button(),
+            self.closed_only(self._wine_build_button()),
             button(tr("Check for updates now"), None, self.check_updates_now),
             button(tr("Edit the config file…"), None, self.edit_config),
-            button(tr("Remove everything…"), "danger", self.purge),
+            self.closed_only(button(tr("Remove everything…"), "danger", self.purge)),
         ], 4)
         grid.setColumnStretch(0, 3)
         grid.setColumnStretch(1, 2)
@@ -978,9 +985,19 @@ class MainWindow(GuiApp):
                           ("desktop", self.install_integrations)):
             enabled, text = self._updates.get(key, (False, ""))
             if text:
-                a = menu.addAction(text)
-                a.setEnabled(enabled)
+                # Wine, Logos and Akousousin (registered in the prefix) are updated with Logos closed.
+                wait = enabled and key in ("wine", "logos", "aks") and self._logos_open()
+                a = menu.addAction(tr("{update} (close Logos first)").format(update=text) if wait else text)
+                a.setEnabled(enabled and not wait)
                 a.triggered.connect(slot)
+
+    def closed_only(self, widget):
+        """Grey `widget` out while Logos is open (see `while_closed`)."""
+        self.while_closed.append(widget)
+        return widget
+
+    def _logos_open(self) -> bool:
+        return self.logos.logos_state in (State.RUNNING, State.STARTING)
 
     # ── Refresh ──
     def _refresh_later(self, *_):
@@ -1032,7 +1049,9 @@ class MainWindow(GuiApp):
         self.s_stop.setEnabled(running)
         self.h_stop.setEnabled(running)
         self.h_stop.setVisible(installed)
-        self.t_reindex.setEnabled(installed and not running)  # not underneath a running Logos
+        for widget in self.while_closed:
+            widget.setEnabled(installed and not running)
+            widget.setToolTip(tr("Close Logos first") if running else "")
         self.h_run.setVisible(installed)
         self.h_install.setVisible(not installed)
         self.h_install.setEnabled(not offline and not self._installing)
@@ -1334,7 +1353,7 @@ class MainWindow(GuiApp):
             return
         can, _ = self._updates.get("aks", (False, ""))
         self.p_speech.setText(tr("Update") if can else tr("Up to date"))
-        self.p_speech.setEnabled(can)
+        self.p_speech.setEnabled(can and not self._logos_open())  # it registers itself in the prefix
         set_kind(self.p_speech, "available" if can else None)
 
     def open_in_logos(self, action: Callable[[], object], wait_for_com: bool = False) -> None:
@@ -1748,7 +1767,9 @@ class CloseLogosDialog(QtWidgets.QDialog):
         if busy:
             self.text.setText(tr("Logos appears to be syncing or saving. Waiting for it to finish…"))
         elif idle > 10:
-            self.text.setText(tr("Logos hasn't closed. It may be asking you something: check its window."))
+            self.text.setText(tr("Logos hasn't closed. It may be asking you something: check its window.\n\n"
+                                 "If its window has already gone, Logos is stuck shutting down and forcing "
+                                 "it to close is safe."))
         else:
             self.text.setText(tr("Waiting for Logos to close…"))
 
@@ -1762,7 +1783,7 @@ class CloseLogosDialog(QtWidgets.QDialog):
         if answer != QtWidgets.QMessageBox.StandardButton.Yes:
             return
         self.cancelled = True
-        self.main.start_thread(self.main.logos.stop)
+        self.main.start_thread(self.main.logos.force_close)
         self._done(True)
 
     def _cancel(self) -> None:

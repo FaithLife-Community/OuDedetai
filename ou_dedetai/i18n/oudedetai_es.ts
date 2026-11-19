@@ -116,10 +116,6 @@
       <translation>La flecha ofrece más formas de abrir Logos</translation>
     </message>
     <message>
-      <source>Run indexing</source>
-      <translation>Indexar</translation>
-    </message>
-    <message>
       <source>Logos updates</source>
       <translation>Actualizaciones de Logos</translation>
     </message>
@@ -180,8 +176,8 @@
       <translation>Obtener ayuda</translation>
     </message>
     <message>
-      <source>Logos's own logging (for Faithlife support)</source>
-      <translation>Registro propio de Logos (para el soporte de Faithlife)</translation>
+      <source>Reinstall desktop integrations</source>
+      <translation>Reinstalar las integraciones con el escritorio</translation>
     </message>
     <message>
       <source>Repair</source>
@@ -280,8 +276,8 @@
       <translation>Ou Dedetai prepara Wine e instala Logos por usted. Al final iniciará sesión en su cuenta de Faithlife.</translation>
     </message>
     <message>
-      <source>Settings and troubleshooting…</source>
-      <translation>Configuración y solución de problemas…</translation>
+      <source>Full view and settings…</source>
+      <translation>Vista completa y configuración…</translation>
     </message>
     <message>
       <source>Logos on Linux</source>
@@ -328,12 +324,12 @@
       <translation>Elegidos automáticamente para este equipo</translation>
     </message>
     <message>
-      <source>Tidy up when Logos closes</source>
-      <translation>Ordenar al cerrar Logos</translation>
+      <source>Tidy up before Logos starts</source>
+      <translation>Limpieza antes de iniciar Logos</translation>
     </message>
     <message>
-      <source>Stops leftover Wine processes</source>
-      <translation>Detiene los procesos de Wine que queden</translation>
+      <source>Stops Wine left running from earlier</source>
+      <translation>Detiene Wine si quedó abierto de antes</translation>
     </message>
     <message>
       <source>Integrations</source>
@@ -366,10 +362,6 @@
     <message>
       <source>What Ou Dedetai sets in Wine for Logos, and why.</source>
       <translation>Lo que Ou Dedetai configura en Wine para Logos, y por qué.</translation>
-    </message>
-    <message>
-      <source>Re-apply settings</source>
-      <translation>Volver a aplicar la configuración</translation>
     </message>
     <message>
       <source>Ou Dedetai won't connect to the internet at all: no update checks, no downloads. Installing and updating need a connection.</source>
@@ -412,12 +404,12 @@
       <translation>GDI (sin 3D)</translation>
     </message>
     <message>
-      <source>Apply</source>
-      <translation>Aplicar</translation>
-    </message>
-    <message>
       <source>Wine builds to use</source>
       <translation>Versiones de Wine que usar</translation>
+    </message>
+    <message>
+      <source>Apply</source>
+      <translation>Aplicar</translation>
     </message>
     <message>
       <source>Then use Update ▸ Wine, or install again.</source>
@@ -442,6 +434,14 @@
     <message>
       <source>Check again</source>
       <translation>Comprobar de nuevo</translation>
+    </message>
+    <message>
+      <source>Logos's own logging (for Faithlife support)</source>
+      <translation>Registro propio de Logos (para el soporte de Faithlife)</translation>
+    </message>
+    <message>
+      <source>Rebuild the index</source>
+      <translation>Reconstruir el índice</translation>
     </message>
     <message>
       <source>Blank (no panels open)</source>
@@ -592,6 +592,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Volver a crear</translation>
     </message>
     <message>
+      <source>Re-apply settings</source>
+      <translation>Volver a aplicar la configuración</translation>
+    </message>
+    <message>
       <source>Registry editor</source>
       <translation>Editor del registro</translation>
     </message>
@@ -616,32 +620,8 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Abrir la carpeta de registros</translation>
     </message>
     <message>
-      <source>Rebuild the index</source>
-      <translation>Reconstruir el índice</translation>
-    </message>
-    <message>
-      <source>Remove the library catalog</source>
-      <translation>Eliminar el catálogo de la biblioteca</translation>
-    </message>
-    <message>
-      <source>Remove all index files</source>
-      <translation>Eliminar todos los archivos de índice</translation>
-    </message>
-    <message>
-      <source>Reinstall language data (ICU)</source>
-      <translation>Reinstalar los datos de idioma (ICU)</translation>
-    </message>
-    <message>
       <source>Install dependencies</source>
       <translation>Instalar dependencias</translation>
-    </message>
-    <message>
-      <source>Back up…</source>
-      <translation>Hacer copia de seguridad…</translation>
-    </message>
-    <message>
-      <source>Restore…</source>
-      <translation>Restaurar…</translation>
     </message>
     <message>
       <source>Check for updates now</source>
@@ -650,10 +630,6 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Edit the config file…</source>
       <translation>Editar el archivo de configuración…</translation>
-    </message>
-    <message>
-      <source>Remove everything…</source>
-      <translation>Quitarlo todo…</translation>
     </message>
     <message>
       <source>None found (needs the desktop integrations)</source>
@@ -674,6 +650,10 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Install {product}</source>
       <translation>Instalar {product}</translation>
+    </message>
+    <message>
+      <source>Close Logos first</source>
+      <translation>Cierre Logos primero</translation>
     </message>
     <message>
       <source>Ou Dedetai updates Logos</source>
@@ -740,8 +720,12 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>winetricks no está disponible con esta versión de Wine.</translation>
     </message>
     <message>
-      <source>Logos hasn't closed. It may be asking you something: check its window.</source>
-      <translation>Logos no se ha cerrado. Quizá le esté preguntando algo: revise su ventana.</translation>
+      <source>Logos hasn't closed. It may be asking you something: check its window.
+
+If its window has already gone, Logos is stuck shutting down and forcing it to close is safe.</source>
+      <translation>Logos no se ha cerrado. Puede que le esté preguntando algo: revise su ventana.
+
+Si su ventana ya desapareció, Logos se quedó atascado al cerrarse y es seguro forzar el cierre.</translation>
     </message>
     <message>
       <source>Waiting for Logos to close…</source>
@@ -758,6 +742,30 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
     <message>
       <source>Ou Dedetai {version} · community supported</source>
       <translation>Ou Dedetai {version} · mantenido por la comunidad</translation>
+    </message>
+    <message>
+      <source>Remove the library catalog</source>
+      <translation>Eliminar el catálogo de la biblioteca</translation>
+    </message>
+    <message>
+      <source>Remove all index files</source>
+      <translation>Eliminar todos los archivos de índice</translation>
+    </message>
+    <message>
+      <source>Reinstall language data (ICU)</source>
+      <translation>Reinstalar los datos de idioma (ICU)</translation>
+    </message>
+    <message>
+      <source>Back up…</source>
+      <translation>Hacer copia de seguridad…</translation>
+    </message>
+    <message>
+      <source>Restore…</source>
+      <translation>Restaurar…</translation>
+    </message>
+    <message>
+      <source>Remove everything…</source>
+      <translation>Quitarlo todo…</translation>
     </message>
     <message>
       <source>Start as usual</source>
@@ -800,16 +808,16 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Logos está al día</translation>
     </message>
     <message>
-      <source>Update ({count})</source>
-      <translation>Actualizar ({count})</translation>
-    </message>
-    <message>
       <source>A file on this computer (AppImage or tarball)…</source>
       <translation>Un archivo de este equipo (AppImage o tarball)…</translation>
     </message>
     <message>
       <source> (in use)</source>
       <translation> (en uso)</translation>
+    </message>
+    <message>
+      <source>Setting up {name}…</source>
+      <translation>Preparando {name}…</translation>
     </message>
     <message>
       <source>Quit Ou Dedetai</source>
@@ -872,12 +880,20 @@ El registro tiene los detalles; Solución de problemas → Guardar un informe pa
       <translation>Actualizar las integraciones de escritorio a {version}</translation>
     </message>
     <message>
+      <source>Update ({count})</source>
+      <translation>Actualizar ({count})</translation>
+    </message>
+    <message>
       <source>Updates available: {names}</source>
       <translation>Actualizaciones disponibles: {names}</translation>
     </message>
     <message>
       <source>Today's reading: {reading}</source>
       <translation>Lectura de hoy: {reading}</translation>
+    </message>
+    <message>
+      <source>{update} (close Logos first)</source>
+      <translation>{update} (cierre Logos primero)</translation>
     </message>
     <message>
       <source>version {version}</source>

@@ -432,7 +432,14 @@ class LogosManager:
             "Logos hasn't closed. It may be asking you something (check its window). Forcing it to "
             "close can lose changes that haven't synced to your Faithlife account yet.",
         ):
-            self.stop()
+            self.force_close()
+
+    def force_close(self) -> None:
+        """Force Logos to close, then end whatever else is still running in its Wine prefix
+        (wineserver, services, leftover CEF processes), so nothing is left behind (#412).
+        Only after the user has agreed: unsynced changes may be lost."""
+        self.stop()
+        wine.wineserver_kill(self.app)
 
     def _closed(self) -> bool:
         self.monitor()

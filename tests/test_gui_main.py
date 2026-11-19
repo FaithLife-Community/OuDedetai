@@ -217,7 +217,7 @@ class TestBackgroundWork(GuiTestCase):
                                return_value=QtWidgets.QMessageBox.StandardButton.Yes), \
                 mock.patch.object(self.window, "start_thread") as start:
             dialog._force()
-        start.assert_called_once_with(self.window.logos.stop)
+        start.assert_called_once_with(self.window.logos.force_close)
         self.assertTrue(dialog.cancelled)
 
     def test_choose_a_wine_build_offers_our_bundles_and_a_file(self):
