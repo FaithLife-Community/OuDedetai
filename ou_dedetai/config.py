@@ -351,7 +351,7 @@ class PersistentConfiguration:
     # Whether the user has chosen Releases or Prereleases themselves (Settings → Updates).
     # Until they have, a development build follows Prereleases.
     update_channel_chosen: bool = False
-    # Whether we've offered to install the KDE Plasma desktop integrations (asked once)
+    # Whether we've offered to install the desktop integrations (asked once)
     desktop_integrations_offered: bool = False
     # Never connect to the internet (no update checks, no downloads) until switched off
     offline_mode: bool = False
@@ -1102,8 +1102,8 @@ class Config:
             else:
                 logging.info("Failed to find any beta-specific appimage, falling back to latest release.")
                 value = self.wine_appimage_recommended_file_name
-        # Store the resolved choice (this mapping used to be computed and then
-        # ignored, so a bare "Recommended" was saved and later run as a program).
+        # Store the resolved choice: a sigil such as "Recommended" saved as it is would
+        # later be run as the Wine program.
         relative = self._relative_from_install_dir(value)
 
         if self._raw.wine_binary != relative:

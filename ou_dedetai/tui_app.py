@@ -265,7 +265,7 @@ class TextualUI(TextualApp[None]):
         self.query_one("#main-menu", OptionList).focus()
         self.set_interval(2.5, self._monitor_tick)
         self.domain.status("TUI ready")
-        # Once, on KDE Plasma: offer the Logos desktop integrations
+        # Once, on KDE Plasma or GNOME: offer the Logos desktop integrations
         self.domain.start_thread(desktop_integrations.offer_or_notice_update, app=self.domain)
         self.domain.start_thread(installer.offer_to_replace_installed, self.domain)
 

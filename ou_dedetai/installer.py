@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from packaging.version import InvalidVersion, Version
 
 from ou_dedetai.app import App, UserExitedFromAsk
 
@@ -161,9 +160,7 @@ def check_for_known_bugs(app: App):
             logging.warning("Detected snap or flatpak browser")
         if app.conf.wine_binary in (constants.WINE_RECOMMENDED_SIGIL, constants.WINE_RECOMMENDED_TARBALL_SIGIL,
                                     constants.WINE_BETA_SIGIL):
-            # The recommended Wine is now the newest build (the bundled tarball), which
-            # has the fix. Switching to the beta sigil here left wine_binary set to the
-            # sigil itself ("Experimental (AKA Beta)"), and the install then failed.
+            # The recommended Wine (the bundled build) has the fix.
             logging.info("Recommended Wine already includes the fix for issue #435")
         else:
             logging.warning("Sign In button may not launch the browser due to issue #435")
@@ -436,7 +433,6 @@ def ensure_fonts(app: App):
     app.installer_step += 1
 
     wine.install_fonts(app)
-    # Font replacements are applied by apply_wine_config.
 
 
 def ensure_icu_data_files(app: App):
@@ -542,11 +538,10 @@ def offer_to_replace_installed(app: App) -> bool:
         return False
     try:
         installed = utils.get_lli_release_version(launcher)
-        newer = installed is None or Version(constants.LLI_CURRENT_VERSION) > Version(installed)
-    except (OSError, subprocess.SubprocessError, InvalidVersion) as e:
+    except (OSError, subprocess.SubprocessError) as e:
         logging.debug(f"Couldn't read the installed Ou Dedetai's version: {e}")
         return False
-    if not newer:
+    if not utils.is_newer_version(constants.LLI_CURRENT_VERSION, installed, strict=True):
         return False
     if not app.approve(
         f"Use this {constants.APP_NAME} ({constants.LLI_CURRENT_VERSION}) from now on?",
@@ -804,7 +799,7 @@ def create_launcher_shortcuts(app: App):
         filename=url_handler_desktop_filename,
         app_name=f"{flproduct} URL Handler",
         comment="Handles logos4: and libronixdls: URL Schemes",
-        # Logos running: the link is handed straight to it (as before, through Wine).
+        # Logos running: the link is handed straight to it, through Wine.
         # Not running: Logos starts the normal way with the link, so the tray and
         # Ou Dedetai's monitoring come up as from the shortcut. Errors go to the log
         # (Troubleshooting → Save a support report) instead of a terminal window.

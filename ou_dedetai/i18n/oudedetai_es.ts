@@ -548,10 +548,6 @@
       <translation>Logos se está abriendo…</translation>
     </message>
     <message>
-      <source>Open layout</source>
-      <translation>Abrir diseño</translation>
-    </message>
-    <message>
       <source>Logos is still running.</source>
       <translation>Logos sigue abierto.</translation>
     </message>

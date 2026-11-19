@@ -1,3 +1,4 @@
+import functools
 import re
 import tarfile
 from dataclasses import dataclass
@@ -55,14 +56,34 @@ def get_devel_or_stable(version: str) -> str:
         return 'devel'
 
 
+def appimage_env(binary: str | Path, env: dict[str, str]) -> dict[str, str]:
+    """A Wine AppImage that can't mount itself (no FUSE) runs by unpacking itself."""
+    if str(binary).lower().endswith(".appimage") and system.appimage_needs_extract(str(binary)):
+        env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
+    return env
+
+
+def _wine_version_output(binary: str) -> str:
+    env = appimage_env(binary, system.fix_ld_library_path(None))
+    return subprocess.check_output([binary, "--version"], encoding='utf-8', env=env).strip()
+
+
+@functools.lru_cache(maxsize=16)
+def _cached_wine_version_output(binary: str, _mtime: float) -> str:
+    return _wine_version_output(binary)
+
+
 # FIXME: consider raising exceptions on error
 def get_wine_release(binary: str) -> tuple[Optional[WineRelease], str]:
-    cmd = [binary, "--version"]
     try:
-        env = system.fix_ld_library_path(None)
-        if str(binary).lower().endswith(".appimage") and system.appimage_needs_extract(str(binary)):
-            env["APPIMAGE_EXTRACT_AND_RUN"] = "1"  # same as every other Wine run (see get_wine_env)
-        version_string = subprocess.check_output(cmd, encoding='utf-8', env=env).strip()
+        # The window asks on every refresh; running an AppImage's --version means mounting it.
+        # A build that's replaced in place gets a new mtime, so it's asked again.
+        try:
+            mtime = os.stat(binary).st_mtime
+        except OSError:
+            version_string = _wine_version_output(binary)
+        else:
+            version_string = _cached_wine_version_output(os.path.realpath(binary), mtime)
         logging.debug(f"Version string: {str(version_string)}")
         branch: Optional[str]
         try:
@@ -117,40 +138,32 @@ def wine_supports_logos_updates(wine_release: Optional[WineRelease]) -> bool:
     return wine_release is not None and wine_release.release == OINOS_WINE_BRANCH
 
 
+def reg_add(app: App, wine_binary: str | Path, key: str, name: str, kind: str, data: str | list[str]) -> bool:
+    """Set one registry value with Wine's reg.exe (waits for it); False if it couldn't run.
+
+    A list is written as REG_MULTI_SZ: reg.exe splits its data on a literal "\\0"."""
+    if isinstance(data, list):
+        data = "\\0".join(data)
+    process = run_wine_during_install(app, wine_binary, exe='reg',
+                                      exe_args=['add', key, '/v', name, '/t', kind, '/d', data, '/f'])
+    return process is not None
+
+
 def allow_logos_updates(app: App, wine_binary: str):
     """Lets Logos's own updates finish under an oinos Wine build."""
-    process = run_wine_during_install(
-        app,
-        wine_binary,
-        exe='reg',
-        exe_args=[
-            'add', 'HKCU\\Software\\Wine\\MSI',
-            '/v', 'IgnoreFailedActions',
-            '/t', 'REG_MULTI_SZ',
-            # wine's reg.exe splits REG_MULTI_SZ data on a literal "\0"
-            '/d', "\\0".join(LOGOS_IGNORED_MSI_ACTIONS),
-            '/f',
-        ]
-    )
-    if process is not None:
-        process.wait()
+    reg_add(app, wine_binary, 'HKCU\\Software\\Wine\\MSI', 'IgnoreFailedActions', 'REG_MULTI_SZ',
+            LOGOS_IGNORED_MSI_ACTIONS)
     use_ffmpeg_media(app, wine_binary)
 
 
 def use_ffmpeg_media(app: App, wine_binary: str):
     """Video and audio through our builds' FFmpeg media source (oinos only).
 
-    Without it Wine uses GStreamer, which needs the system's H.264/AAC plugins
-    (gstreamer1.0-libav etc.); Ou Dedetai no longer installs system packages, so on
-    e.g. Kubuntu Logos's videos wouldn't play. This used to be the "experimental
-    media support" tick."""
-    process = run_wine_during_install(
-        app, wine_binary, exe='reg',
-        exe_args=['add', 'HKCU\\Software\\Wine\\MediaFoundation', '/v', 'DisableGstByteStreamHandler',
-                  '/t', 'REG_DWORD', '/d', '1', '/f'],
-    )
-    if process is not None:
-        process.wait()
+    Otherwise Wine uses GStreamer, which needs the system's H.264/AAC plugins
+    (gstreamer1.0-libav etc.), and Ou Dedetai doesn't install system packages: on
+    e.g. Kubuntu Logos's videos wouldn't play."""
+    reg_add(app, wine_binary, 'HKCU\\Software\\Wine\\MediaFoundation', 'DisableGstByteStreamHandler',
+            'REG_DWORD', '1')
 
 
 @dataclass
@@ -318,10 +331,55 @@ def prepare_prefix(app: App, wine64_binary: Optional[str] = None, init: bool = F
         raise subprocess.CalledProcessError(1, command)
 
 
+def update_prefix_for_new_wine(app: App) -> None:
+    """After switching to another Wine build: an existing prefix is updated now, quietly.
+
+    Left to Wine, the update happens when Logos next starts, with Wine's
+    "configuration is being updated" window and its offer to install Wine Mono."""
+    if (Path(app.conf.wine_prefix) / "system.reg").is_file():
+        app.status("Updating the Wine prefix for this Wine build…")
+        prepare_prefix(app)
+
+
 def initializeWineBottle(wine64_binary: str, app: App):
     app.status("Initializing wine bottle…")
     logging.debug(f"{wine64_binary=}")
     prepare_prefix(app, wine64_binary, init=True)
+
+
+_SECTION_RE = re.compile(r"^\[(?P<key>[^\]]+)\][^\n]*\n(?P<body>.*?)(?=^\[|\Z)", re.MULTILINE | re.DOTALL)
+_VALUE_RE = re.compile(r'^"(?P<name>(?:[^"\\]|\\.)*)"=(?P<value>.*)$', re.MULTILINE)
+
+
+def parse_reg_file(path: Path) -> dict[str, dict[str, str]]:
+    """Parse a Wine registry file into {lower-case key: {lower-case value name: raw value}}.
+
+    Keys are as Wine writes them in the file (relative to the hive, single backslashes)."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    result: dict[str, dict[str, str]] = {}
+    for section in _SECTION_RE.finditer(text):
+        key = section.group("key").replace("\\\\", "\\").lower()
+        values = result.setdefault(key, {})
+        for match in _VALUE_RE.finditer(section.group("body")):
+            name = match.group("name").replace("\\\\", "\\").lower()
+            values[name] = match.group("value")
+    return result
+
+
+def read_registry(app: App, hive: str = "user") -> dict[str, dict[str, str]]:
+    """The prefix's user.reg (or system.reg) read straight from the file: no Wine process
+    is started, so it's quick and safe while Logos is running."""
+    return parse_reg_file(Path(app.conf.wine_prefix) / f"{hive}.reg")
+
+
+def reg_string(raw: Optional[str]) -> Optional[str]:
+    """A REG_SZ value as parse_reg_file returns it ('"gl"') without its quotes; None if absent."""
+    if raw is None or not (raw.startswith('"') and raw.endswith('"')):
+        return None
+    return raw[1:-1].replace("\\\\", "\\")
 
 
 @dataclass(frozen=True)
@@ -332,35 +390,12 @@ class RelevantWineRegistrySettings:
 
 
 def read_wine_config(app: App) -> RelevantWineRegistrySettings:
-    path = Path(app.conf.wine_prefix) / "user.reg"
-    try:
-        lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
-    except FileNotFoundError:
-        return RelevantWineRegistrySettings(None, None, None)
-    except OSError:
-        logging.exception("Could not read Wine settings from %s", path)
-        return RelevantWineRegistrySettings(None, None, None)
-
-    sections: dict[str, dict[str, str]] = {}
-    section: Optional[str] = None
-    for line in lines:
-        match = re.match(r"^\[([^]]+)\](?:\s|$)", line)
-        if match:
-            section = match.group(1).casefold().replace("\\\\", "\\")
-            sections.setdefault(section, {})
-        elif section is not None:
-            match = re.match(r'^"([^"]+)"="([^"]*)"', line)
-            if match:
-                sections[section][match.group(1).casefold()] = match.group(2)
-
-    renderer = sections.get(r"software\wine\direct3d", {}).get("renderer")
-    windows_version = sections.get(r"software\wine", {}).get("version")
-    product = app.conf.faithlife_product
-    indexer_version = sections.get(
-        rf"software\wine\appdefaults\{product}indexer.exe".casefold(), {}
-    ).get("version")
+    sections = read_registry(app)
+    windows_version = reg_string(sections.get(r"software\wine", {}).get("version"))
+    indexer_key = rf"software\wine\appdefaults\{app.conf.faithlife_product}indexer.exe".lower()
+    indexer_version = reg_string(sections.get(indexer_key, {}).get("version"))
     return RelevantWineRegistrySettings(
-        renderer=renderer,
+        renderer=get_renderer(app),
         windows_version=windows_version,
         indexer_version=indexer_version or windows_version,
     )
@@ -386,21 +421,8 @@ def set_win_version(app: App, exe: str, windows_version: str):
         )
 
     elif exe == "indexer":
-        reg = f"HKCU\\Software\\Wine\\AppDefaults\\{app.conf.faithlife_product}Indexer.exe"
-        exe_args = [
-            'add',
-            reg,
-            "/v", "Version",
-            "/t", "REG_SZ",
-            "/d", f"{windows_version}", "/f",
-            ]
-        process = run_wine_during_install(
-            app,
-            app.conf.wine_binary,
-            exe='reg',
-            exe_args=exe_args
-        )
-        if process is None:
+        key = f"HKCU\\Software\\Wine\\AppDefaults\\{app.conf.faithlife_product}Indexer.exe"
+        if not reg_add(app, app.conf.wine_binary, key, "Version", "REG_SZ", windows_version):
             app.exit("Failed to spawn command to set windows version for indexer")
 
 
@@ -487,30 +509,8 @@ def disable_winemenubuilder(app: App, wine64_binary: str):
 
 def get_renderer(app: App) -> Optional[str]:
     """Get the configured Wine Direct3D renderer."""
-    user_reg = Path(app.conf.wine_prefix) / "user.reg"
-    if not user_reg.is_file():
-        logging.debug("Wine user.reg not found: %s", user_reg)
-        return None
-
-    try:
-        contents = user_reg.read_text()
-        section = re.search(
-            r'^\[Software\\\\Wine\\\\Direct3D\].*?(?=^\[|\Z)',
-            contents,
-            re.MULTILINE | re.DOTALL | re.IGNORECASE,
-        )
-        if section:
-            renderer = re.search(
-                r'^"renderer"="([^"]+)"',
-                section.group(),
-                re.MULTILINE | re.IGNORECASE,
-            )
-            if renderer:
-                return renderer.group(1).lower()
-    except OSError:
-        logging.exception("Failed to read Wine renderer configuration")
-
-    return None
+    renderer = reg_string(read_registry(app).get(r"software\wine\direct3d", {}).get("renderer"))
+    return renderer.lower() if renderer else None
 
 
 def set_renderer(app: App, wine64_binary: str, value: str):
@@ -565,16 +565,9 @@ def run_dxvk_tool(app: App, tool: str) -> Optional[int]:
 
 def dxvk_enabled(app: App) -> bool:
     """Whether the prefix has DXVK's DLLs set to native (as dxvk-install does)."""
-    user_reg = Path(app.conf.wine_prefix) / "user.reg"
-    if not user_reg.is_file():
-        return False
-    section = re.search(
-        r'^\[Software\\\\Wine\\\\DllOverrides\].*?(?=^\[|\Z)',
-        user_reg.read_text(), re.MULTILINE | re.DOTALL | re.IGNORECASE,
-    )
-    return section is not None and re.search(
-        r'^"\*?d3d9"="native"\s*$', section.group(), re.MULTILINE | re.IGNORECASE
-    ) is not None
+    overrides = read_registry(app).get(r"software\wine\dlloverrides", {})
+    value = reg_string(overrides.get("d3d9") or overrides.get("*d3d9"))
+    return (value or "").lower() == "native"
 
 
 def get_effective_renderer(app: App) -> Optional[str]:
@@ -669,20 +662,7 @@ FONT_REPLACEMENTS: dict[str, list[str]] = {
 def set_font_replacements(app: App, wine64_binary: str):
     key = "HKCU\\Software\\Wine\\Fonts\\Replacements"
     for family, replacements in FONT_REPLACEMENTS.items():
-        # wine's reg.exe splits REG_MULTI_SZ data on a literal "\0"
-        process = run_wine_during_install(
-            app,
-            wine64_binary,
-            exe='reg',
-            exe_args=[
-                'add', key,
-                '/v', family,
-                '/t', 'REG_MULTI_SZ',
-                '/d', "\\0".join(replacements),
-                '/f',
-            ]
-        )
-        if process is None:
+        if not reg_add(app, wine64_binary, key, family, 'REG_MULTI_SZ', replacements):
             app.exit(f"Failed to spawn command to set font replacement for {family}")
     wineserver_wait(app)
 
@@ -1142,10 +1122,7 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     if additional_wine_dll_overrides is not None:
         wine_env["WINEDLLOVERRIDES"] += ";" + additional_wine_dll_overrides
 
-    # A Wine AppImage that can't mount itself (no FUSE) unpacks itself instead.
-    appimage = Path(app.conf.wine_binary)
-    if appimage.name.lower().endswith(".appimage") and system.appimage_needs_extract(str(appimage)):
-        wine_env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
+    appimage_env(app.conf.wine_binary, wine_env)
 
     updated_env = {k: wine_env.get(k) for k in wine_env_defaults.keys()}
 
@@ -1215,7 +1192,4 @@ def setup_wine(app: App):
     create_wine_symlinks(app)
     if app.conf.wine_appimage_path is not None:
         system.ensure_appimage_runtime(app, str(app.conf.wine_appimage_path))
-    if (Path(app.conf.wine_prefix) / "system.reg").is_file():
-        # A different Wine updates the prefix on first use; do it now, quietly.
-        app.status("Updating the Wine prefix for this Wine build…")
-        prepare_prefix(app)
+    update_prefix_for_new_wine(app)

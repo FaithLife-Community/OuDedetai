@@ -17,7 +17,7 @@ import zipfile
 
 from collections.abc import MutableMapping
 from dataclasses import dataclass
-from packaging.version import InvalidVersion, Version
+from packaging.version import Version
 
 import requests
 from pathlib import Path
@@ -147,6 +147,21 @@ def run_command(command, retries=1, delay=0, **kwargs) -> Optional[subprocess.Co
 
     logging.error(f"Failed to execute after {retries} attempts: '{command}'")
     return None
+
+
+def run_program(command: list[str], timeout: int, env: Optional[MutableMapping[str, str]] = None,
+                cwd: Optional[str | Path] = None) -> Optional[subprocess.CompletedProcess[str]]:
+    """Run another program (not Wine) and capture its output; None if it couldn't run.
+
+    It gets the system's libraries rather than the ones bundled in our binary
+    (fix_ld_library_path), and PYINSTALLER_RESET_ENVIRONMENT lets another PyInstaller
+    app (Akousousin) set up its own environment instead of inheriting ours."""
+    env = fix_ld_library_path(dict(os.environ if env is None else env, PYINSTALLER_RESET_ENVIRONMENT="1"))
+    try:
+        return subprocess.run(command, capture_output=True, text=True, timeout=timeout, env=env, cwd=cwd)
+    except (OSError, subprocess.SubprocessError) as error:
+        logging.warning(f"Couldn't run {command[0]}: {error}")
+        return None
 
 
 # FIXME: #300 refactor this to either return Popen or raise. No None.
@@ -898,25 +913,17 @@ def _fuse_package(manager: str) -> str:
     if manager != "apt":
         return FUSE_PACKAGES.get(manager, "fuse")
     # Ubuntu 24.04+ and Debian 13+ renamed it.
-    try:
-        known = subprocess.run(["apt-cache", "show", "libfuse2t64"], capture_output=True, timeout=30,
-                               env=fix_ld_library_path(None)).returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        known = False
-    return "libfuse2t64" if known else "libfuse2"
+    result = run_program(["apt-cache", "show", "libfuse2t64"], timeout=30)
+    return "libfuse2t64" if result is not None and result.returncode == 0 else "libfuse2"
 
 
 @functools.lru_cache(maxsize=8)
 def appimage_runs(path: str, extract: bool = False) -> bool:
     """Whether this Wine AppImage starts here (`--version`), mounted with FUSE or,
     with extract, unpacking itself (APPIMAGE_EXTRACT_AND_RUN). Cached per run."""
-    env = fix_ld_library_path(None)
-    if extract:
-        env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
-    try:
-        result = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=180, env=env)
-    except (OSError, subprocess.SubprocessError) as error:
-        logging.warning(f"Couldn't run {path}: {error}")
+    env = dict(os.environ, APPIMAGE_EXTRACT_AND_RUN="1") if extract else None
+    result = run_program([path, "--version"], timeout=180, env=env)
+    if result is None:
         return False
     if result.returncode != 0:
         logging.info(f"{Path(path).name} --version (extract={extract}) exited {result.returncode}: "
@@ -929,32 +936,48 @@ def appimage_needs_extract(path: str) -> bool:
     return Path(path).is_file() and not appimage_runs(path) and appimage_runs(path, extract=True)
 
 
+def _package_manager_name() -> Optional[str]:
+    """"apt", "dnf", "pacman"… (the install command's program), or None if unknown."""
+    package_manager = get_package_manager()
+    return Path(package_manager.install[0]).name if package_manager else None
+
+
+def offer_packages(app: App, packages: list[str], question: str, why: str) -> bool:
+    """Offer to install just these system packages; True if they were installed.
+
+    Ou Dedetai doesn't install system packages up front: each feature that needs one
+    asks for it here. Never on image-based systems (their system files are replaced on
+    update), and never fatal."""
+    package_manager = None if is_image_based_os() else get_package_manager()
+    if package_manager is None:
+        return False
+    # Just these packages: pacman's usual install command also upgrades the whole system.
+    install = (["pacman", "-S", "--needed", "--noconfirm"] if _package_manager_name() == "pacman"
+               else package_manager.install)
+    if not app.approve(question, f"{why}\n\nThis runs: {' '.join(install + packages)}"):
+        return False
+    try:
+        run_command([app.superuser_command, *install, *packages])
+    except (OSError, subprocess.CalledProcessError) as error:
+        logging.warning(f"Installing {packages} failed: {error}")
+        return False
+    return True
+
+
 def ensure_appimage_runtime(app: App, path: str) -> None:
-    """Called when a Wine AppImage becomes the runner. Ou Dedetai no longer installs
-    system packages up front; an AppImage that can't mount itself gets its FUSE package
-    offered here (only that one), or, on image-based systems or if declined, runs by
-    unpacking itself each time instead."""
+    """Called when a Wine AppImage becomes the runner: one that can't mount itself gets its
+    FUSE package offered, or, where that isn't possible or is declined, runs by unpacking
+    itself each time instead."""
     if not Path(path).is_file() or appimage_runs(path):
         return
-    package_manager = None if is_image_based_os() else get_package_manager()
-    if package_manager is not None:
-        manager = Path(package_manager.install[0]).name
-        package = _fuse_package(manager)
-        install = ["pacman", "-S", "--needed", "--noconfirm"] if manager == "pacman" else package_manager.install
-        if app.approve(
-            f"Install {package} so this Wine AppImage can run?",
-            "AppImages mount themselves with FUSE, which isn't installed. Without it the AppImage "
-            "unpacks itself every time Wine starts, which is slower.\n\nThis runs: "
-            + " ".join(install + [package]),
-        ):
-            try:
-                run_command([app.superuser_command, *install, package])
-            except (OSError, subprocess.CalledProcessError) as error:
-                logging.warning(f"Installing {package} failed: {error}")
-            appimage_runs.cache_clear()
-            if appimage_runs(path):
-                app.status(f"Installed {package}.")
-                return
+    package = _fuse_package(_package_manager_name() or "")
+    if offer_packages(app, [package], f"Install {package} so this Wine AppImage can run?",
+                      "AppImages mount themselves with FUSE, which isn't installed. Without it the "
+                      "AppImage unpacks itself every time Wine starts, which is slower."):
+        appimage_runs.cache_clear()
+        if appimage_runs(path):
+            app.status(f"Installed {package}.")
+            return
     if appimage_runs(path, extract=True):
         app.status("This Wine AppImage will unpack itself each time it starts (no FUSE here).")
     else:
@@ -968,10 +991,8 @@ def missing_winetricks_tools() -> list[str]:
 
 
 def offer_winetricks_tools(app: App) -> None:
-    """Before running winetricks: offer to install what it needs to unpack downloads.
-
-    Ou Dedetai no longer installs system packages during install, and Logos doesn't
-    need these; winetricks often does. Never fatal: winetricks still runs."""
+    """Before running winetricks: offer what it needs to unpack its downloads. Logos
+    doesn't need these, so they aren't installed with it. Never fatal: winetricks still runs."""
     missing = missing_winetricks_tools()
     if not missing:
         return
@@ -982,22 +1003,13 @@ def offer_winetricks_tools(app: App) -> None:
                  "system-wide. You can install them in a container (e.g. distrobox) or with your "
                  "system's own tools.")
         return
-    package_manager = get_package_manager()
-    manager = Path(package_manager.install[0]).name if package_manager else None
-    packages = [WINETRICKS_TOOLS[tool].get(manager or "", tool) for tool in missing]
-    if package_manager is None:
+    if get_package_manager() is None:
         app.info(context)
         return
-    # Just these packages: pacman's usual install command also upgrades the whole system.
-    install = ["pacman", "-S", "--needed", "--noconfirm"] if manager == "pacman" else package_manager.install
-    if not app.approve("Install them now?", context + "\n\nThis runs: " + " ".join(install + packages)):
-        return
-    try:
-        run_command([app.superuser_command, *install, *packages])
+    manager = _package_manager_name() or ""
+    packages = [WINETRICKS_TOOLS[tool].get(manager, tool) for tool in missing]
+    if offer_packages(app, packages, "Install them now?", context):
         app.status(f"Installed {', '.join(packages)}.", 100)
-    except (OSError, subprocess.CalledProcessError) as error:
-        logging.warning(f"Installing {packages} failed: {error}")
-        app.status(f"Couldn't install {', '.join(packages)}; winetricks may not manage everything.", 0)
 
 
 def wl_paste_available() -> bool:
@@ -1010,23 +1022,11 @@ def offer_wl_clipboard(app: App) -> None:
     """After installing the desktop integrations on Wayland: their look-up shortcut reads
     highlighted text with wl-paste. If neither the system nor Akousousin has it, offer
     just that package (it still works with copied text without it)."""
-    if not os.environ.get("WAYLAND_DISPLAY") or wl_paste_available() or is_image_based_os():
+    if not os.environ.get("WAYLAND_DISPLAY") or wl_paste_available():
         return
-    package_manager = get_package_manager()
-    if package_manager is None:
-        return
-    manager = Path(package_manager.install[0]).name
-    install = ["pacman", "-S", "--needed", "--noconfirm"] if manager == "pacman" else package_manager.install
-    if not app.approve(
-        "Install wl-clipboard too?",
-        "The Logos look-up shortcut uses it to read text you've highlighted. Without it, the "
-        "shortcut only reads text you've copied.\n\nThis runs: " + " ".join(install + ["wl-clipboard"]),
-    ):
-        return
-    try:
-        run_command([app.superuser_command, *install, "wl-clipboard"])
-    except (OSError, subprocess.CalledProcessError) as error:
-        logging.warning(f"Installing wl-clipboard failed: {error}")
+    offer_packages(app, ["wl-clipboard"], "Install wl-clipboard too?",
+                   "The Logos look-up shortcut uses it to read text you've highlighted. Without it, "
+                   "the shortcut only reads text you've copied.")
 
 
 def install_dependencies(app: App, target_version=10):
@@ -1325,13 +1325,9 @@ def akousousin_update(app: App) -> Optional[str]:
     except (requests.RequestException, OSError, ValueError, LookupError) as error:
         logging.debug(f"Akousousin update check failed: {error}")
         return None
+    from . import utils
     latest = str(release.version).lstrip("v")
-    current = (akousousin_version() or "").lstrip("v")
-    try:
-        newer = not current or Version(latest) > Version(current)
-    except InvalidVersion:
-        newer = latest != current
-    return latest if newer else None
+    return latest if utils.is_newer_version(latest, akousousin_version()) else None
 
 
 def update_akousousin(app: App):
@@ -1346,11 +1342,7 @@ def update_akousousin(app: App):
         app.status(f"Akousousin {akousousin_version() or ''} is up to date.", 0)
         return
     if akousousin_installed():
-        try:
-            subprocess.run([str(akousousin_launcher()), "--quit"], capture_output=True, timeout=60,
-                           env=dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1"))
-        except (OSError, subprocess.SubprocessError) as error:
-            logging.debug(f"akousousin --quit: {error}")
+        run_program([str(akousousin_launcher()), "--quit"], timeout=60)
     if ensure_akousousin(app, update=True):
         app.status("Akousousin updated and Wine speech registration refreshed.", 100)
 

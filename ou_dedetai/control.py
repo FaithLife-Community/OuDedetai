@@ -178,8 +178,7 @@ def purge_targets(app: App) -> list[Path]:
 
 def _forget_url_handlers() -> None:
     """Drop our logos4:/libronixdls: defaults from mimeapps.list."""
-    config_home = Path(os.getenv("XDG_CONFIG_HOME") or Path.home() / ".config")
-    for mimeapps in (config_home / "mimeapps.list",
+    for mimeapps in (Path(constants.XDG_CONFIG_HOME) / "mimeapps.list",
                      Path(constants.XDG_DATA_HOME) / "applications" / "mimeapps.list"):
         try:
             lines = mimeapps.read_text().splitlines(keepends=True)
@@ -200,31 +199,26 @@ def _purge_akousousin(app: App) -> None:
     launcher = system.akousousin_launcher()
     if not launcher.is_file():
         return
-    try:
-        help_text = subprocess.run([str(launcher), "--help"], capture_output=True, text=True, timeout=60).stdout
-        if "--purge" not in help_text:
-            app.status("This Akousousin is too old to remove itself; update it first, then run akousousin --purge.")
-            return
-        result = subprocess.run([str(launcher), "--purge", "--yes"], capture_output=True, text=True, timeout=600)
-        if result.returncode != 0:
-            logging.warning(f"akousousin --purge: {result.stdout}{result.stderr}")
-            app.status("Akousousin couldn't remove everything; see the log.")
-    except (OSError, subprocess.SubprocessError) as e:
-        logging.warning(f"Couldn't run akousousin --purge: {e}")
+    help_result = system.run_program([str(launcher), "--help"], timeout=60)
+    if help_result is None:
+        return
+    if "--purge" not in help_result.stdout:
+        app.status("This Akousousin is too old to remove itself; update it first, then run akousousin --purge.")
+        return
+    result = system.run_program([str(launcher), "--purge", "--yes"], timeout=600)
+    if result is not None and result.returncode != 0:
+        logging.warning(f"akousousin --purge: {result.stdout}{result.stderr}")
+        app.status("Akousousin couldn't remove everything; see the log.")
 
 
 def _purge_integrations() -> None:
     from ou_dedetai import desktop_integrations
     if not desktop_integrations.is_installed():
         return
-    script = Path(constants.XDG_DATA_HOME) / "logos-plasma" / "uninstall.sh"
-    try:
-        subprocess.run(["sh", str(script)], capture_output=True, timeout=120)
-    except (OSError, subprocess.SubprocessError) as e:
-        logging.warning(f"Couldn't run the desktop integrations' uninstaller: {e}")
-    config_home = Path(os.getenv("XDG_CONFIG_HOME") or Path.home() / ".config")
-    shutil.rmtree(Path(constants.XDG_DATA_HOME) / "logos-plasma", ignore_errors=True)
-    shutil.rmtree(config_home / "logos-plasma", ignore_errors=True)
+    install_dir = desktop_integrations._install_dir()
+    system.run_program(["sh", str(install_dir / "uninstall.sh")], timeout=120)
+    shutil.rmtree(install_dir, ignore_errors=True)
+    shutil.rmtree(Path(constants.XDG_CONFIG_HOME) / "logos-plasma", ignore_errors=True)
 
 
 PURGE_WARNING = (

@@ -44,7 +44,7 @@ class TestSetWine(unittest.TestCase):
         appimage.write_text("")
         self.app.conf.wine_appimage_path = str(appimage)
         with mock.patch.object(utils, "check_appimage", return_value=True), \
-                mock.patch.object(utils.wine, "prepare_prefix") as prepare:
+                mock.patch.object(utils.wine, "prepare_prefix") as prepare:  # via update_prefix_for_new_wine
             utils.set_appimage_symlink(self.app)
         prepare.assert_called_once_with(self.app)
 

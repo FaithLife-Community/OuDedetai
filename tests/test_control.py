@@ -34,6 +34,7 @@ class TestPurge(unittest.TestCase):
             mock.patch.dict(os.environ, {"HOME": str(h), "XDG_CONFIG_HOME": str(h / "config"),
                                          "XDG_DATA_HOME": str(h / "share")}),
             mock.patch.object(constants, "XDG_DATA_HOME", str(h / "share")),
+            mock.patch.object(constants, "XDG_CONFIG_HOME", str(h / "config")),
             mock.patch.object(constants, "DATA_HOME", str(h / "share/FaithLife-Community")),
             mock.patch.object(constants, "CONFIG_DIR", str(h / "config/FaithLife-Community")),
             mock.patch.object(constants, "CACHE_DIR", str(h / "cache/FaithLife-Community")),

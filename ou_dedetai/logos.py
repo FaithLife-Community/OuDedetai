@@ -7,6 +7,7 @@ from enum import Enum
 import logging
 import psutil
 import threading
+from typing import Optional
 
 from ou_dedetai import constants, database
 from ou_dedetai.app import App
@@ -109,16 +110,30 @@ class LogosManager:
         self.monitor()
         if self.logos_state not in (State.STARTING, State.RUNNING):
             return False
-        logging.info(f"Logos is running; handing it {link.split(':', 1)[0]}: link.")
+        self.send_link(link)
+        self.app.conf._overrides.logos_link = None
+        return True
+
+    def send_link(self, url: str) -> None:
+        """Pass a link to the running Logos, as Logos.exe <link> does on Windows."""
+        logging.info(f"Handing Logos a {url.split(':', 1)[0]}: link.")
+        if not self._run_quietly(self.app.conf.logos_exe, [url], timeout=60):
+            logging.warning("Logos took over a minute to take the link.")
+
+    def _run_quietly(self, exe: Optional[str], args: list[str], timeout: float, kill_late: bool = False) -> bool:
+        """Run a Windows program in the prefix, output discarded; False if it took longer
+        than `timeout` seconds (it's then stopped with kill_late, otherwise left running)."""
         with open(os.devnull, "w") as devnull:
             process = wine.run_wine_process(self.app, self.app.conf.wine_binary, devnull, devnull,
-                                            exe=self.app.conf.logos_exe, exe_args=[link])
-        if process is not None:
-            try:
-                process.wait(timeout=60)
-            except subprocess.TimeoutExpired:
-                logging.warning("Logos took over a minute to take the link.")
-        self.app.conf._overrides.logos_link = None
+                                            exe=exe, exe_args=args)
+        if process is None:
+            return True
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            if kill_late:
+                process.kill()
+            return False
         return True
 
     def reap_finished(self):
@@ -224,8 +239,8 @@ class LogosManager:
             if process is not None:
                 self.processes[self.app.conf.logos_exe] = process
             # Stay STARTING: monitor() moves to RUNNING once Logos's processes appear.
-            # Marking it RUNNING here let a monitor() call that came before Wine had
-            # started Logos.exe see "running, but no processes" and stop it again.
+            # Marked RUNNING here, a monitor() call made before Wine has started
+            # Logos.exe would see "running, but no processes" and stop it again.
 
         # Ensure wine version is compatible with Logos release version.
         good_wine, reason = wine.check_wine_rules(
@@ -357,14 +372,8 @@ class LogosManager:
         without /F sends WM_CLOSE), so it can finish syncing and ask about unsaved work."""
         exe = Path(self.app.conf.logos_exe).name if self.app.conf.logos_exe else "Logos.exe"
         logging.info(f"Asking {exe} to close.")
-        with open(os.devnull, "w") as devnull:
-            process = wine.run_wine_process(self.app, self.app.conf.wine_binary, devnull, devnull,
-                                            exe="taskkill", exe_args=["/IM", exe])
-        if process is not None:
-            try:
-                process.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                process.kill()
+        if not self._run_quietly("taskkill", ["/IM", exe], timeout=30, kill_late=True):
+            logging.warning("taskkill took over 30 seconds.")
 
     def _logos_processes(self) -> list:
         return [p for procs in self.existing_processes.values() for p in procs
@@ -567,17 +576,7 @@ class LogosManager:
                 state = state_enabled
 
         logging.info(f"Setting app logging to '{state}'.")
-        exe_args = [
-            'add', 'HKCU\\Software\\Logos4\\Logging', '/v', 'Enabled',
-            '/t', 'REG_DWORD', '/d', value, '/f'
-        ]
-        process = wine.run_wine_during_install(
-            app=self.app,
-            wine_binary=self.app.conf.wine_binary,
-            exe='reg',
-            exe_args=exe_args
-        )
-        if process:
-            process.wait()
+        wine.reg_add(self.app, self.app.conf.wine_binary, 'HKCU\\Software\\Logos4\\Logging', 'Enabled',
+                     'REG_DWORD', value)
         wine.wineserver_wait(self.app)
         self.app.conf.faithlife_product_logging = state == state_enabled

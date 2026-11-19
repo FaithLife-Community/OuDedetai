@@ -135,11 +135,13 @@ def row(title: str, subtitle: str = "", right: Optional[QtWidgets.QWidget] = Non
     return w
 
 
-def scrolled(widget: QtWidgets.QWidget) -> QtWidgets.QScrollArea:
+def scrolled(widget: QtWidgets.QWidget, page: bool = True) -> QtWidgets.QScrollArea:
+    """A frameless scroll area around `widget`; a page gets the page background."""
     area = QtWidgets.QScrollArea()
     area.setWidgetResizable(True)
     area.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-    widget.setObjectName("od-page")
+    if page:
+        widget.setObjectName("od-page")
     area.setWidget(widget)
     return area
 
@@ -238,7 +240,7 @@ class InstallGuide(QtWidgets.QWidget):
         settings_detail.setText(", ".join(
             tr(s.title) for s in wine_settings.SETTINGS if s.group == wine_settings.Group.NEEDED))
         settings_detail.setVisible(True)
-        self.area = scrolled_frame(frame)
+        self.area = scrolled(frame, page=False)
         v.addWidget(self.area, 1)
         self.current = -1
 
@@ -265,14 +267,6 @@ class InstallGuide(QtWidgets.QWidget):
                 mark.setAccessibleName(tr("Not started"))
         if 0 <= self.current < len(self.row_widgets):
             self.area.ensureWidgetVisible(self.row_widgets[self.current], 0, 40)
-
-
-def scrolled_frame(frame: QtWidgets.QWidget) -> QtWidgets.QScrollArea:
-    area = QtWidgets.QScrollArea()
-    area.setWidgetResizable(True)
-    area.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-    area.setWidget(frame)
-    return area
 
 
 # ── The window ───────────────────────────────────────────────────────────────
@@ -942,6 +936,11 @@ class MainWindow(GuiApp):
         menu.clear()
         menu.addAction(tr("Start as usual")).triggered.connect(self.run_logos)
         menu.addSeparator()
+        self.add_open_items(menu)
+
+    def add_open_items(self, menu: QtWidgets.QMenu) -> None:
+        """Bible, today's readings and saved layouts: the Run menu's and the tray's entries.
+        Each starts Logos first if it isn't running."""
         bible = menu.addAction(tr("Bible (your preferred Bible)"))
         bible.triggered.connect(lambda _=False: self.open_link(PREFERRED_BIBLE))
         for plan in self._plans[:3]:
@@ -1359,14 +1358,15 @@ class MainWindow(GuiApp):
     def open_in_logos(self, action: Callable[[], object], wait_for_com: bool = False) -> None:
         """Start Logos if needed, then do something in it (open a link or layout)."""
         def run():
-            if self.logos.logos_state not in (State.RUNNING, State.STARTING):
+            started = self.logos.logos_state not in (State.RUNNING, State.STARTING)
+            if started:
                 self.signals.tray.emit()
                 self.logos.start()
             deadline = time.monotonic() + 240
             while self.logos.logos_state != State.RUNNING and time.monotonic() < deadline:
                 time.sleep(1)
                 self.logos.monitor()
-            if wait_for_com:
+            if wait_for_com and started:
                 time.sleep(10)  # COM answers once Logos has finished opening its window
             action()
         self.start_thread(run)
@@ -1379,10 +1379,7 @@ class MainWindow(GuiApp):
     def _send_link(self, url: str) -> None:
         if desktop_integrations.is_installed() and desktop_integrations.open_url(url):
             return
-        # Without the integrations: hand the link to Logos.exe, as the link handler does.
-        with open(os.devnull, "w") as devnull:
-            wine.run_wine_process(self, self.conf.wine64_binary, devnull, devnull,
-                                  exe=self.conf.logos_exe_windows_path, exe_args=[url])
+        self.logos.send_link(url)  # without the integrations, as the link handler does
 
     def open_layout(self, name: str) -> None:
         self.open_in_logos(lambda: desktop_integrations.open_layout(name), wait_for_com=True)
@@ -1827,18 +1824,7 @@ class TrayController(QtCore.QObject):
         head = menu.addAction(tr("Logos is running") if state == State.RUNNING else tr("Logos is starting…"))
         head.setEnabled(False)
         w = self.window
-        menu.addAction(tr("Bible (your preferred Bible)")).triggered.connect(
-            lambda _=False: w.start_thread(w._send_link, PREFERRED_BIBLE))
-        for plan in w._plans[:2]:
-            for reading in (plan.get("readings") or [])[:1]:
-                if reading.get("url"):
-                    a = menu.addAction(tr("Today's reading: {reading}").format(reading=reading.get("label", "")))
-                    a.triggered.connect(lambda _=False, url=reading["url"]: w.start_thread(w._send_link, url))
-        if w._layouts:
-            layouts = menu.addMenu(tr("Open layout"))
-            for name in w._layouts:
-                a = layouts.addAction(name)
-                a.triggered.connect(lambda _=False, n=name: w.start_thread(desktop_integrations.open_layout, n))
+        w.add_open_items(menu)
         stop = menu.addAction(tr("Stop Logos"))
         stop.triggered.connect(lambda: w.stop_logos())
         menu.addSeparator()

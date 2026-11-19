@@ -26,7 +26,11 @@ from . import constants
 from . import utils
 
 
-_offline = os.getenv("OUDEDETAI_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on")
+def _offline_by_environment() -> bool:
+    return os.getenv("OUDEDETAI_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+_offline = _offline_by_environment()
 
 
 class OfflineError(requests.exceptions.ConnectionError):
@@ -39,7 +43,7 @@ class OfflineError(requests.exceptions.ConnectionError):
 def set_offline(value: bool) -> None:
     """Turn offline mode on or off for every request this process makes."""
     global _offline
-    _offline = bool(value) or os.getenv("OUDEDETAI_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on")
+    _offline = bool(value) or _offline_by_environment()
 
 
 def is_offline() -> bool:
@@ -47,7 +51,8 @@ def is_offline() -> bool:
 
 
 def _ensure_online(url: str) -> None:
-    """The one gate every request passes through. Offline mode never connects."""
+    """Raise instead of connecting while offline mode is on (header lookups; _net_get
+    checks the same flag and returns None instead)."""
     if _offline:
         logging.info(f"Offline mode: skipped {url}")
         raise OfflineError(url)
@@ -584,7 +589,6 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
             # One that writes into a file, and one that returns a str, 
             # that share most of the internal logic
             if target_props.path is None:  # return url content as text
-                _ensure_online(url_props.path)
                 with requests.get(url_props.path, headers=headers) as r:
                     if callable(r):
                         logging.error("Failed to retrieve data from the URL.")
@@ -615,7 +619,6 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
 
                     return r._content  # raw bytes
             else:  # download url to target.path
-                _ensure_online(url_props.path)
                 with requests.get(url_props.path, stream=True, headers=headers) as r:
                     with target_props.path.open(mode=file_mode) as f:
                         if file_mode == 'wb':

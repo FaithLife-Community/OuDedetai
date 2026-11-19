@@ -9,7 +9,6 @@ Reading is done from ``user.reg``/``system.reg`` directly: it needs no Wine proc
 so it is fast and safe while Logos is running.
 """
 import logging
-import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -150,26 +149,7 @@ SETTINGS: tuple[WineSetting, ...] = (
 )
 
 
-_SECTION_RE = re.compile(r"^\[(?P<key>[^\]]+)\][^\n]*\n(?P<body>.*?)(?=^\[|\Z)", re.MULTILINE | re.DOTALL)
-_VALUE_RE = re.compile(r'^"(?P<name>(?:[^"\\]|\\.)*)"=(?P<value>.*)$', re.MULTILINE)
-
-
-def parse_reg_file(path: Path) -> dict[str, dict[str, str]]:
-    """Parse a Wine registry file into {lower-case key: {lower-case value name: raw value}}.
-
-    Keys are as Wine writes them in the file (relative to the hive, single backslashes)."""
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return {}
-    result: dict[str, dict[str, str]] = {}
-    for section in _SECTION_RE.finditer(text):
-        key = section.group("key").replace("\\\\", "\\").lower()
-        values = result.setdefault(key, {})
-        for match in _VALUE_RE.finditer(section.group("body")):
-            name = match.group("name").replace("\\\\", "\\").lower()
-            values[name] = match.group("value")
-    return result
+parse_reg_file = wine.parse_reg_file
 
 
 def configured_wine_binary(app: App) -> Optional[str]:

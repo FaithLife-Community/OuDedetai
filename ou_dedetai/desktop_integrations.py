@@ -9,16 +9,13 @@ import json
 import logging
 import os
 import shutil
-import subprocess
-import tarfile
 import tempfile
 from pathlib import Path
 from typing import Mapping, Optional
 
 import requests
-from packaging.version import InvalidVersion, Version
 
-from ou_dedetai import constants, network, system
+from ou_dedetai import constants, network, system, utils
 from ou_dedetai.app import App
 
 REPOSITORY = "FaithLife-Community/logos-desktop-integrations"
@@ -43,11 +40,20 @@ def desktop(env: Optional[Mapping[str, str]] = None) -> Optional[str]:
     return "plasma" if is_kde_plasma(env) else "gnome" if is_gnome(env) else None
 
 
+def _install_dir(env: Optional[Mapping[str, str]] = None) -> Path:
+    """Where the integrations install themselves (they kept their first name, logos-plasma)."""
+    env = os.environ if env is None else env
+    return Path(env.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "logos-plasma"
+
+
+def _backend(env: Optional[Mapping[str, str]] = None) -> Optional[Path]:
+    path = _install_dir(env) / "logos_plasma.py"
+    return path if path.is_file() else None
+
+
 def is_installed(env: Optional[Mapping[str, str]] = None) -> bool:
     """True when the integrations' backend is installed for this user."""
-    env = os.environ if env is None else env
-    data_home = Path(env.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-    return (data_home / "logos-plasma" / "logos_plasma.py").is_file()
+    return _backend(env) is not None
 
 
 def installed_version(env: Optional[Mapping[str, str]] = None) -> Optional[str]:
@@ -55,10 +61,8 @@ def installed_version(env: Optional[Mapping[str, str]] = None) -> Optional[str]:
     record it), or None when they aren't installed."""
     if not is_installed(env):
         return None
-    env = os.environ if env is None else env
-    data_home = Path(env.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
     try:
-        return (data_home / "logos-plasma" / "VERSION").read_text().strip().lstrip("v") or "0"
+        return (_install_dir(env) / "VERSION").read_text().strip().lstrip("v") or "0"
     except OSError:
         return "0"
 
@@ -76,10 +80,7 @@ def update_available(app: App) -> Optional[str]:
     except (requests.RequestException, OSError, ValueError, LookupError, RuntimeError) as e:
         logging.debug(f"Desktop integrations update check failed: {e}")
         return None
-    try:
-        return latest if Version(latest) > Version(current) else None
-    except InvalidVersion:
-        return latest if latest != current else None
+    return latest if utils.is_newer_version(latest, current) else None
 
 
 def should_offer(app: App, env: Optional[Mapping[str, str]] = None) -> bool:
@@ -126,16 +127,6 @@ def offer_or_notice_update(app: App) -> None:
                    "choose Update Desktop Integrations in the menu.")
 
 
-def latest_release_tag() -> str:
-    data = network._net_get(f"https://api.github.com/repos/{REPOSITORY}/releases/latest")
-    if data is None:
-        raise RuntimeError(f"Couldn't look up the latest release of {REPOSITORY}")
-    tag = json.loads(data.decode()).get("tag_name")
-    if not tag:
-        raise RuntimeError(f"No release found for {REPOSITORY}")
-    return str(tag)
-
-
 def install(app: App) -> bool:
     """Download the latest release and run its install.sh. Returns True on success."""
     session = desktop()
@@ -143,23 +134,23 @@ def install(app: App) -> bool:
         app.info("The Logos desktop integrations support KDE Plasma and GNOME.")
         return False
     try:
-        tag = latest_release_tag()
-        app.status(f"Downloading Logos desktop integrations {tag}…")
-        archive = network._net_get(f"{PROJECT_URL}/archive/refs/tags/{tag}.tar.gz")
-        if archive is None:
-            raise RuntimeError("Download failed")
+        # The release has no attached files: its source archive is the download.
+        release = network._get_release_data(REPOSITORY, tag="latest")
         with tempfile.TemporaryDirectory(prefix="logos-desktop-integrations-") as tmp:
-            archive_path = Path(tmp) / "release.tar.gz"
-            archive_path.write_bytes(archive)
-            with tarfile.open(archive_path) as tar:
-                tar.extractall(tmp, filter="data")
+            archive = Path(tmp) / "release.tar.gz"
+            network._net_get(release.download_url, target=archive, app=app)
+            if not archive.is_file() or archive.stat().st_size == 0:
+                raise RuntimeError("the download failed")
+            utils.untar_file(archive, tmp)
             installers = sorted(Path(tmp).glob("*/install.sh"))
             if not installers:
                 raise RuntimeError("install.sh not found in the release")
             app.status("Installing Logos desktop integrations…")
-            result = system.run_command(["sh", str(installers[0]), f"--{session}"], check=False, timeout=600,
-                                        cwd=str(installers[0].parent))
-    except (requests.RequestException, OSError, tarfile.TarError, subprocess.SubprocessError, RuntimeError) as e:
+            result = system.run_program(["sh", str(installers[0]), f"--{session}"], timeout=600,
+                                        cwd=installers[0].parent)
+            if result is None:
+                raise RuntimeError("its installer couldn't be started")
+    except (requests.RequestException, OSError, LookupError, ValueError, RuntimeError) as e:
         logging.error(f"Installing desktop integrations failed: {e}")
         app.info(f"Couldn't install the Logos desktop integrations: {e}\n\nSee {PROJECT_URL}")
         return False
@@ -194,19 +185,15 @@ def restart_plasma(app: App) -> None:
     commands = [["systemctl", "--user", "restart", "plasma-plasmashell.service"]]
     if shutil.which("kquitapp6") and shutil.which("kstart"):
         commands.append(["sh", "-c", "kquitapp6 plasmashell; kstart plasmashell >/dev/null 2>&1"])
+    # run_program, so plasmashell starts with the system's Qt, not the copy in our binary.
     for command in commands:
-        try:
-            if subprocess.run(command, capture_output=True, timeout=60).returncode == 0:
-                break
-        except (OSError, subprocess.SubprocessError) as error:
-            logging.debug(f"{command}: {error}")
+        result = system.run_program(command, timeout=60)
+        if result is not None and result.returncode == 0:
+            break
     else:
         app.status("Couldn't restart Plasma; log out and in to see the integrations.")
         return
-    try:  # KRunner reloads its plugins when it next starts.
-        subprocess.run(["kquitapp6", "krunner"], capture_output=True, timeout=30)
-    except (OSError, subprocess.SubprocessError):
-        pass
+    system.run_program(["kquitapp6", "krunner"], timeout=30)  # KRunner reloads its plugins when it next starts
     app.status("Logos desktop integrations installed; Plasma reloaded.")
 
 
@@ -218,25 +205,14 @@ def restart_plasma(app: App) -> None:
 # older version without the command, or have reading Logos's data switched off, so
 # the window simply leaves the feature out.
 
-def _backend(env: Optional[Mapping[str, str]] = None) -> Optional[Path]:
-    env = os.environ if env is None else env
-    data_home = Path(env.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-    path = data_home / "logos-plasma" / "logos_plasma.py"
-    return path if path.is_file() else None
-
-
 def _run_backend(*args: str, timeout: int = 60) -> Optional[str]:
     backend = _backend()
-    python = "/usr/bin/python3" if Path("/usr/bin/python3").is_file() else "python3"
     if backend is None:
         return None
     # The backend runs on the system's Python, not the one bundled in our binary.
-    env = system.fix_ld_library_path(dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1"))
-    try:
-        result = subprocess.run([python, str(backend), *args], capture_output=True, text=True,
-                                timeout=timeout, env=env)
-    except (OSError, subprocess.SubprocessError) as error:
-        logging.debug(f"Desktop integrations {args}: {error}")
+    python = "/usr/bin/python3" if Path("/usr/bin/python3").is_file() else "python3"
+    result = system.run_program([python, str(backend), *args], timeout=timeout)
+    if result is None:
         return None
     if result.returncode != 0:
         logging.debug(f"Desktop integrations {args}: exit {result.returncode}: {result.stderr.strip()}")

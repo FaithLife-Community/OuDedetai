@@ -17,7 +17,7 @@ import sys
 import tarfile
 import time
 from ou_dedetai.app import App
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -287,6 +287,21 @@ def compare_logos_linux_installer_version(app: App) -> Optional[VersionCompariso
 WINE_BUILD_SUFFIXES = (".appimage", ".tar.xz", ".tar.gz", ".tgz")
 
 
+def is_newer_version(candidate: str, current: Optional[str], strict: bool = False) -> bool:
+    """Whether release `candidate` is newer than `current` (a leading "v" is ignored).
+
+    No current version counts as older. Versions packaging can't compare (not PEP 440)
+    count as newer whenever they differ, or never with `strict` (for changes that
+    mustn't go backwards)."""
+    candidate, current = candidate.lstrip("v"), (current or "").lstrip("v")
+    if not current:
+        return True
+    try:
+        return Version(candidate) > Version(current)
+    except InvalidVersion:
+        return not strict and candidate != current
+
+
 def wine_build_name(file_name: str) -> str:
     """The build's name without the AppImage/tarball extension, so both forms compare equal."""
     for suffix in WINE_BUILD_SUFFIXES:
@@ -554,11 +569,7 @@ def set_appimage_symlink(app: App):
         link = appdir_bindir / name
         link.unlink(missing_ok=True)
         link.symlink_to(f"./{appimage_symlink_path.name}")
-    if (Path(app.conf.wine_prefix) / "system.reg").is_file():
-        # A different Wine updates the prefix on first use, and then offers Wine Mono;
-        # do it now without the offer, as a tarball switch does (wine.setup_wine).
-        app.status("Updating the Wine prefix for this Wine build…")
-        wine.prepare_prefix(app)
+    wine.update_prefix_for_new_wine(app)
 
 
 def update_to_latest_lli_release(app: App):
