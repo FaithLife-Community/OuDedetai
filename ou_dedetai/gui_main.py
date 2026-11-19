@@ -541,7 +541,7 @@ class MainWindow(GuiApp):
         v.addWidget(self.s_hint)
         v.addSpacing(8)
         foot = QtWidgets.QHBoxLayout()
-        foot.addWidget(button(tr("Settings and troubleshooting…"), "link", lambda: self.open_full(SETTINGS)))
+        foot.addWidget(button(tr("Full view and settings…"), "link", lambda: self.open_full(HOME)))
         foot.addStretch(1)
         foot.addWidget(label(tr("Ou Dedetai {version} · community supported").format(
             version=constants.LLI_CURRENT_VERSION), "muted", wrap=False))
@@ -682,16 +682,19 @@ class MainWindow(GuiApp):
         col.addWidget(self.h_title)
         col.addWidget(self.h_state)
         top.addLayout(col, 1)
-        self.h_index = button(tr("Run indexing"), None, self.run_indexing)
-        top.addWidget(self.h_index)
-        self.h_run = self._run_button()
-        top.addWidget(self.h_run)
+        # The simple view's Run / Update / Stop, reversed: the row is right-aligned, so Run
+        # (the main button) ends up at the far right.
+        self.h_stop = button(tr("Stop"), None, self.stop_logos)
+        self.h_stop.setMinimumHeight(40)
+        top.addWidget(self.h_stop)
         self.h_update = QtWidgets.QToolButton()
         self.h_update.setText(tr("Update"))
         self.h_update.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
         self.h_update.setMenu(self._update_menu())
         self.h_update.setMinimumHeight(40)
         top.addWidget(self.h_update)
+        self.h_run = self._run_button()
+        top.addWidget(self.h_run)
         self.h_install = button(tr("Install"), "primary", self._install_from_full)
         self.h_install.setMinimumHeight(40)
         top.addWidget(self.h_install)
@@ -902,10 +905,11 @@ class MainWindow(GuiApp):
         # An OS update (seen on Bazzite and SteamOS) can leave KRunner and the look-up
         # shortcut not working; reinstalling them puts their files and settings back (#581).
         self.t_integrations = button(tr("Reinstall desktop integrations"), None, self.install_integrations)
+        self.t_reindex = button(tr("Rebuild the index"), None, self.run_indexing)
         section(tr("Repair"), [
             button(tr("Re-apply settings"), None, self.update_wine_config),
             self.t_integrations,
-            button(tr("Rebuild the index"), None, self.run_indexing),
+            self.t_reindex,
             button(tr("Remove the library catalog"), None, self.remove_library_catalog),
             button(tr("Remove all index files"), None, self.remove_indexes),
             button(tr("Reinstall language data (ICU)"), None, self.install_icu),
@@ -1026,8 +1030,9 @@ class MainWindow(GuiApp):
             b.setText(tr("Run {product}").format(product=product))
             b.setEnabled(installed and not running)
         self.s_stop.setEnabled(running)
-        self.h_index.setEnabled(installed and not running)
-        self.h_index.setVisible(installed)
+        self.h_stop.setEnabled(running)
+        self.h_stop.setVisible(installed)
+        self.t_reindex.setEnabled(installed and not running)  # not underneath a running Logos
         self.h_run.setVisible(installed)
         self.h_install.setVisible(not installed)
         self.h_install.setEnabled(not offline and not self._installing)
@@ -1596,7 +1601,9 @@ class MainWindow(GuiApp):
             return
 
         def run():
-            self.status(tr("Setting up {name}…").format(name=Path(filename).name), 0)
+            # No percentage: the bar animates until the switch is done (copying a big
+            # AppImage takes a while and says nothing else meanwhile).
+            self.status(tr("Setting up {name}…").format(name=Path(filename).name))
             installer.use_wine_file(self, filename)
             self._wine_builds_known = False  # "(in use)" moves
             self.signals.refresh.emit()

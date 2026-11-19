@@ -47,7 +47,7 @@ shows the window. Between prereleases, every commit can also be built with the
    or why. Now every setting is listed with its reason and whether it's applied, in the window, in
    `--show-wine-config` and in the support report.
 2. **An "easy button".** One Install button, then Run / Update / Stop. Everything else sits behind
-   "Settings and troubleshooting…", and developer options behind a switch.
+   "Full view and settings…", and developer options behind a switch.
 3. **Easier support.** Health checks, one-click support report, clear errors (no error is lost in a
    background thread any more).
 4. **Offline use.** Missionaries and others asked for it: a promise that Ou Dedetai won't go online.
@@ -142,6 +142,8 @@ Each is its own commit (see `git log 14e328b..next`), so any can be dropped or r
 | **Wine from a file** says what it's doing, waits for Logos to be closed, applies Ou Dedetai's settings afterwards, and updates the prefix without the Wine Mono offer for AppImages too | The window looked stuck, and Wine offered Mono on the next start (#576) | `installer.use_wine_file`, `utils.set_appimage_symlink` |
 | **Full view opens at full size**; Update menu on Home; Logos version re-read when Logos closes | A start-up resize meant for the simple view shrank the full view (#573); updates weren't visible from Home (#572); the version shown was stale after Logos updated itself (#574) | `_fit_full`, `h_update` |
 | **Reinstall desktop integrations** under Troubleshooting → Repair | An OS update on Bazzite/SteamOS left KRunner and the copy-verse shortcut not working until reinstalled (#581) | `t_integrations` |
+| **Home's buttons are Stop · Update · Run**, the simple view's Run · Update · Stop reversed because the row is right-aligned; Run indexing moved to Troubleshooting → Repair → Rebuild the index (same action, now greyed out while Logos runs); the simple view's link "Full view and settings…" opens Home | Update to the right of Run looked wrong; indexing is a repair step; the link jumped straight to Settings | `_build_home`, `t_reindex` |
+| **Choosing Wine from a file animates the progress bar** until it's done | It said "Setting up…" with no bar, so it looked finished while the AppImage was still being copied | `set_appimage` |
 | **Smaller binary**: unused Qt parts (Quick/QML via the virtual keyboard plugin, Pdf, extra image formats and platforms, non-base translations) left out | About 10 MB smaller (#577) | `ou_dedetai.spec` |
 | **Signals and error handling** in the window: results come back through named Qt signals; a `QTimer` checks Logos; narrow `except`s; unexpected errors are shown | Taylor's review | 0967faf |
 
