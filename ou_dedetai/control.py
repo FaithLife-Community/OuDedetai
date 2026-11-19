@@ -27,11 +27,13 @@ def remove_all_index_files(app: App):
     if not app.conf.logos_exe:
         app.exit("Cannot remove index files, Logos is not installed")
     logos_dir = os.path.dirname(app.conf.logos_exe)
+    # Not LibraryCatalog: the indexer takes the list of resources to index from
+    # it. Without it, running the indexer afterwards finds "0 indexable resources"
+    # and replaces the index with an empty one (see remove_library_catalog).
     index_paths = [
         os.path.join(logos_dir, "Data", "*", "BibleIndex"),
         os.path.join(logos_dir, "Data", "*", "LibraryIndex"),
         os.path.join(logos_dir, "Data", "*", "PersonalBookIndex"),
-        os.path.join(logos_dir, "Data", "*", "LibraryCatalog"),
     ]
     for index_path in index_paths:
         pattern = os.path.join(index_path, "*")

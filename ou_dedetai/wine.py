@@ -324,34 +324,54 @@ def initializeWineBottle(wine64_binary: str, app: App):
     prepare_prefix(app, wine64_binary, init=True)
 
 
-def get_win_version(app: App, exe: str) -> Optional[str]:
-    if exe == "logos":
-        process = run_wine_completed_process(
-            app, app.conf.wine_binary, exe="winecfg", exe_args=["/v"]
-        )
-        if process.returncode == 0:
-            return (process.stdout or process.stderr).strip() or None
-        return None
+@dataclass(frozen=True)
+class RelevantWineRegistrySettings:
+    renderer: Optional[str]
+    windows_version: Optional[str]
+    indexer_version: Optional[str]
 
-    if exe == "indexer":
-        key = (
-            f"HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\"
-            f"{app.conf.faithlife_product}Indexer.exe"
-        )
-        process = run_wine_completed_process(
-            app, app.conf.wine_binary, exe="reg.exe",
-            exe_args=["query", key, "/v", "Version"],
-        )
-        if process.returncode == 0:
-            match = re.search(
-                r"^\s*Version\s+REG_SZ\s+(\S+)\s*$",
-                process.stdout, re.MULTILINE,
-            )
+
+def read_wine_config(app: App) -> RelevantWineRegistrySettings:
+    path = Path(app.conf.wine_prefix) / "user.reg"
+    try:
+        lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    except FileNotFoundError:
+        return RelevantWineRegistrySettings(None, None, None)
+    except OSError:
+        logging.exception("Could not read Wine settings from %s", path)
+        return RelevantWineRegistrySettings(None, None, None)
+
+    sections: dict[str, dict[str, str]] = {}
+    section: Optional[str] = None
+    for line in lines:
+        match = re.match(r"^\[([^]]+)\](?:\s|$)", line)
+        if match:
+            section = match.group(1).casefold().replace("\\\\", "\\")
+            sections.setdefault(section, {})
+        elif section is not None:
+            match = re.match(r'^"([^"]+)"="([^"]*)"', line)
             if match:
-                return match.group(1)
+                sections[section][match.group(1).casefold()] = match.group(2)
 
-        return get_win_version(app, "logos")
+    renderer = sections.get(r"software\wine\direct3d", {}).get("renderer")
+    windows_version = sections.get(r"software\wine", {}).get("version")
+    product = app.conf.faithlife_product
+    indexer_version = sections.get(
+        rf"software\wine\appdefaults\{product}indexer.exe".casefold(), {}
+    ).get("version")
+    return RelevantWineRegistrySettings(
+        renderer=renderer,
+        windows_version=windows_version,
+        indexer_version=indexer_version or windows_version,
+    )
 
+
+def get_win_version(app: App, exe: str) -> Optional[str]:
+    settings = read_wine_config(app)
+    if exe == "logos":
+        return settings.windows_version
+    if exe == "indexer":
+        return settings.indexer_version
     raise ValueError(f"Unknown executable: {exe}")
 
 
