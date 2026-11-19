@@ -274,15 +274,22 @@ def initializeWineBottle(wine64_binary: str, app: App):
     )
 
 
-def read_wine_config(app: App) -> tuple[Optional[str], Optional[str], Optional[str]]:
+@dataclass(frozen=True)
+class RelevantWineRegistrySettings:
+    renderer: Optional[str]
+    windows_version: Optional[str]
+    indexer_version: Optional[str]
+
+
+def read_wine_config(app: App) -> RelevantWineRegistrySettings:
     path = Path(app.conf.wine_prefix) / "user.reg"
     try:
         lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
     except FileNotFoundError:
-        return None, None, None
+        return RelevantWineRegistrySettings(None, None, None)
     except OSError:
         logging.exception("Could not read Wine settings from %s", path)
-        return None, None, None
+        return RelevantWineRegistrySettings(None, None, None)
 
     sections: dict[str, dict[str, str]] = {}
     section: Optional[str] = None
@@ -302,15 +309,19 @@ def read_wine_config(app: App) -> tuple[Optional[str], Optional[str], Optional[s
     indexer_version = sections.get(
         rf"software\wine\appdefaults\{product}indexer.exe".casefold(), {}
     ).get("version")
-    return renderer, windows_version, indexer_version or windows_version
+    return RelevantWineRegistrySettings(
+        renderer=renderer,
+        windows_version=windows_version,
+        indexer_version=indexer_version or windows_version,
+    )
 
 
 def get_win_version(app: App, exe: str) -> Optional[str]:
-    _, windows_version, indexer_version = read_wine_config(app)
+    settings = read_wine_config(app)
     if exe == "logos":
-        return windows_version
+        return settings.windows_version
     if exe == "indexer":
-        return indexer_version
+        return settings.indexer_version
     raise ValueError(f"Unknown executable: {exe}")
 
 

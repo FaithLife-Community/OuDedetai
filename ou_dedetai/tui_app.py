@@ -706,14 +706,14 @@ class TUI(App):
             self.go_to_main_menu()
 
     def set_wineconfig_menu_options(self) -> list[str]:
-        renderer, logos_version, indexer_version = wine.read_wine_config(self)
+        settings = wine.read_wine_config(self)
         return [
-            f"Set Renderer (Current: {renderer or 'Unknown'})",
+            f"Set Renderer (Current: {settings.renderer or 'Unknown'})",
             "Set Runner (AppImage or tarball)",
             "Update to Latest Wine",
             "Toggle experimental media support",
-            f"Set Windows Version for Logos (Current: {logos_version or 'Default'})",
-            f"Set Windows Version for Indexer (Current: {indexer_version or 'Default'})",
+            f"Set Windows Version for Logos (Current: {settings.windows_version or 'Default'})",
+            f"Set Windows Version for Indexer (Current: {settings.indexer_version or 'Default'})",
             "Return to Main Menu",
         ]
 
