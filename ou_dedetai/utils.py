@@ -554,6 +554,11 @@ def set_appimage_symlink(app: App):
         link = appdir_bindir / name
         link.unlink(missing_ok=True)
         link.symlink_to(f"./{appimage_symlink_path.name}")
+    if (Path(app.conf.wine_prefix) / "system.reg").is_file():
+        # A different Wine updates the prefix on first use, and then offers Wine Mono;
+        # do it now without the offer, as a tarball switch does (wine.setup_wine).
+        app.status("Updating the Wine prefix for this Wine build…")
+        wine.prepare_prefix(app)
 
 
 def update_to_latest_lli_release(app: App):

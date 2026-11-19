@@ -237,6 +237,15 @@ def use_wine_release(app: App, channel: str) -> None:
     _finish_wine_switch(app, was_oinos)
 
 
+def use_wine_file(app: App, path: str) -> None:
+    """Switch to a Wine AppImage or tarball chosen from the computer, then apply Ou Dedetai's
+    settings for it, as the other ways of changing Wine do."""
+    was_oinos = _running_oinos(app)
+    app.conf.wine_appimage_path = path
+    utils.set_appimage_symlink(app)
+    _finish_wine_switch(app, was_oinos)
+
+
 def _running_oinos(app: App) -> bool:
     try:
         release, _ = wine.get_wine_release(app.conf.wine_binary)

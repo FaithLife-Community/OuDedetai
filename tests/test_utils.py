@@ -122,6 +122,7 @@ class TestAppUtils(unittest.TestCase):
             self.app.conf.installer_binary_dir = str(bindir)
             self.app.conf.wine_appimage_link_file_name = 'selected_wine.AppImage'
             self.app.conf.wine_download_file_name = 'recommended.AppImage'
+            self.app.conf.wine_prefix = str(root / 'prefix')
             utils.set_appimage_symlink(self.app)
             destination = bindir / source.name
             self.app.exit.assert_not_called()

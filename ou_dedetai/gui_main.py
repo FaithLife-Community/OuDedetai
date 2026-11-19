@@ -439,14 +439,28 @@ class MainWindow(GuiApp):
         self.stack.setCurrentIndex(view)
         self.stack.updateGeometry()
         if view == FULL:
-            self.root.resize(max(self.root.width(), 1040), max(self.root.height(), 700))
+            self._fit_full()
         elif view == SIMPLE:
             self._fit_simple()
+
+    def _fit_full(self) -> None:
+        """At least big enough for the full view's content, within the screen."""
+        page = self.stack.widget(FULL)
+        hint = page.sizeHint() if page is not None else QtCore.QSize(0, 0)
+        width = max(self.root.width(), 1040, hint.width())
+        height = max(self.root.height(), 700, hint.height())
+        screen = self.root.screen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            width, height = min(width, available.width()), min(height, available.height())
+        self.root.resize(width, height)
 
     def _fit_simple(self) -> None:
         """Size the window to the simple view's content (no empty band)."""
         page = self.stack.widget(SIMPLE)
-        if page is None:
+        if page is None or self.stack.currentIndex() != SIMPLE:
+            # A fit queued by refresh() before the full view opened (e.g. at start-up
+            # with the full view as default) would shrink it to the simple size.
             return
         width = 720
         # Measure without resizing the page itself (adjustSize() here left the page
@@ -672,6 +686,12 @@ class MainWindow(GuiApp):
         top.addWidget(self.h_index)
         self.h_run = self._run_button()
         top.addWidget(self.h_run)
+        self.h_update = QtWidgets.QToolButton()
+        self.h_update.setText(tr("Update"))
+        self.h_update.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.h_update.setMenu(self._update_menu())
+        self.h_update.setMinimumHeight(40)
+        top.addWidget(self.h_update)
         self.h_install = button(tr("Install"), "primary", self._install_from_full)
         self.h_install.setMinimumHeight(40)
         top.addWidget(self.h_install)
@@ -1009,6 +1029,8 @@ class MainWindow(GuiApp):
         self.h_install.setEnabled(not offline and not self._installing)
         self.s_options.setEnabled(not offline and not self._installing)
         self.s_update.setEnabled(installed)
+        self.h_update.setEnabled(installed)
+        self.h_update.setVisible(installed)
         self._show_update_button()
         # Home tiles
         oinos = self._oinos()
@@ -1199,6 +1221,8 @@ class MainWindow(GuiApp):
             if state == State.STOPPED and self._last_state == State.RUNNING:
                 # Readings may have been ticked off and layouts saved in Logos.
                 self.start_thread(self._load_integrations)
+                # Logos may have updated itself: read its version again.
+                self.conf._installed_faithlife_product_release = None
             self._last_state = state
             self.refresh()
 
@@ -1270,9 +1294,10 @@ class MainWindow(GuiApp):
     def _show_update_button(self) -> None:
         """Light blue, with a count and the list as a tooltip, when something can be updated."""
         available = [text for can, text in self._updates.values() if can] if not network.is_offline() else []
-        self.s_update.setText(tr("Update ({count})").format(count=len(available)) if available else tr("Update"))
-        self.s_update.setToolTip("\n".join(available))
-        set_kind(self.s_update, "available" if available else None)
+        for b in (self.s_update, self.h_update):
+            b.setText(tr("Update ({count})").format(count=len(available)) if available else tr("Update"))
+            b.setToolTip("\n".join(available))
+            set_kind(b, "available" if available else None)
 
     def _show_desktop_integrations(self) -> None:
         offline = network.is_offline()
@@ -1558,9 +1583,19 @@ class MainWindow(GuiApp):
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(
             self.root, tr("Choose a Wine build"), str(Path.home()),
             tr("Wine runner (*.AppImage *.tar.xz *.tar.gz *.tgz);;All files (*)"))
-        if filename:
-            self.conf.wine_appimage_path = filename
-            self.start_thread(utils.set_appimage_symlink, self)
+        if not filename:
+            return
+        if self.logos.logos_state in (State.RUNNING, State.STARTING):
+            self.status(tr("Close Logos before changing its Wine."), 0)
+            return
+
+        def run():
+            self.status(tr("Setting up {name}…").format(name=Path(filename).name), 0)
+            installer.use_wine_file(self, filename)
+            self._wine_builds_known = False  # "(in use)" moves
+            self.signals.refresh.emit()
+            self._check_updates()
+        self.start_thread(run)
 
     def edit_config(self) -> None:
         control.edit_file(self.conf.config_file_path)
