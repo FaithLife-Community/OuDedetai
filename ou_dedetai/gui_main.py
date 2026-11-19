@@ -899,8 +899,12 @@ class MainWindow(GuiApp):
         self.logging = QtWidgets.QCheckBox(tr("Logos's own logging (for Faithlife support)"))
         self.logging.clicked.connect(lambda _=False: self.switch_logging())
         help_.addWidget(self.logging)
+        # An OS update (seen on Bazzite and SteamOS) can leave KRunner and the look-up
+        # shortcut not working; reinstalling them puts their files and settings back (#581).
+        self.t_integrations = button(tr("Reinstall desktop integrations"), None, self.install_integrations)
         section(tr("Repair"), [
             button(tr("Re-apply settings"), None, self.update_wine_config),
+            self.t_integrations,
             button(tr("Rebuild the index"), None, self.run_indexing),
             button(tr("Remove the library catalog"), None, self.remove_library_catalog),
             button(tr("Remove all index files"), None, self.remove_indexes),
@@ -1048,6 +1052,8 @@ class MainWindow(GuiApp):
         self.offline.blockSignals(False)
         self._show_akousousin()
         self._show_desktop_integrations()
+        self.t_integrations.setVisible(desktop_integrations.is_installed())
+        self.t_integrations.setEnabled(not offline)
         self.logging.blockSignals(True)
         self.logging.setChecked(bool(self.conf.faithlife_product_logging))
         self.logging.blockSignals(False)
