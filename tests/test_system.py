@@ -78,7 +78,10 @@ class TestAkousousinInstall(unittest.TestCase):
 
     def test_bundle_install_failure_prevents_registration(self):
         self.run_command.side_effect = subprocess.CalledProcessError(1, ['sh'], stderr='install failed')
-        self.assertFalse(system.ensure_akousousin(self.app))
+        # No network in unit tests: the release lookup is stubbed, as in the test above.
+        with patch.object(network, '_get_release_data', return_value=network.SoftwareReleaseInfo(
+                'beta-123', 'https://example/package')):
+            self.assertFalse(system.ensure_akousousin(self.app))
         self.assertEqual(self.run_command.call_count, 1)
         self.app.exit.assert_not_called()  # reported, never fatal
 
