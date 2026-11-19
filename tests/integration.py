@@ -22,15 +22,14 @@ Requirements:
   menu bug. Without a WM, typed "@" may come out as "2".
 
 Environment:
-- INSTALLDIR / CONFIG_FILE: reuse an existing install. Skips install and the
-  final uninstall. Otherwise a temp dir is used and uninstalled afterwards.
-- LOGOS_USERNAME / LOGOS_PASSWORD: log in and download resources on first run.
-  Feature and crash-detection tests only run when logged in. Account needs three
-  login options.
+- With INSTALLDIR unset or empty, install in a temporary directory and exit
+  when the product window opens. The app stays open for manual sign-in.
+  Paste the two printed exports and rerun the script to test that installation.
+- With INSTALLDIR set, CONFIG_FILE must point to the existing install's config.
+  The feature and crash-detection tests require a signed-in installation.
 - FLPRODUCT: Logos (default) or Verbum.
 - logos_release_channel: stable (default) or beta.
 - wine_log, LOGOS_LOG: passed through to oudedetai.
-- BACKUPDIR: not yet supported; raises if set and not logged in.
 
 Crash-detection tests deliberately break the install (e.g. hide the Fonts dir)
 to confirm the harness notices; they restore it afterwards.
@@ -42,6 +41,7 @@ import os
 from pathlib import Path
 import tempfile
 import psutil
+import shlex
 import shutil
 import subprocess
 import threading
@@ -172,7 +172,7 @@ class OuDedetai:
 
         return str(output)
 
-    def run(self, *args, **kwargs):
+    def run(self, *args, detached=False, **kwargs):
         if self._binary is None:
             self._binary = self._oudedetai_binary()
         if "env" not in kwargs:
@@ -199,6 +199,11 @@ class OuDedetai:
         elif self.log_level == "quiet":
             log_level = "--quiet"
         args = ([self._binary, log_level, "--i-agree-to-faithlife-terms"] + args[0], *args[1:]) #noqa: E501
+        if detached:
+            return subprocess.Popen(
+                *args, **kwargs, start_new_session=True, stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
         # FIXME: Output to both stdout and PIPE (for debugging these tests)
         output = run_cmd(*args, **kwargs)
 
@@ -1038,49 +1043,37 @@ def main():
 
     # FIXME: consider loop to run all of these in their supported distroboxes (https://distrobox.it/)
     
+    install_dir = os.getenv("INSTALLDIR")
+    config_file = os.getenv("CONFIG_FILE")
+    if install_dir and (not config_file or not Path(config_file).is_file()):
+        raise TestFailed("CONFIG_FILE must point to an existing file when INSTALLDIR is set.")
+
     ou_dedetai = OuDedetai(
         log_level="debug",
-        install_dir=os.getenv("INSTALLDIR"),
-        config_file=os.getenv("CONFIG_FILE")
+        install_dir=install_dir,
+        config_file=os.path.abspath(config_file) if config_file else None,
     )
-    if not ou_dedetai.faithlife_product.is_installed():
+    product = ou_dedetai.faithlife_product
+    if not install_dir:
         ou_dedetai.run(["--install-app", "--assume-yes"])
+        launcher = ou_dedetai.run(["--run-installed-app"], detached=True)
+        try:
+            wait_for_true(lambda: launcher.poll() is not None or product.is_window_open(), timeout=30)
+        except TimeoutError:
+            launcher.terminate()
+            raise TestFailed(f"Timed out waiting for the {product.name()} window.") from None
+        if launcher.poll() is not None:
+            raise TestFailed(f"{product.name()} launcher exited with status {launcher.returncode}.")
+        print(f"export INSTALLDIR={shlex.quote(str(ou_dedetai.install_dir))}")
+        print(f"export CONFIG_FILE={shlex.quote(str(ou_dedetai.config))}")
+        return
 
-        # If we were given credentials, use them to login and download resources.
-        # This may take some time.
-        # Useful bash script to set these
-        """
-        export LOGOS_USERNAME=`read -p "Username: " foo;echo $foo`;
-        export LOGOS_PASSWORD=`read -p "Password: " -s foo;echo $foo`;
-        echo
-        """
-        logos_username = os.getenv("LOGOS_USERNAME")
-        logos_password = os.getenv("LOGOS_PASSWORD")
-        # These key sequences were tested on Logos 41.
-        # If the installer changes form, we'll need to adjust this.
-        if logos_username and logos_password:
-            print("Tests are build for use with accounts with three login options. "
-                "If that isn't the case for you, login to Logos and Verbum, that should"
-                "Get you enough resources to qualify for three options")
-            # If tests are printing a 2 instead of a @ you may need a window manager
-            # in your Xorg server. openbox is subject to menu bug, xfce4 isn't
-            test_first_run_resource_download(ou_dedetai, logos_username, logos_password)
-        
-    if not ou_dedetai.faithlife_product.is_logged_in() and os.getenv("BACKUPDIR"):
-        # FIXME: also support loading from a backup to achieve the same state
-        raise NotImplementedError("In the future this test suite should support loading"
-                                  " from a backup")
-
-    if ou_dedetai.faithlife_product.is_logged_in():
-        test_logos_features(ou_dedetai)
-
-        test_logos_crash_is_detected_by_test_code(ou_dedetai)
-
-    # FIXME: more robust cleanup on test failure. Consider waiting until after moving 
-    # this into unittest
-    if not os.getenv("INSTALLDIR"):
-        # If we didn't pass an install dir we should cleanup
-        ou_dedetai.uninstall()
+    if not product.is_installed():
+        raise TestFailed(f"{product.name()} is not installed in {install_dir}.")
+    if not product.is_logged_in():
+        raise TestFailed(f"Sign in to {product.name()} in {install_dir} before running the tests.")
+    test_logos_features(ou_dedetai)
+    test_logos_crash_is_detected_by_test_code(ou_dedetai)
 
     # Untested:
     # - run_indexing - Need to be logged in
