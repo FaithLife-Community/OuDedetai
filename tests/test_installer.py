@@ -158,3 +158,29 @@ class TestUseWineRelease(unittest.TestCase):
         self.assertIsNone(app.conf.wine_appimage_path)
         self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
         setup.assert_called_once_with(app)
+
+
+class TestBetaProductLogging(unittest.TestCase):
+    def _app(self, chosen):
+        app = Mock()
+        app.conf._raw.faithlife_product_logging = chosen
+        return app
+
+    def test_beta_build_enables_logging_when_unset(self):
+        app = self._app(None)
+        with patch.object(installer.constants, "LLI_CURRENT_VERSION", "4.0.0-beta.17.dev4"):
+            installer.ensure_beta_product_logging(app)
+        app.logos.switch_logging.assert_called_once_with(action='enable')
+
+    def test_user_choice_is_kept(self):
+        for chosen in (True, False):
+            app = self._app(chosen)
+            with patch.object(installer.constants, "LLI_CURRENT_VERSION", "4.0.0-beta.17.dev4"):
+                installer.ensure_beta_product_logging(app)
+            app.logos.switch_logging.assert_not_called()
+
+    def test_release_build_leaves_logging_off(self):
+        app = self._app(None)
+        with patch.object(installer.constants, "LLI_CURRENT_VERSION", "4.0.0"):
+            installer.ensure_beta_product_logging(app)
+        app.logos.switch_logging.assert_not_called()

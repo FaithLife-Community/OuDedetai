@@ -137,6 +137,7 @@ Each is its own commit (see `git log 14e328b..next`), so any can be dropped or r
 | **Quiet prefix set-up**: wineboot runs without Wine Mono/Gecko and without a display (falls back to a normal run) | The Mono prompt and "configuration is being updated" window looked untidy | bce9da1, d239e89 |
 | **Child processes get the system's libraries** (PyInstaller's `LD_LIBRARY_PATH` dropped once at start-up) | Kubuntu 26.04's `uname` failed from the binary and stopped the install | 7764f8d, 2bde6b2 |
 | **`--purge` / Remove everything**: install, prefix, config, cache, logs, shortcuts, link handlers; asks about Akousousin (its own `--purge`) and the integrations; never deletes a `WINEPREFIX` override | "As if we were never there" | 0967faf, 2bf4b32 |
+| **Logos logging on during the beta**: a fresh install on a beta/dev build turns on Logos's own logging unless the user has already chosen; release builds don't | Crash dumps only show that a .NET exception went unhandled (#582); `Logos.log` says which one. Logos.log can list the user's books, so the support zip still leaves it out | `ensure_beta_product_logging` |
 | **Signals and error handling** in the window: results come back through named Qt signals; a `QTimer` checks Logos; narrow `except`s; unexpected errors are shown | Taylor's review | 0967faf |
 
 Bugs found and fixed while testing (in existing code):

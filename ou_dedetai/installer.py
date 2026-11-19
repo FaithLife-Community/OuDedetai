@@ -468,10 +468,28 @@ def ensure_product_installed(app: App):
     # Clear installed version cache
     app.conf._installed_faithlife_product_release = None
 
+    ensure_beta_product_logging(app)
+
     # Clean up temp files, etc.
     utils.clean_all()
 
     logging.debug(f"> {app.conf.logos_exe=}")
+
+
+def ensure_beta_product_logging(app: App):
+    """Beta/dev builds: turn on Logos's own logging unless the user has chosen.
+
+    A crash dump only shows that a .NET exception went unhandled; Logos.log says
+    which one. Release builds keep logging off. FIXME: drop once 4.0.0 is out."""
+    if "beta" not in constants.LLI_CURRENT_VERSION and "dev" not in constants.LLI_CURRENT_VERSION:
+        return
+    if app.conf._raw.faithlife_product_logging is not None:
+        return  # the user turned it on or off themselves
+    logging.info("Beta build: enabling Logos logging so crashes can be diagnosed.")
+    try:
+        app.logos.switch_logging(action='enable')
+    except Exception:
+        logging.warning("Couldn't enable Logos logging.", exc_info=True)
 
 
 def ensure_config_file(app: App):
