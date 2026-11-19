@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ou_dedetai import wine
+from ou_dedetai import constants, wine
 
 
 class TestPrintingSetup(unittest.TestCase):
@@ -218,3 +218,35 @@ class TestRegistryRetry(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):
                 wine.run_wine_during_install(mock.Mock(), "/w", exe="msiexec", exe_args=["/i"])
         self.assertEqual(run.call_count, 1)
+
+
+class TestReuseUnpackedWine(unittest.TestCase):
+    """#579: choosing (or updating to) a build that's already unpacked doesn't download it again."""
+    def _app(self, root: str):
+        app = mock.Mock()
+        app.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL
+        app.conf.wine_download_file_name = "wine-11.22-oinos-pre-b1e3dff-x86_64.tar.xz"
+        app.conf.wine_distribution_dir = root
+        app.conf.wine_prefix = root  # no system.reg: nothing to update
+        return app
+
+    def test_unpacked_build_is_used_without_downloading(self):
+        with tempfile.TemporaryDirectory() as root:
+            bindir = Path(root) / "wine-11.22-oinos-pre-b1e3dff-x86_64" / "bin"
+            bindir.mkdir(parents=True)
+            for name in ("wine", "wineserver"):
+                (bindir / name).touch()
+            app = self._app(root)
+            with mock.patch("ou_dedetai.installer.download_wine") as download, \
+                    mock.patch("ou_dedetai.installer.create_wine_symlinks"):
+                wine.setup_wine(app)
+            download.assert_not_called()
+            self.assertEqual(app.conf.wine_binary, str((bindir / "wine").absolute()))
+
+    def test_missing_build_is_downloaded(self):
+        with tempfile.TemporaryDirectory() as root:
+            app = self._app(root)
+            with mock.patch("ou_dedetai.installer.download_wine", return_value=None) as download, \
+                    mock.patch("ou_dedetai.installer.create_wine_symlinks"):
+                wine.setup_wine(app)
+            download.assert_called_once()

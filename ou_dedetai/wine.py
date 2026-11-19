@@ -1138,9 +1138,30 @@ def is_wine_tarball(path: Path) -> bool:
     return path.is_file() and path.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz"))
 
 
+def _unpacked_wine_build(app: App) -> Optional[Path]:
+    """The recommended tarball's build if it's already unpacked here (its folder is named
+    after the tarball, as utils.installed_wine_build_name expects), so choosing or
+    updating to a build we already have doesn't download and unpack it again."""
+    if app.conf.wine_binary != constants.WINE_RECOMMENDED_TARBALL_SIGIL:
+        return None
+    build = utils.wine_build_name(Path(app.conf.wine_download_file_name).name)
+    build_dir = Path(app.conf.wine_distribution_dir) / build
+    wine_path = build_dir / "bin" / "wine"
+    if wine_path.is_file() and (build_dir / "bin" / "wineserver").is_file():
+        return wine_path
+    return None
+
+
 def setup_wine(app: App):
     from .installer import download_wine, create_wine_symlinks
-    downloaded_file = download_wine(app)
+    unpacked = _unpacked_wine_build(app)
+    if unpacked is not None:
+        app.status(f"Using {unpacked.parent.parent.name}, already on this computer…")
+        app.conf.wine_binary = str(unpacked.absolute())
+        app.conf.wine_appimage_path = None
+        downloaded_file = None
+    else:
+        downloaded_file = download_wine(app)
     if downloaded_file is None and is_wine_tarball(Path(app.conf.wine_binary)):
         # A tarball chosen with "Choose File" is unpacked like a downloaded one.
         downloaded_file = Path(app.conf.wine_binary)
