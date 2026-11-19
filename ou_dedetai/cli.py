@@ -43,8 +43,15 @@ class CLI(App):
         installer.install(self)
         self.exit("Install has finished", intended=True)
 
+    def update_installed_app(self):
+        utils.update_faithlife_product(self)
+        self.exit("Update has finished", intended=True)
+
     def install_dependencies(self):
         utils.install_dependencies(app=self)
+
+    def update_wine_config(self):
+        installer.update_wine_config(self)
 
     def install_icu(self):
         wine.enforce_icu_data_files(self)
@@ -68,6 +75,10 @@ class CLI(App):
         self.logos.start()
         # Keep the process running so that our background threads can keep running
         while self.logos.logos_state != LogosRunningState.STOPPED:
+            # A worker thread (e.g. the memory watchdog) may have asked us to
+            # exit; run it here on the main thread so the process truly stops.
+            if self._pending_exit is not None:
+                self.exit(*self._pending_exit)
             time.sleep(3)
             self.logos.monitor()
 
@@ -106,8 +117,11 @@ class CLI(App):
     def toggle_app_logging(self):
         self.logos.switch_logging()
 
+    def toggle_media_support(self):
+        wine.toggle_media_support(self)
+
     def update_latest_appimage(self):
-        utils.update_to_latest_recommended_appimage(self)
+        installer.update_to_latest_wine(self)
 
     def update_self(self):
         utils.update_to_latest_lli_release(self)
@@ -115,7 +129,7 @@ class CLI(App):
     def get_support(self):
         control.get_support(self)
 
-    _exit_option: str = "Exit"
+    _exit_option: str | None = "Exit"
 
     def _ask(self, question: str, options: list[str] | str) -> str:
         """Passes the user input to the user_input_processor thread
@@ -160,6 +174,10 @@ class CLI(App):
             end=""
         )
 
+    def _schedule_exit_on_main_thread(self, reason: str, intended: bool) -> None:
+        # Same handling - exit happens to be thread safe today.
+        self._exit(reason=reason, intended=intended)
+
     def exit(self, reason: str, intended: bool = False):
         # Signal CLI.user_input_processor to stop.
         self.input_q.put(None)
@@ -197,6 +215,9 @@ class CLI(App):
         # (so we're back at the beginning for the next log line)
         if progress_str:
             print(progress_str, end="\r")
+
+    def _pop_up(self, title, message):
+        self._status(message=message)
 
     @property
     def superuser_command(self) -> str:

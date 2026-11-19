@@ -9,6 +9,7 @@ import time
 from typing import Callable, Optional
 
 import ou_dedetai
+from ou_dedetai import database_faithlife
 from ou_dedetai.app import App
 import ou_dedetai.cli
 from ou_dedetai.config import EphemeralConfiguration, PersistentConfiguration
@@ -60,7 +61,7 @@ def detect_broken_install(
 
     # Recovery is best-effort we don't want to crash the app on account of failures here
     try:
-        with ou_dedetai.database.LocalUserPreferencesManager(logos_app_dir, logos_user_id) as db: 
+        with database_faithlife.LocalUserPreferencesManager(logos_app_dir, logos_user_id) as db:
             app_local_preferences = db.app_local_preferences
             if (
                 app_local_preferences

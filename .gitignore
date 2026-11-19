@@ -1,12 +1,16 @@
 *.pyc
 __pycache__/
 dist/
+/dist
 build/
+/build
 env/
 .env/
 venv/
 .venv/
+/.venv
 .idea/
 *.egg-info
 .vscode
 /.flatpak-builder
+/distrobox

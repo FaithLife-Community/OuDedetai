@@ -28,8 +28,14 @@ class App(abc.ABC):
 
     _threads: list[threading.Thread]
     """List of threads
-    
+
     Non-daemon threads will be joined before shutdown
+    """
+    _pending_exit: Optional[tuple[str, bool]] = None
+    """(reason, intended) handed from a worker thread to the main-thread loop.
+
+    Set when exit() is called off the main thread; read by the CLI/TUI polling
+    loops so they can re-invoke exit() on the main thread.
     """
     _last_status: Optional[str] = None
     """The last status we had"""
@@ -45,6 +51,7 @@ class App(abc.ABC):
         self.conf = Config(config, self)
         self.logos = LogosManager(app=self)
         self._threads = []
+        self._pending_exit: Optional[tuple[str, bool]] = None
         # Ensure everything is good to start
         check_incompatibilities(self)
 
@@ -148,8 +155,31 @@ class App(abc.ABC):
     def _exit(self, reason: str, intended: bool = False) -> None:
         """Cleanup any lingering objects, per-implementation specific"""
 
+    def _schedule_exit_on_main_thread(self, reason: str, intended: bool) -> None:
+        """Wake/redirect the main thread so it runs exit().
+
+        Called on a worker thread when exit() was invoked off the main thread.
+        Frontends with their own main loop override this with the appropriate
+        thread-safe mechanism (e.g. tk's root.after, or poking a polled queue).
+        The default interrupts the main thread, which most blocking main loops
+        surface as a KeyboardInterrupt.
+        """
+        import _thread
+        _thread.interrupt_main()
+
     def exit(self, reason: str, intended: bool = False) -> NoReturn:
-        """Exits the application cleanly with a reason."""
+        """Exits the application cleanly with a reason.
+
+        If called from a worker thread, marshals the real exit onto the main
+        thread (so per-frontend _exit() cleanup runs there and the process
+        actually terminates), then lets this worker die.
+        """
+        if threading.current_thread() is not threading.main_thread():
+            self._pending_exit = (reason, intended)
+            self._schedule_exit_on_main_thread(reason, intended)
+            # Kills only this worker (CPython swallows SystemExit off the main
+            # thread); also frees any join() the main-thread exit waits on.
+            raise SystemExit
         logging.debug(f"Closing {constants.APP_NAME}.")
         self._exit(reason, intended)
         # Shutdown logos/indexer if we spawned it
@@ -235,7 +265,7 @@ class App(abc.ABC):
     # Perhaps this should just raise NotImplementedError to avoid confusion?
     @abc.abstractmethod
     def _status(self, message: str, percent: Optional[int] = None):
-        """Implementation for updating status pre-front end
+        """Implementation for updating status per-front end
         
         Args:
             message: str - message to send to user
@@ -276,7 +306,32 @@ class App(abc.ABC):
                 print(f"{message}")
                 if bar:
                     print(bar)
+
+    def pop_up(self, title: str, message: str):
+        """An intrusive message requiring user attention
         
+        Args:
+            title: str - title of the alert
+            message: str - message to send to user
+        """
+        # Check to see if we want to suppress all output
+        if self.conf._overrides.quiet:
+            return
+
+        self._pop_up(title=title,message=message)
+
+    # FIXME: This implementation is overridden in every implementation
+    # Perhaps this should just raise NotImplementedError to avoid confusion?
+    @abc.abstractmethod
+    def _pop_up(self, title: str, message: str):
+        """Implementation for opening a pop up per-front end
+        
+        Args:
+            title: str - title of the alert
+            message: str - message to send to user
+        """
+        # Fallback to just sending a status if pop up isn't implemented.
+        self._status(message=message)
 
     @property
     def superuser_command(self) -> str:

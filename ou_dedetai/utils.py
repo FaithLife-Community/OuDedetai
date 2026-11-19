@@ -1,6 +1,7 @@
 import atexit
 from datetime import datetime
 import enum
+import glob
 import inspect
 import json
 import logging
@@ -24,6 +25,7 @@ from . import constants
 from . import network
 from . import system
 from . import wine
+from .database import LogosPaths
 
 
 # FIXME: This function isn't used and should probably be removed.
@@ -161,80 +163,31 @@ def get_current_logos_version(logos_appdata_dir: Optional[str]) -> Optional[str]
     return None
 
 
-def get_winebin_code_and_desc(app: App, binary) -> Tuple[str, str | None]:
-    """Gets the type of wine in use and it's description
-    
-    Returns:
-        code: One of: Recommended, AppImage, System, Proton, PlayOnLinux, Custom
-        description: Description of the above
-    """
-    # Set binary code, description, and path based on path
-    codes = {
-        "Recommended": "Use the recommended AppImage",
-        "AppImage": "AppImage of Wine64",
-        "System": (
-            "Use the system binary (i.e., /usr/bin/wine64). "
-            "WINE must be 7.18-staging or later, or 8.16-devel or later, and cannot be version 8.0."
-        ),
-        "Proton": "Install using the Steam Proton fork of WINE.",
-        "PlayOnLinux": "Install using a PlayOnLinux WINE64 binary.",
-        "Custom": "Use a WINE64 binary from another directory.",
-    }
-    # TODO: The GUI currently cannot distinguish between the recommended
-    # AppImage and another on the system. We need to add some manner of making
-    # this distinction in the GUI, which is why the wine binary codes exist.
-    # Currently the GUI only accept an array with a single element, the binary
-    # itself; this will need to be modified to a two variable array, at the
-    # least, even if we hide the wine binary code, but it might be useful to
-    # tell the GUI user that a particular AppImage/binary is recommended.
-    # Below is my best guess for how to do this with the single element array…
-    # Does it work?
-    if isinstance(binary, Path):
-        binary = str(binary)
-    if binary == f"{app.conf.installer_binary_dir}/{app.conf.wine_appimage_recommended_file_name}":
-        code = "Recommended"
-    elif binary.lower().endswith('.appimage'):
-        code = "AppImage"
-    elif "/usr/bin/" in binary:
-        code = "System"
-    elif "Proton" in binary:
-        code = "Proton"
-    elif "PlayOnLinux" in binary:
-        code = "PlayOnLinux"
-    else:
-        code = "Custom"
-    desc = codes.get(code)
-    logging.debug(f"{binary} code & desc: {code}; {desc}")
-    return code, desc
-
-
 def get_wine_options(app: App) -> List[str]:
     appimages = app.conf.wine_app_image_files
     binaries = app.conf.wine_binary_files
     logging.debug(f"{appimages=}")
     logging.debug(f"{binaries=}")
-    wine_binary_options = []
-
-    recomended_appimage = f"{app.conf.installer_binary_dir}/{app.conf.wine_appimage_recommended_file_name}"
-
-    if recomended_appimage in appimages:
-        appimages.remove(recomended_appimage)
+    wine_binary_options = [constants.WINE_RECOMMENDED_TARBALL_SIGIL]
 
     # Add AppImages to list
     os_name, _ = system.get_os()
     if os_name != "alpine":
-        wine_binary_options.append(recomended_appimage)
+        wine_binary_options.extend([
+            constants.WINE_RECOMMENDED_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL,
+            constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL,
+        ])
         wine_binary_options.extend(appimages)
 
     sorted_binaries = sorted(list(set(binaries)))
     logging.debug(f"{sorted_binaries=}")
 
     for wine_binary_path in sorted_binaries:
-        # FIXME: The results of this function aren't used [anymore?].
-        code, description = get_winebin_code_and_desc(app, wine_binary_path)
-
         # Create wine binary option array
         wine_binary_options.append(wine_binary_path)
+    wine_binary_options.append(constants.PROMPT_OPTION_FILE)
     logging.debug(f"{wine_binary_options=}")
     return wine_binary_options
 
@@ -316,7 +269,6 @@ class VersionComparison(enum.Enum):
 def compare_logos_linux_installer_version(app: App) -> Optional[VersionComparison]:
     current = Version(constants.LLI_CURRENT_VERSION)
     latest = Version(app.conf.app_latest_version)
-
     if current < latest:
         # Current release is older than recommended.
         output = VersionComparison.OUT_OF_DATE
@@ -327,13 +279,46 @@ def compare_logos_linux_installer_version(app: App) -> Optional[VersionCompariso
         # Current release is latest.
         output = VersionComparison.UP_TO_DATE
 
-    logging.debug(f"LLI self-update check: {output=}")
     return output
 
 
 # FIXME: This actually compares any wine binary with recommended version. Maybe
 # the function should be renamed to 'check_recommended_wine_version'?
-def compare_recommended_appimage_version(app: App):
+WINE_BUILD_SUFFIXES = (".appimage", ".tar.xz", ".tar.gz", ".tgz")
+
+
+def wine_build_name(file_name: str) -> str:
+    """The build's name without the AppImage/tarball extension, so both forms compare equal."""
+    for suffix in WINE_BUILD_SUFFIXES:
+        if file_name.lower().endswith(suffix):
+            return file_name[:-len(suffix)]
+    return file_name
+
+
+def installed_wine_build_name(app: App) -> Optional[str]:
+    """Name of the Wine build in use (AppImage file or unpacked tarball folder), if OuDedetai manages it."""
+    if app.conf.wine_appimage_path is not None:
+        return wine_build_name(Path(app.conf.wine_appimage_path).name)
+    if app.conf.is_wine_binary_in_distribution:
+        # <wine distribution dir>/<build>/bin/wine
+        return Path(app.conf.wine_binary).parent.parent.name
+    return None
+
+
+def recommended_wine_build_name(app: App) -> Optional[str]:
+    """Name of the build "Update to Latest" would install for this kind of install."""
+    try:
+        if app.conf.is_wine_binary_in_distribution:
+            url = app.conf._wine_tarball_release.download_url
+        else:
+            url = app.conf.wine_download_url
+    except Exception as e:
+        logging.debug(f"Couldn't get the recommended Wine build: {e}")
+        return None
+    return wine_build_name(os.path.basename(url))
+
+
+def compare_recommended_wine_version(app: App):
     status = None
     message = None
     wine_exe_path = app.conf.wine_binary
@@ -342,16 +327,24 @@ def compare_recommended_appimage_version(app: App):
         current_version = Version(f"{wine_release.major}.{wine_release.minor}")
         logging.debug(f"Current wine release: {current_version}")
 
-        recommended_version = Version(app.conf.wine_appimage_recommended_version)
+        recommended_version = Version(app.conf.wine_recommended_version)
         logging.debug(f"Recommended wine release: {recommended_version}")
         if current_version < recommended_version:
             # Current release is older than recommended.
             status = 0
             message = "yes"
         elif current_version == recommended_version:
-            # Current release is latest.
-            status = 1
-            message = "uptodate"
+            # Same Wine version; a different build of it (our builds are rebuilt with fixes
+            # on the same upstream version) is still an update.
+            installed, recommended = installed_wine_build_name(app), recommended_wine_build_name(app)
+            if installed and recommended and installed != recommended:
+                logging.debug(f"Installed build {installed}, recommended build {recommended}")
+                status = 0
+                message = "yes"
+            else:
+                # Current release is latest.
+                status = 1
+                message = "uptodate"
         elif current_version > recommended_version:
             # Installed version is custom
             status = 2
@@ -430,7 +423,8 @@ def check_appimage(filestr):
 
 
 def find_appimage_files(app: App) -> list[str]:
-    release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release 
+    # Must not prompt; may run before the release default is set
+    release_version = app.conf.installed_faithlife_product_release or app.conf._raw.faithlife_product_release
     appimages = []
     directories = [
         app.conf.installer_binary_dir,
@@ -461,20 +455,36 @@ def find_appimage_files(app: App) -> list[str]:
 
 
 def find_wine_binary_files(app: App, release_version: Optional[str]) -> list[str]:
+    home = os.path.expanduser("~")
     wine_binary_path_list = [
         "/usr/local/bin",
-        os.path.expanduser("~") + "/bin",
-        os.path.expanduser("~") + "/PlayOnLinux/wine/linux-amd64/*/bin",
-        os.path.expanduser("~") + "/.steam/steam/steamapps/common/Proton*/files/bin",
+        home + "/bin",
+        home + "/PlayOnLinux/wine/linux-amd64/*/bin",
     ]
+
+    steam_roots = [
+        home + "/.steam/steam",
+        home + "/.local/share/Steam",
+        home + "/.var/app/com.valvesoftware.Steam/.local/share/Steam",
+    ]
+    steam_libraries = list(steam_roots)
+    for root in steam_roots:
+        manifest = Path(root) / "steamapps/libraryfolders.vdf"
+        if manifest.is_file():
+            steam_libraries += re.findall(r'"path"\s+"([^"]+)"', manifest.read_text(errors="ignore"))
+    for library in steam_libraries:
+        for layout in ("files", "dist"):
+            wine_binary_path_list.append(f"{library}/steamapps/common/Proton*/{layout}/bin")
+            wine_binary_path_list.append(f"{library}/compatibilitytools.d/*/{layout}/bin")
 
     if app.conf._overrides.custom_binary_path is not None:
         wine_binary_path_list.append(app.conf._overrides.custom_binary_path)
 
     # Temporarily modify PATH for additional WINE64 binaries.
-    for p in wine_binary_path_list:
-        if p not in os.environ['PATH'] and os.path.isdir(p):
-            os.environ['PATH'] = os.environ['PATH'] + os.pathsep + p
+    for pattern in wine_binary_path_list:
+        for p in glob.glob(pattern) or [pattern]:
+            if p not in os.environ['PATH'].split(os.pathsep) and os.path.isdir(p):
+                os.environ['PATH'] = os.environ['PATH'] + os.pathsep + p
 
     # Check each directory in PATH for wine64; add to list
     binaries = []
@@ -501,22 +511,27 @@ def find_wine_binary_files(app: App, release_version: Optional[str]) -> list[str
 
 def set_appimage_symlink(app: App):
     # This function assumes make_skel() has been run once.
-    if app.conf.wine_binary_code not in ["AppImage", "Recommended"]:
-        logging.debug("AppImage commands disabled since we're not using an appimage")
-        return
     if app.conf.wine_appimage_path is None:
         logging.debug("No need to set appimage symlink, as it wasn't set")
         return
 
+    # A Wine tarball (such as our builds' .tar.xz) is unpacked and used like at install.
+    if wine.is_wine_tarball(Path(app.conf.wine_appimage_path)):
+        tarball = app.conf.wine_appimage_path
+        app.conf.wine_appimage_path = None
+        app.conf.wine_binary = str(tarball)
+        wine.setup_wine(app)
+        return
+
     logging.debug(f"{app.conf.wine_appimage_path=}")
-    logging.debug(f"{app.conf.wine_appimage_recommended_file_name=}")
+    logging.debug(f"{app.conf.wine_download_file_name=}")
     appimage_file_path = Path(app.conf.wine_appimage_path)
     appdir_bindir = Path(app.conf.installer_binary_dir)
     appimage_symlink_path = appdir_bindir / app.conf.wine_appimage_link_file_name
 
     destination_file_path = appdir_bindir / appimage_file_path.name
 
-    if appimage_file_path.name == app.conf.wine_appimage_recommended_file_name:
+    if appimage_file_path.name == app.conf.wine_download_file_name:  # noqa: E501
         # Default case.
         # This saves in the install binary dir
         network.download_recommended_appimage(app)
@@ -532,6 +547,12 @@ def set_appimage_symlink(app: App):
     delete_symlink(appimage_symlink_path)
     os.symlink(destination_file_path, appimage_symlink_path)
     app.conf.wine_appimage_path = destination_file_path
+    # Use it: an install that ran another Wine (e.g. a tarball) would otherwise keep running it.
+    app.conf.wine_binary = str(destination_file_path)
+    for name in ("wine", "wine64", "wineserver", "winetricks"):
+        link = appdir_bindir / name
+        link.unlink(missing_ok=True)
+        link.symlink_to(f"./{appimage_symlink_path.name}")
 
 
 def update_to_latest_lli_release(app: App):
@@ -547,20 +568,33 @@ def update_to_latest_lli_release(app: App):
         logging.debug(f"{constants.APP_NAME} is at a newer version than the latest.") # noqa: 501
 
 
-# FIXME: consider moving this to control
-def update_to_latest_recommended_appimage(app: App):
-    if app.conf.wine_binary_code not in ["AppImage", "Recommended"]:
-        logging.debug("AppImage commands disabled since we're not using an appimage")
+def update_faithlife_product(app: App):
+    from ou_dedetai import installer  # local import to avoid circular dependency
+    releases = app.conf.faithlife_product_releases
+    if not releases:
+        app.status(f"No releases were found for {app.conf.faithlife_product}. Refusing to update.")
         return
-    app.conf.wine_appimage_path = Path(app.conf.wine_appimage_recommended_file_name)
-    status, _ = compare_recommended_appimage_version(app)
-    if status == 0:
-        # TODO: Consider also removing old appimage from install dir. 
-        set_appimage_symlink(app)
-    elif status == 1:
-        logging.debug("The AppImage is already set to the latest recommended.")
-    elif status == 2:
-        logging.debug("The AppImage version is newer than the latest recommended.")
+    latest = releases[0]  # feed is ordered newest-first
+    app.status(f"Updating {app.conf.faithlife_product} to {latest}…")
+    app.conf.faithlife_product_release = latest
+    installer.install(app)
+
+
+
+
+def check_for_updates(app: App, force: bool = False) -> VersionComparison:
+    if force:
+        app.conf._network.refresh_app_latest_version(app.conf.app_release_channel)
+
+    result = compare_logos_linux_installer_version(app)
+    if result == VersionComparison.OUT_OF_DATE:
+        app.status(f"A newer version of {constants.APP_NAME} is available: {app.conf.app_latest_version}")
+    elif result == VersionComparison.UP_TO_DATE:
+        app.status(f"{constants.APP_NAME} is up to date.")
+    elif result == VersionComparison.DEVELOPMENT:
+        app.status(f"Running a development version of {constants.APP_NAME}.")
+
+    return result
 
 
 def get_downloaded_file_path(download_dir: str, filename: str):
@@ -647,3 +681,34 @@ def get_timestamp():
 def parse_bool(string: str) -> bool:
     return string.lower() in ['true', '1', 'y', 'yes']
 
+
+def get_logos_paths(ephemeral_config):
+    from .config import PersistentConfiguration, get_wine_prefix_path, get_wine_user, \
+        get_logos_appdata_dir, get_logos_user_id
+    persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
+    if persistent_config.install_dir is None:
+        raise RuntimeError("No Logos installation found")
+    if persistent_config.faithlife_product is None:
+        raise RuntimeError("No Logos product found")
+    wine_prefix = (
+        ephemeral_config.wine_prefix
+        or get_wine_prefix_path(persistent_config.install_dir)
+    )
+    wine_user = get_wine_user(wine_prefix)
+    if wine_user is None:
+        raise RuntimeError("Unable to find Wine user")
+
+    appdata = Path(get_logos_appdata_dir(wine_prefix, wine_user, persistent_config.faithlife_product))
+    logos_user_id = get_logos_user_id(str(appdata))
+    if logos_user_id is None:
+        raise RuntimeError("Unable to find Logos user ID")
+
+    return LogosPaths(
+        appdata=appdata,
+        data=appdata / "Data" / logos_user_id,
+        documents=appdata / "Documents" / logos_user_id,
+        user_id=logos_user_id
+    )
+
+def get_logos_databases(ephemeral_config) -> list[Path]:
+    return get_logos_paths(ephemeral_config).databases

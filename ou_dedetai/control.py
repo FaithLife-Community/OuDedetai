@@ -27,11 +27,13 @@ def remove_all_index_files(app: App):
     if not app.conf.logos_exe:
         app.exit("Cannot remove index files, Logos is not installed")
     logos_dir = os.path.dirname(app.conf.logos_exe)
+    # Not LibraryCatalog: the indexer takes the list of resources to index from
+    # it. Without it, running the indexer afterwards finds "0 indexable resources"
+    # and replaces the index with an empty one (see remove_library_catalog).
     index_paths = [
         os.path.join(logos_dir, "Data", "*", "BibleIndex"),
         os.path.join(logos_dir, "Data", "*", "LibraryIndex"),
         os.path.join(logos_dir, "Data", "*", "PersonalBookIndex"),
-        os.path.join(logos_dir, "Data", "*", "LibraryCatalog"),
     ]
     for index_path in index_paths:
         pattern = os.path.join(index_path, "*")
@@ -65,8 +67,10 @@ def uninstall(app: App):
     app.status("Uninstalling…")
     delete_paths = [
         app.conf.config_file_path,
-        app.conf.install_dir,
     ]
+    # Only add install_dir if we know what it is
+    if app.conf._raw.install_dir is not None:
+        delete_paths += [app.conf._raw.install_dir]
 
     question = "Are you sure you want to uninstall?"
     context = (
@@ -124,13 +128,27 @@ def get_support(app: App) -> str:
             zip.write(app.conf.app_log_path)
         if Path(app.conf.app_wine_log_path).exists():
             zip.write(app.conf.app_wine_log_path)
+        if Path(app.conf.app_wine_log_previous_path).exists():
+            zip.write(app.conf.app_wine_log_previous_path)
+        # Only include LogosCrash.log for now. Logos.log can include
+        # information about which books the user owns which is more information than
+        # The user would probably expect to be included in a support package.
+        if (
+            app.conf._faithlife_crash_log is not None and
+            Path(app.conf._faithlife_crash_log).exists()
+        ):
+            zip.write(app.conf._faithlife_crash_log)
+
         if Path("/etc/os-release").exists():
             zip.write("/etc/os-release")
         run_commands = [
             ["glxinfo"],
             ["free", "-h"],
             ["inxi", "-F"],
-            ["df", "-h"]
+            ["df", "-h"],
+            ["xdg-mime", "query", "default", "x-scheme-handler/https"],
+            ["xdg-mime", "query", "default", "x-scheme-handler/logos4"],
+            ["xdg-mime", "query", "default", "x-scheme-handler/libronixdls"]
         ]
 
         if app.conf._raw.wine_binary:
@@ -147,9 +165,7 @@ def get_support(app: App) -> str:
                     text=True,
                     env=subprocess_env
                 )
-                # This writes to the root of the zip, which is file considering this is
-                # just a support package
-                zip.writestr(f"{command[0]}.out", output)
+                zip.writestr(f"/tmp/{" ".join(command).replace("/","_")}", output)
             except Exception as e:
                 # Some of these commands may not be found.
                 logging.debug(
@@ -195,7 +211,8 @@ def get_support(app: App) -> str:
 
         answer = app.ask(
             "How would you like to continue to get support?\n"
-            f"Make sure to:\n"
+            "Make sure to:\n"
+            f"- Check the pinned issues {constants.REPOSITORY_ISSUES_LINK} to see if your problem is already known.\n"
             f"- Upload {output_path.replace(str(Path().home()), "~")}\n"
             "- Describe what went wrong\n"
             "- Describe actions you took",

@@ -1,5 +1,36 @@
 # Changelog
 
+- 4.0.0-beta.16
+	- Allow Ou Dedetai to update itself and Wine and distinguish latest use from prerelease
+	- Allow using a Wine tarball
+	- Implement a new Logos to Markdown Notes Exporter
+	- Fix how Ou Dedetai finds Steam Proton
+	- Fix installation of ICU
+	- Permit Logos printing via Wine prefix
+	- Allow use of GitHub personal access tokens
+	- Fix GUI popup errors
+	- TUI improvements and bug fixes
+	- Various bug fixes
+- 4.0.0-beta.15
+	- Fix issues with TUI [J. Bellars, T. H. Wright]
+	- Switch TUI to Textual [T. H. Wright]
+- 4.0.0-beta.14
+	- This release adds an update Logos button [N. Shaaban]
+	- OD now detects OpenGL version [T. H. Wright]
+	- Various bugs and AI agent files [N. Shaaban]
+- 4.0.0-beta.13
+	- This release fixes some bugs found since beta 12. [N. Shaaban]
+	- This release also adds some initial support for containerized browsers. [N. Shaaban]
+- 4.0.0-beta.12
+	- This release fixes numerous small issues that prevented working installs, while also introducing numerous small UX improvements [N. Shaaban, N. Marti, T. H. Wright, DavidDGTNT, Simpleboy0]
+	- This release fixes a critical issue with beta 11 [N. Shaaban]
+	- This release supports the Logos 41+ login flow [N. Shaaban]
+- 4.0.0-beta.11
+	- Fixes bug where the TUI didn't open (#379, #382) [N. Shaaban, T. H. Wright]
+	- Fixes bug where Verbum didn't stop when told (#374) [N. Shaaban]
+	- Functionality restored to Backup/Restore on CLI (#345) [N. Marti]
+	- Properly rotate wine.log (#378, #376) [N. Shaaban]
+	- Adds proper progress bar to CLI (#370) [N. Shaaban]
 - 4.0.0-beta.10
 	- Fixes bug where advanced GUI install failed (#354) [N. Shaaban]
 	- Adds a new option: "Get Support" to create a zip and display our social groups (#353, #274, #103) [N. Shaaban]

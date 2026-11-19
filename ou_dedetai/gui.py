@@ -34,6 +34,7 @@ class ChoiceGui(Frame):
         # drop-down menu
         self.answer_var = StringVar(value=self._default_prompt)
         self.answer_dropdown = Combobox(self, textvariable=self.answer_var)
+        self.answer_dropdown.config(postcommand=self._configure_dropdown)
         self.answer_dropdown['values'] = options
         if len(options) > 0:
             self.answer_dropdown.set(options[0])
@@ -45,10 +46,22 @@ class ChoiceGui(Frame):
         # Place widgets.
         row = 0
         self.question_label.grid(column=0, row=row, sticky='nws', pady=2, padx=8)
-        self.answer_dropdown.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
+        self.columnconfigure(1, weight=1)
+        self.answer_dropdown.grid(column=1, row=row, sticky='ew', pady=2, columnspan=2)
         row += 1
         self.cancel_button.grid(column=1, row=row, sticky='e', pady=2)
         self.okay_button.grid(column=2, row=row, sticky='e', pady=2)
+
+    def _configure_dropdown(self):
+        tk = self.answer_dropdown.tk
+        popdown = tk.call('ttk::combobox::PopdownWindow', self.answer_dropdown)
+        listbox = f'{popdown}.f.l'
+        scrollbar = f'{popdown}.f.xscroll'
+        if not tk.call('winfo', 'exists', scrollbar):
+            tk.call('ttk::scrollbar', scrollbar, '-orient', 'horizontal',
+                    '-command', (listbox, 'xview'))
+            tk.call('grid', scrollbar, '-row', 1, '-column', 0, '-sticky', 'ew')
+            tk.call(listbox, 'configure', '-xscrollcommand', (scrollbar, 'set'))
 
 
 class InfoGui(Frame):
@@ -251,6 +264,13 @@ class ControlGui(StatusGui):
         # Install deps button
         self.deps_label = Label(self, text="Install dependencies")
         self.deps_button = Button(self, text="Install")
+        # Update Wine configuration button
+        self.wine_config_label = Label(self, text="Update Wine configuration")
+        self.wine_config_button = Button(self, text="Update")
+        # Update Faithlife product button
+        self.update_product_labelvar = StringVar(value="Update Faithlife Product")
+        self.update_product_label = Label(self, textvariable=self.update_product_labelvar)
+        self.update_product_button = Button(self, text="Update")
         # Backup/restore data buttons
         self.backups_label = Label(self, text="Backup/restore data")
         self.backup_button = Button(self, text="Backup")
@@ -265,12 +285,14 @@ class ControlGui(StatusGui):
             text="Update to Latest AppImage"
         )
         self.latest_appimage_button = Button(self, text="Run")
-        self.set_appimage_label = Label(self, text="Set AppImage")
+        self.set_appimage_label = Label(self, text="Set Runner (AppImage or tarball)")
         self.set_appimage_button = Button(self, text="Run")
         # App logging toggle
         self.loggingstatevar = StringVar(value='Enable')
         self.logging_label = Label(self, text="Toggle app logging")
         self.logging_button = Button(self, textvariable=self.loggingstatevar)
+        self.media_label = Label(self, text="Toggle experimental media support")
+        self.media_button = Button(self, text="Enable", state='disabled')
         # Support options
         self.support_state_var = StringVar(value='Get Support')
         self.support_label = Label(self, text="Troubleshooting")
@@ -305,6 +327,12 @@ class ControlGui(StatusGui):
         row += 1
         self.deps_label.grid(column=0, row=row, sticky='w', pady=2)
         self.deps_button.grid(column=1, row=row, sticky='w', pady=2)
+        row += 1
+        self.wine_config_label.grid(column=0, row=row, sticky='w', pady=2)
+        self.wine_config_button.grid(column=1, row=row, sticky='w', pady=2)
+        row += 1
+        self.update_product_label.grid(column=0, row=row, sticky='w', pady=2)
+        self.update_product_button.grid(column=1, row=row, sticky='w', pady=2)
         # row += 1
         # self.backups_label.grid(column=0, row=row, sticky='w', pady=2)
         # self.backup_button.grid(column=1, row=row, sticky='w', pady=2)
@@ -321,6 +349,9 @@ class ControlGui(StatusGui):
         row += 1
         self.logging_label.grid(column=0, row=row, sticky='w', pady=2)
         self.logging_button.grid(column=1, row=row, sticky='w', pady=2)
+        row += 1
+        self.media_label.grid(column=0, row=row, sticky='w', pady=2)
+        self.media_button.grid(column=1, row=row, sticky='w', pady=2)
         row += 1
         self.support_label.grid(column=0, row=row, sticky='w', pady=2)
         self.support_button.grid(column=1, row=row, sticky='w', pady=2)

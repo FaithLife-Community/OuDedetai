@@ -3,12 +3,12 @@
 #   - https://tkdocs.com/
 #   - https://github.com/thw26/LogosLinuxInstaller/blob/master/LogosLinuxInstaller.sh
 
+import copy
 import logging
 from pathlib import Path
 from queue import Queue
 
 import shutil
-from threading import Event
 import threading
 import time
 from tkinter import PhotoImage, messagebox
@@ -16,7 +16,7 @@ from tkinter import Tk
 from tkinter import Toplevel as TkToplevel
 from tkinter import filedialog as fd
 from tkinter.ttk import Style
-from typing import Callable, Optional
+from typing import Callable, Optional, TypeVar
 
 from ou_dedetai.app import App, UserExitedFromAsk
 from ou_dedetai.constants import (
@@ -25,6 +25,7 @@ from ou_dedetai.constants import (
     PROMPT_OPTION_NEW_FILE,
 )
 from ou_dedetai.config import EphemeralConfiguration
+import ou_dedetai.logos
 
 from . import backup
 from . import constants
@@ -34,6 +35,9 @@ from . import installer
 from . import system
 from . import utils
 from . import wine
+import ou_dedetai
+
+T = TypeVar("T")
 
 class GuiApp(App):
     """Implements the App interface for all windows"""
@@ -52,16 +56,14 @@ class GuiApp(App):
 
 
     def _ask(self, question: str, options: list[str] | str) -> Optional[str]:
-        # This cannot be run from the main thread as the dialog will never appear
-        # since the tinker mainloop hasn't started and we block on a response
-
+        # Safe from any thread once mainloop runs; wait_window pumps Tk events.
         if isinstance(options, list):
             answer_q: Queue[Optional[str]] = Queue()
-            answer_event = Event()
-            ChoicePopUp(question, options, answer_q, answer_event)
+            popup = ChoicePopUp(question, options, answer_q)
 
-            answer_event.wait()
-            answer: Optional[str] = answer_q.get()
+            self.root.wait_window(popup.root)
+            # Empty if closed via the window manager
+            answer: Optional[str] = answer_q.get_nowait() if not answer_q.empty() else None
         elif isinstance(options, str):
             answer = options
 
@@ -87,7 +89,10 @@ class GuiApp(App):
 
     def _info(self, message):
         """Display information to the user"""
-        InfoPopUp(message)
+        self._run_on_main_thread(lambda: InfoPopUp(message))
+
+    def _pop_up(self, title, message):
+        self._run_on_main_thread(lambda: messagebox.showinfo(title=title, message=message))
 
     def _status(self, message, percent = None):
         message = message.strip()
@@ -107,10 +112,38 @@ class GuiApp(App):
         self._status('', 0)
 
     def approve(self, question: str, context: str | None = None) -> bool:
-        if context is None:
-            context = ""
-        message = f"{question}\n\n{context}"
-        return messagebox.askquestion(question, message.strip()) == 'yes'
+        message = f"{question}\n\n{context or ''}".strip()
+        return self._run_on_main_thread(lambda: messagebox.askquestion(question, message) == 'yes')
+
+    def _run_on_main_thread(self, fn: Callable[[], T]) -> T:
+        """Run fn on the Tk main thread and return its result; fn's exceptions re-raise here.
+
+        Tk dialogs opened off the main thread don't respond to input.
+        fn must not return an exception instance; it would be raised instead.
+        """
+        # Calling directly avoids blocking the mainloop that would run the callback
+        if threading.current_thread() is threading.main_thread():
+            return fn()
+
+        result_q: Queue[T | BaseException] = Queue()
+
+        def _run_and_reply():
+            try:
+                result_q.put(fn())
+            except BaseException as e:
+                result_q.put(e)
+
+        self.root.after(0, _run_and_reply)
+        reply = result_q.get()
+        if isinstance(reply, BaseException):
+            raise reply
+        return reply
+
+    def _schedule_exit_on_main_thread(self, reason: str, intended: bool) -> None:
+        # root.after is the supported way to run work on the mainloop (main)
+        # thread from another thread. The callback re-invokes exit() there, so
+        # _exit() (and root.destroy()) run on the main thread.
+        self.root.after(0, lambda: self.exit(reason, intended))
 
     def _exit(self, reason: str, intended: bool = False):
         # Create a little dialog before we die so the user can see why this happened
@@ -206,7 +239,6 @@ class ChoicePopUp:
         question: str,
         options: list[str],
         answer_q: Queue[Optional[str]],
-        answer_event: Event,
         **kwargs
     ):
         self.root = Toplevel()
@@ -224,20 +256,18 @@ class ChoicePopUp:
         )
         self.gui.cancel_button.config(command=self.on_cancel_released)
         self.gui.okay_button.config(command=self.on_confirm_choice)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_cancel_released)
         self.answer_q = answer_q
-        self.answer_event = answer_event
 
     def on_confirm_choice(self, evt=None):
         if self.gui.answer_dropdown.get() == gui.ChoiceGui._default_prompt:
             return
         answer = self.gui.answer_dropdown.get()
         self.answer_q.put(answer)
-        self.answer_event.set()
         self.root.destroy()
 
     def on_cancel_released(self, evt=None):
         self.answer_q.put(None)
-        self.answer_event.set()
         self.root.destroy()
 
 
@@ -441,6 +471,25 @@ class ControlWindow(GuiApp):
             self.update_latest_lli_release_button()
         self.gui.update_lli_button.state(['disabled'])
         self.start_thread(_update_lli_version)
+
+        if self.conf._raw.faithlife_product:
+            control_gui.update_product_labelvar.set(f"Update {self.conf._raw.faithlife_product}")
+
+        # Spawn a thread to ensure our logos state stays up to date
+        def _monitor_faithlife_product_pids():
+            last_state = copy.copy(self.logos.logos_state)
+            while True:
+                if self.is_installed():
+                    self.logos.monitor()
+                    time.sleep(1)
+                else:
+                    # Will probably be some time before we need to monitor.
+                    time.sleep(30)
+                # If our state changed, we need to update our button.
+                if last_state != self.logos.logos_state:
+                    self.update_app_button()
+                last_state = copy.copy(self.logos.logos_state)
+        self.start_thread(_monitor_faithlife_product_pids)
         self.gui.update_lli_label.config(text=text)
         self.gui.run_indexing_radio.config(
             command=self.on_action_radio_clicked
@@ -466,11 +515,14 @@ class ControlWindow(GuiApp):
         )
         self.gui.logging_button.state(['disabled'])
         self.gui.support_button.config(command=self.get_support)
+        self.gui.media_button.config(command=self.toggle_media_support)
 
         self.gui.config_button.config(command=self.edit_config)
         self.gui.deps_button.config(command=self.install_deps)
+        self.gui.wine_config_button.config(command=self.update_wine_config)
         self.gui.backup_button.config(command=self.run_backup)
         self.gui.restore_button.config(command=self.run_restore)
+        self.gui.update_product_button.config(command=self.update_faithlife_product)
         self.gui.update_lli_button.config(
             command=self.update_to_latest_lli_release
         )
@@ -511,6 +563,9 @@ class ControlWindow(GuiApp):
         classname = constants.BINARY_NAME
         installer_window_top = Toplevel()
         InstallerWindow(installer_window_top, self.root, app=self, class_=classname) 
+
+    def stop_logos(self):
+        self.start_thread(self.logos.stop)
 
     def run_logos(self, evt=None):
         self.start_thread(self.logos.start)
@@ -571,15 +626,22 @@ class ControlWindow(GuiApp):
     def install_deps(self, evt=None):
         self.start_thread(utils.install_dependencies, self)
 
+    def update_wine_config(self, evt=None):
+        self.start_thread(installer.update_wine_config, self)
+
     def open_file_dialog(self, filetype_name, filetype_extension):
         file_path = fd.askopenfilename(
             title=f"Select {filetype_name}",
             filetypes=[
-                (filetype_name, f"*.{filetype_extension}"),
+                (filetype_name, " ".join(f"*.{ext}" for ext in filetype_extension.split())),
                 ("All Files", "*.*")
             ],
         )
         return file_path
+
+    def update_faithlife_product(self, evt=None):
+        self.status(f"Updating {self.conf.faithlife_product} to latest release…")
+        self.start_thread(utils.update_faithlife_product, app=self)
 
     def update_to_latest_lli_release(self, evt=None):
         self.status(f"Updating to latest {constants.APP_NAME} version…")
@@ -597,12 +659,11 @@ class ControlWindow(GuiApp):
         self.start_thread(self.update_to_latest_appimage, evt=evt)
 
     def update_to_latest_appimage(self, evt=None):
-        utils.update_to_latest_recommended_appimage(self)
+        installer.update_to_latest_wine(self)
         self.root.event_generate(evt)
 
     def set_appimage(self, evt=None):
-        # TODO: Separate as advanced feature.
-        appimage_filename = self.open_file_dialog("AppImage", "AppImage")
+        appimage_filename = self.open_file_dialog("Wine runner (AppImage or tarball)", "AppImage tar.xz tar.gz tgz")
         if not appimage_filename:
             return
         self.conf.wine_appimage_path = appimage_filename
@@ -617,6 +678,22 @@ class ControlWindow(GuiApp):
             action=desired_state.lower()
         )
 
+    def toggle_media_support(self):
+        self.gui.media_button.state(['disabled'])
+
+        def toggle():
+            try:
+                wine.toggle_media_support(self)
+            finally:
+                self._run_on_main_thread(self.update_media_button)
+        self.start_thread(toggle)
+
+    def update_media_button(self):
+        installed = self.is_installed()
+        enabled = installed and wine.media_support_enabled(self)
+        self.gui.media_button.config(text="Disable" if enabled else "Enable")
+        self.gui.media_button.state(['!disabled' if installed else 'disabled'])
+
     def get_support(self):
         def _run():
             control.get_support(self)
@@ -628,10 +705,15 @@ class ControlWindow(GuiApp):
         self.gui.logging_button.state(['!disabled'])
 
     def update_app_button(self, evt=None):
+        self.update_media_button()
         self.gui.app_button.state(['!disabled'])
         if self.is_installed():
-            self.gui.app_buttonvar.set(f"Run {self.conf.faithlife_product}")
-            self.gui.app_button.config(command=self.run_logos)
+            if self.logos.logos_state == ou_dedetai.logos.State.RUNNING:
+                self.gui.app_buttonvar.set(f"Stop {self.conf.faithlife_product}")
+                self.gui.app_button.config(command=self.stop_logos)
+            else:
+                self.gui.app_buttonvar.set(f"Run {self.conf.faithlife_product}")
+                self.gui.app_button.config(command=self.run_logos)
             self.gui.logging_button.state(['!disabled'])
             self.gui.app_install_advanced.grid_forget()
             self.gui.actions_button.state(['!disabled'])
@@ -655,6 +737,28 @@ class ControlWindow(GuiApp):
                 # Disable Both install buttons
                 self.gui.app_button.state(['disabled'])
                 self.gui.app_install_advanced.state(['disabled'])
+
+    def update_wine_config_button(self, evt=None):
+        if self.is_installed():
+            self.gui.wine_config_button.state(['!disabled'])
+        else:
+            gui.ToolTip(self.gui.wine_config_button, "This button is disabled. Please install first.")
+            self.gui.wine_config_button.state(['disabled'])
+
+    def update_product_button(self, evt=None):
+        msg = None
+        if not self.is_installed():
+            state = 'disabled'
+            msg = "This button is disabled. Please install first."
+        elif self.conf.is_installed_faithlife_product_release_latest:
+            state = 'disabled'
+            msg = f"This button is disabled. {self.conf.faithlife_product} is up-to-date."
+        else:
+            state = '!disabled'
+        if msg:
+            gui.ToolTip(self.gui.update_product_button, msg)
+        self.clear_status()
+        self.gui.update_product_button.state([state])
 
     def update_latest_lli_release_button(self, evt=None):
         msg = None
@@ -681,16 +785,12 @@ class ControlWindow(GuiApp):
         if not self.is_installed():
             state = "disabled"
             msg = "Please install first"
-        elif self.conf._raw.wine_binary_code not in ["Recommended", "AppImage", None]:
+        elif self.conf.wine_appimage_path is None and not self.conf.is_wine_binary_in_distribution:
+            # wine_binary is always a resolved path once installed, so ask how Wine is managed
             state = 'disabled'
-            msg = "This button is disabled. The configured install was not created using an AppImage."
-            self.gui.set_appimage_button.state(['disabled'])
-            gui.ToolTip(
-                self.gui.set_appimage_button,
-                "This button is disabled. The configured install was not created using an AppImage."
-            )
+            msg = "This button is disabled. The install uses a Wine that OuDedetai doesn't manage."
         elif self.conf._raw.wine_binary is not None:
-            status, _ = utils.compare_recommended_appimage_version(self)
+            status, _ = utils.compare_recommended_wine_version(self)
             if status == 0:
                 state = '!disabled'
             elif status == 1:
@@ -721,6 +821,14 @@ class ControlWindow(GuiApp):
             self.update_latest_appimage_button()
         except Exception:
             logging.exception("Failed to update appimage button")
+        try:
+            self.update_product_button()
+        except Exception:
+            logging.exception("Failed to update product button")
+        self.update_wine_config_button()
+        product = self.conf._raw.faithlife_product
+        if product:
+            self.gui.update_product_labelvar.set(f"Update {product}")
 
 
     def current_logging_state_value(self) -> str:

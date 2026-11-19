@@ -7,9 +7,9 @@ import json
 import logging
 from pathlib import Path
 
-from ou_dedetai import network, utils, constants, wine, system
+from . import network, utils, constants, wine, system
+from .constants import PROMPT_OPTION_DIRECTORY
 
-from ou_dedetai.constants import PROMPT_OPTION_DIRECTORY
 
 @dataclass
 class LegacyConfiguration:
@@ -32,8 +32,6 @@ class LegacyConfiguration:
     LAST_UPDATED: Optional[str] = None # Unused in new code
     RECOMMENDED_WINE64_APPIMAGE_URL: Optional[str] = None # Unused in new code
     LLI_LATEST_VERSION: Optional[str] = None # Unused in new code
-    logos_release_channel: Optional[str] = None
-    lli_release_channel: Optional[str] = None
 
     # Legacy Extended Configuration
     APPIMAGE_LINK_SELECTION_NAME: Optional[str] = None
@@ -241,7 +239,6 @@ class EphemeralConfiguration:
     terminal_app_prefer_dialog: Optional[bool] = None
 
     # Start of values just set via cli arg
-    faithlife_install_passive: bool = False
     app_run_as_root_permitted: bool = False
     agreed_to_faithlife_terms: bool = False
     """The user expressed clear agreement with faithlife's terms.
@@ -330,18 +327,14 @@ class PersistentConfiguration:
     faithlife_product_logging: Optional[bool] = None
     install_dir: Optional[str] = None
     wine_binary: Optional[str] = None
-    # FIXME: Should this be stored independently of wine_binary
-    # (and potentially get out of sync), or
-    # Should we derive this value from wine_binary?
-    wine_binary_code: Optional[str] = None
-    """This is the type of wine installation used"""
+    wine_release_channel: str = "stable"
     backup_dir: Optional[str] = None
 
     # Color to use in curses. Either "System", "Logos", "Light", or "Dark"
     curses_color_scheme: Optional[str] = None
     # Faithlife's release channel. Either "stable" or "beta"
     faithlife_product_release_channel: str = "stable"
-    # The Installer's release channel. Either "stable" or "beta"
+    # The Installer's release channel. Either "stable" or "dev"
     app_release_channel: str = "stable"
 
     _legacy: Optional[LegacyConfiguration] = None
@@ -379,7 +372,11 @@ class PersistentConfiguration:
             logging.info("Not reading new values from non-existent config")
 
         # Now override with values from ENV
-        config_env = PersistentConfiguration.from_legacy(LegacyConfiguration.load_from_env()) 
+        legacy_env = LegacyConfiguration.load_from_env()
+        config_env = PersistentConfiguration.from_legacy(legacy_env)
+        config_env.faithlife_product_release_channel = config_dict["faithlife_product_release_channel"]
+        config_env.app_release_channel = config_dict["app_release_channel"]
+        config_env._legacy = None
         for k, v in config_env.__dict__.items():
             if v is not None:
                 config_dict[k] = v
@@ -387,7 +384,10 @@ class PersistentConfiguration:
         return PersistentConfiguration(**config_dict)
 
     @classmethod
-    def from_legacy(cls, legacy: LegacyConfiguration) -> "PersistentConfiguration":
+    def from_legacy(
+        cls,
+        legacy: LegacyConfiguration
+    ) -> "PersistentConfiguration":
         faithlife_product_logging = None
         if legacy.LOGS is not None:
             faithlife_product_logging = utils.parse_bool(legacy.LOGS)
@@ -399,12 +399,9 @@ class PersistentConfiguration:
             backup_dir=legacy.BACKUPDIR,
             curses_color_scheme=legacy.curses_colors,
             faithlife_product_release=legacy.TARGET_RELEASE_VERSION,
-            faithlife_product_release_channel=legacy.logos_release_channel or 'stable',
             faithlife_product_version=legacy.TARGETVERSION,
             install_dir=install_dir,
-            app_release_channel=legacy.lli_release_channel or 'stable',
             wine_binary=legacy.WINE_EXE,
-            wine_binary_code=legacy.WINEBIN_CODE,
             faithlife_product_logging=faithlife_product_logging,
             _legacy=legacy
         )
@@ -482,18 +479,29 @@ def get_wine_user(wine_prefix: str) -> Optional[str]:
     return None
 
 
+def get_appdata_dir(
+    wine_prefix: str,
+    wine_user: str,
+) -> str:
+    return f'{wine_prefix}/drive_c/users/{wine_user}/AppData/'
+
+
 def get_logos_appdata_dir(
     wine_prefix: str,
     wine_user: str,
     faithlife_product: str
 ) -> str:
-    return f'{wine_prefix}/drive_c/users/{wine_user}/AppData/Local/{faithlife_product}'
+    appdata = get_appdata_dir(wine_prefix=wine_prefix, wine_user=wine_user)
+    return f'{appdata}/Local/{faithlife_product}'
 
 
 def get_logos_user_id(
     logos_appdata_dir: str
 ) -> Optional[str]:
     logos_data_path = Path(logos_appdata_dir) / "Data"
+    # If somehow the directory does not exist - like if the user removed it manually while trying to reset their data.
+    if not logos_data_path.exists():
+        return None
     contents = os.listdir(logos_data_path)
     children = [logos_data_path / child for child in contents]
     file_children = [child for child in children if child.is_dir()]
@@ -501,6 +509,7 @@ def get_logos_user_id(
         return file_children[0].name
     else:
         return None
+
 
 class Config:
     """Set of configuration values. 
@@ -515,7 +524,8 @@ class Config:
     # prefix with app_ if it's ours (and otherwise not clear)
     # prefix with wine_ if it's theirs
     # suffix with _binary if it's a linux binary
-    # suffix with _exe if it's a windows binary
+    # suffix with _exe if it's a windows binary structured as a linux path
+    # suffix with _exe_windows_path if it's a windows binary structured as a windows path
     # suffix with _path if it's a file path
     # suffix with _file_name if it's a file's name (with extension)
 
@@ -674,7 +684,9 @@ class Config:
             return self._overrides.faithlife_product_version
         if self._raw.faithlife_product_version is not None:
             return self._raw.faithlife_product_version
-        return "10"
+        # The only version we presently support is 10 - so set it.
+        self.faithlife_product_version = "10"
+        return self.faithlife_product_version
         # Keep following in case we need to prompt for additional versions in the future
         #question = f"Which version of {self.faithlife_product} should the script install?: "
         #options = constants.FAITHLIFE_PRODUCT_VERSIONS
@@ -711,6 +723,25 @@ class Config:
         )
         options = self.faithlife_product_releases
         return self._ask_if_not_found("faithlife_product_release", question, options)
+
+    @property
+    def is_installed_faithlife_product_release_latest(self) -> Optional[bool]:
+        releases = self.faithlife_product_releases
+        if not releases:
+            # We didn't get any releases back. Strange.
+            logging.debug("No faithlife releases on the given channel.")
+            return None
+        installed = self.installed_faithlife_product_release
+        if installed is None:
+            return None
+        # Now unfortunately the format differs between the releases and the installed one
+        # the releases has it in the form 51.1.0.0003 (notice the padded 0 on the build number)
+        # While the installed version has it in the form 51.1.0.3
+        # Normalize both to tuples of ints so the padding doesn't matter.
+        def _normalize(version: str) -> tuple[int, ...]:
+            return tuple(int(part) for part in version.split("."))
+
+        return _normalize(releases[0]) == _normalize(installed)
 
     @faithlife_product_release.setter
     def faithlife_product_release(self, value: Optional[str]):
@@ -758,6 +789,14 @@ class Config:
     def app_release_channel(self) -> str:
         return self._raw.app_release_channel
 
+    @app_release_channel.setter
+    def app_release_channel(self, value: str):
+        if value not in ("stable", "dev"):
+            raise ValueError(f"Invalid app release channel: {value}")
+        if self._raw.app_release_channel != value:
+            self._raw.app_release_channel = value
+            self._write()
+
     @property
     def winetricks_binary(self) -> str:
         """Download winetricks if it doesn't exist"""
@@ -797,15 +836,43 @@ class Config:
             self._write()
 
     @property
+    def export_dir_default(self) -> str:
+        return str(Path(self.install_dir) / "export")
+
+    @property
+    def export_dir(self) -> str:
+        if self._overrides.export_dir:
+            return self._overrides.export_dir
+        return self.export_dir_default
+
+    @property
     # This used to be called APPDIR_BINDIR
     def installer_binary_dir(self) -> str:
         if self._overrides.installer_binary_dir is not None:
             return self._overrides.installer_binary_dir
-        return f"{self.install_dir}/data/bin"
+        return f"{self.install_dir}/{constants.RELATIVE_BINARY_DIR}"
 
     @property
     def _logos_appdata_dir(self) -> Optional[str]:
         """Path to the user's Logos installation under AppData"""
+        # We don't want to prompt the user in this function
+        if (
+            self._raw.faithlife_product is None
+            or self._raw.install_dir is None
+        ):
+            return None
+        wine_user = self.wine_user
+        if wine_user is None:
+            return None
+        return get_logos_appdata_dir(
+            self.wine_prefix,
+            wine_user,
+            self.faithlife_product
+        )
+
+    @property
+    def _faithlife_logs_dir(self) -> Optional[str]:
+        """Path to the directory containing faithlife logs"""
         # We don't want to prompt the user in this function
         wine_user = self.wine_user
         if (
@@ -814,11 +881,21 @@ class Config:
             or self._raw.install_dir is None
         ):
             return None
-        return get_logos_appdata_dir(
+        appdata = get_appdata_dir(
             self.wine_prefix,
             wine_user,
-            self.faithlife_product
         )
+        return f'{appdata}/Local/Faithlife/Logs/{self.faithlife_product}'
+
+    @property
+    def _faithlife_crash_log(self) -> Optional[str]:
+        """Path to the LogosCrash.log or VerbumCrash.log respectively"""
+        faithlife_logs = self._faithlife_logs_dir
+        if not faithlife_logs or self._raw.faithlife_product is None:
+            return None
+        # FIXME: Confirm Verbum's Crash log has this name - not aware of a Verbum crash right now
+        # to confirm this.
+        return f"{faithlife_logs}/{self._raw.faithlife_product}Crash.log"
 
     @property
     def _logos_user_id(self) -> Optional[str]:
@@ -829,11 +906,55 @@ class Config:
         return get_logos_user_id(logos_appdata_dir)
 
     @property
+    def wine_release_channel(self) -> str:
+        return self._raw.wine_release_channel
+
+    @wine_release_channel.setter
+    def wine_release_channel(self, value: str) -> None:
+        if value not in ("stable", "dev"):
+            raise ValueError("Wine release channel must be 'stable' or 'dev'")
+        if self._raw.wine_release_channel != value:
+            self._raw.wine_release_channel = value
+            self._write()
+
+    def toggle_wine_release_channel(self) -> None:
+        self.wine_release_channel = (
+            "dev" if self.wine_release_channel == "stable" else "stable"
+        )
+
+    @property
+    def _wine_tarball_release(self) -> network.SoftwareReleaseInfo:
+        return self._network.wine_tarball_release(self.wine_release_channel)
+
+    @property
     # This used to be called WINEPREFIX
     def wine_prefix(self) -> str:
         if self._overrides.wine_prefix is not None:
             return self._overrides.wine_prefix
         return get_wine_prefix_path(self.install_dir)
+
+    @property
+    def wine_distribution_dir(self) -> str:
+        """Directory containing the extracted Wine distribution."""
+        return f"{self.installer_binary_dir}/wine-distribution"
+
+    @property
+    def wine_distribution_dir_relative(self) -> str:
+        """Wine distribution directory relative to install_dir."""
+        return constants.RELATIVE_WINE_DISTRIBUTION_DIR
+
+    @property
+    def wine_path_in_distribution(self) -> str:
+        if self.is_wine_binary_in_distribution and Path(self.wine_binary).is_file():
+            return str(Path(self.wine_binary).absolute())
+        return str(next(Path(self.wine_distribution_dir).glob("*/bin/wine")).absolute())
+
+    @property
+    def is_wine_binary_in_distribution(self) -> bool:
+        return (
+                self.wine_binary.startswith(self.wine_distribution_dir_relative)
+                or self.wine_binary.startswith(self.wine_distribution_dir)
+        )
 
     @property
     def wine_binary(self) -> str:
@@ -881,10 +1002,19 @@ class Config:
         # if not Path(aboslute).is_file():
         #     raise ValueError("Wine Binary path must be a valid file")
 
+        if value == constants.WINE_RECOMMENDED_SIGIL:
+            value = constants.WINE_RECOMMENDED_TARBALL_SIGIL
+        elif value == constants.WINE_BETA_SIGIL:
+            if self.wine_appimage_beta_file_name:
+                value = self.wine_appimage_beta_file_name
+            else:
+                logging.info("Failed to find any beta-specific appimage, falling back to latest release.")
+                value = self.wine_appimage_recommended_file_name
+
         if self._raw.wine_binary != relative:
             self._raw.wine_binary = relative
             # Reset dependents
-            self._raw.wine_binary_code = None
+            # self._raw.wine_binary_code = None
             self._overrides.wine_appimage_path = None
             self._wine64_path = None
             self._write()
@@ -903,16 +1033,6 @@ class Config:
         if self._wine_appimage_files is None:
             self._wine_appimage_files = utils.find_appimage_files(self.app)
         return self._wine_appimage_files
-
-    @property
-    def wine_binary_code(self) -> str:
-        """Wine binary code.
-        
-        One of: Recommended, AppImage, System, Proton, PlayOnLinux, Custom"""
-        if self._raw.wine_binary_code is None:
-            self._raw.wine_binary_code = utils.get_winebin_code_and_desc(self.app, self.wine_binary)[0]
-            self._write()
-        return self._raw.wine_binary_code
 
     @property
     def wine64_binary(self) -> str:
@@ -990,9 +1110,6 @@ class Config:
         if self._overrides.wine_appimage_path != value:
             self._overrides.wine_appimage_path = value
             # Reset dependents
-            self._raw.wine_binary_code = None
-            # NOTE: we don't save this persistently, it's assumed
-            # it'll be saved under wine_binary if it's used
 
     @property
     def wine_appimage_link_file_name(self) -> str:
@@ -1001,22 +1118,69 @@ class Config:
         return 'selected_wine.AppImage'
 
     @property
-    def wine_appimage_recommended_url(self) -> str:
-        """URL to recommended appimage.
+    def wine_download_url(self) -> str:
+        """URL to download the specified wine binary
         
         Talks to the network if required"""
-        return self._network.wine_appimage_recommended_url()
-    
+        if self.wine_binary == constants.WINE_UNTESTED_STABLE_APPIMAGE_SIGIL:
+            return self._network.wine_appimage_upstream_url("continuous-stable")
+        elif self.wine_binary == constants.WINE_UNTESTED_STAGING_APPIMAGE_SIGIL:
+            return self._network.wine_appimage_upstream_url("continuous-staging")
+        elif self.wine_binary == constants.WINE_UNTESTED_DEVELOPMENT_APPIMAGE_SIGIL:
+            return self._network.wine_appimage_upstream_url("continuous-devel")
+        elif self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL:
+            return self._wine_tarball_release.download_url
+        else:
+            versions = self._network.wine_appimage_versions()
+            return versions.latest.download_url
+
+    @property
+    def wine_appimage_beta_url(self) -> Optional[str]:
+        """URL to beta appimage.
+        
+        Talks to the network if required"""
+        versions = self._network.wine_appimage_versions()
+        if versions.pre_release is None:
+            return None
+        else:
+            return versions.pre_release.download_url
+
+    @property
+    def wine_appimage_recommended_url(self) -> str:
+        """URL to recommended appimage.
+
+        Talks to the network if required"""
+        versions = self._network.wine_appimage_versions()
+        if versions.latest is None:
+            raise ValueError("Failed to find release for wine appimage")
+        else:
+            return versions.latest.download_url
+
+    @property
+    def wine_appimage_beta_file_name(self) -> Optional[str]:
+        """Returns the file name of the recommended appimage with extension"""
+        pre_release = self._network.wine_appimage_versions().pre_release
+        if pre_release is None:
+            return None
+        return os.path.basename(pre_release.download_url)
+
     @property
     def wine_appimage_recommended_file_name(self) -> str:
         """Returns the file name of the recommended appimage with extension"""
         return os.path.basename(self.wine_appimage_recommended_url)
 
     @property
-    def wine_appimage_recommended_version(self) -> str:
-        # Getting version and branch rely on the filename having this format:
-        #   wine-[branch]_[version]-[arch]
-        return self.wine_appimage_recommended_file_name.split('-')[1].split('_')[1]
+    def wine_download_file_name(self) -> str:
+        """Returns the file name of the recommended appimage with extension"""
+        return os.path.basename(self.wine_download_url)
+
+    @property
+    def wine_recommended_version(self) -> str:
+        if self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL:
+            return self._wine_tarball_release.version
+        filename = self.wine_download_file_name
+        # AppImage format: wine-[branch]_[version]-[arch]
+        return filename.split("-")[1].split("_")[1]
 
     @property
     def wine_dll_overrides(self) -> str:
@@ -1049,6 +1213,11 @@ class Config:
         return constants.DEFAULT_APP_WINE_LOG_PATH
 
     @property
+    def app_wine_log_previous_path(self) -> str:
+        wine_log = Path(self.app_wine_log_path)
+        return str(wine_log.with_suffix(".1" + wine_log.suffix))
+
+    @property
     def app_log_path(self) -> str:
         if self._overrides.app_log_path is not None:
             return self._overrides.app_log_path
@@ -1061,14 +1230,11 @@ class Config:
             new_channel = "stable"
         self._raw.faithlife_product_release_channel = new_channel
         self._write()
-    
+
     def toggle_installer_release_channel(self):
-        if self._raw.app_release_channel == "stable":
-            new_channel = "dev"
-        else:
-            new_channel = "stable"
-        self._raw.app_release_channel = new_channel
-        self._write()
+        self.app_release_channel = (
+            "dev" if self.app_release_channel == "stable" else "stable"
+        )
     
     @property
     def backup_dir(self) -> Path:
@@ -1113,7 +1279,12 @@ class Config:
     @property
     def wine_user(self) -> Optional[str]:
         # We don't want to prompt the user for install_dir if it isn't set
-        if not self._raw.install_dir:
+        # or anything that is used in the default install dir
+        if (
+            not self._raw.install_dir
+            or not self._raw.faithlife_product 
+            or not self._raw.faithlife_product_version
+        ):
             return None
         # Cache a successful result (as it goes out to the fs)
         if not self._wine_user:
@@ -1121,25 +1292,42 @@ class Config:
         return self._wine_user
 
     @property
-    def logos_cef_exe(self) -> Optional[str]:
-        if self.wine_user is not None:
-            # This name is the same even in Verbum
-            return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\LogosCEF.exe'
-        return None
+    def logos_appdata_windows_path(self) -> Optional[str]:
+        """Path to the Logos appdata dir within windows. 
+        
+        Structured like: C:\\Users\\user\\AppData\\Local...
+        """
+        if self.wine_user is None:
+            return None
+        # We don't want to prompt here.
+        if self._raw.faithlife_product is None:
+            return None
+        return f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self._raw.faithlife_product}'
 
     @property
-    def logos_indexer_exe(self) -> Optional[str]:
-        if self.wine_user is not None:
-            return (f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\'
-                    f'{self.faithlife_product}Indexer.exe')
-        return None
+    def logos_exe_windows_path(self) -> Optional[str]:
+        if self.logos_appdata_windows_path is None or self._raw.faithlife_product is None:
+            return None
+        return f'{self.logos_appdata_windows_path}\\{self._raw.faithlife_product}.exe'
 
     @property
-    def logos_login_exe(self) -> Optional[str]:
-        if self.wine_user is not None:
-            return (f'C:\\users\\{self.wine_user}\\AppData\\Local\\{self.faithlife_product}\\System\\'
-                    f'{self.faithlife_product}.exe')
-        return None
+    def logos_cef_exe_windows_path(self) -> Optional[str]:
+        if self.logos_appdata_windows_path is None:
+            return None
+        # This name is the same even in Verbum
+        return f'{self.logos_appdata_windows_path}\\System\\LogosCEF.exe'
+
+    @property
+    def logos_indexer_exe_windows_path(self) -> Optional[str]:
+        if self.logos_appdata_windows_path is None or self._raw.faithlife_product is None:
+            return None
+        return f'{self.logos_appdata_windows_path}\\System\\{self._raw.faithlife_product}Indexer.exe'
+
+    @property
+    def logos_system_exe_windows_path(self) -> Optional[str]:
+        if self.logos_appdata_windows_path is None or self._raw.faithlife_product is None:
+            return None
+        return f'{self.logos_appdata_windows_path}\\System\\{self._raw.faithlife_product}.exe'
 
     @property
     def log_level(self) -> str | int:

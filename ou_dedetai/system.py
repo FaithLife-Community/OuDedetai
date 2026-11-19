@@ -1,8 +1,5 @@
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional, Tuple
-from collections.abc import MutableMapping
-import zipfile
+import re
+
 import distro
 import logging
 import os
@@ -13,12 +10,19 @@ import struct
 import subprocess
 import sys
 import time
+import zipfile
+
+from collections.abc import MutableMapping
+from dataclasses import dataclass
+from packaging.version import Version
+from pathlib import Path
+from typing import Optional, Tuple
 
 from ou_dedetai import constants, network
 from ou_dedetai.app import App
 
 
-def fix_ld_library_path(env: Optional[MutableMapping[str, str]]) -> dict[str, str]: 
+def fix_ld_library_path(env: Optional[MutableMapping[str, str]]) -> dict[str, str]:
     """Removes pyinstaller bundled dynamic linked libraries when executing commands
 
     - https://pyinstaller.org/en/latest/common-issues-and-pitfalls.html#launching-external-programs-from-the-frozen-application
@@ -366,6 +370,36 @@ class SuperuserCommandNotFound(Exception):
     """Superuser command not found. Install pkexec or sudo or doas"""
 
 
+class OpenGLIncompatible(Exception):
+    """OpenGL version is incompatible."""
+
+
+def check_opengl_version(app: App, required_version="3.2") -> tuple[bool, str]:
+    try:
+        result = run_command(['glxinfo'], env=fix_ld_library_path(None), capture_output=True, text=True, check=True)
+    except FileNotFoundError:
+        return False, "glxinfo command not found. Please install mesa-utils or equivalent."
+    except subprocess.CalledProcessError as e:
+        return False, f"glxinfo command failed: {e.stderr.strip()}"
+    
+    if not result:
+        return False, "failed to launch glxinfo."
+
+    match = re.search(r"OpenGL version string:\s+([\d\.]+)", result.stdout)
+    if not match:
+        return False, "Failed to parse OpenGL version from glxinfo output."
+
+    opengl_version = match.group(1)
+    if Version(opengl_version) >= Version(required_version):
+        message = f"OpenGL Version: {opengl_version} is supported (>= {required_version})."
+        logging.info(message)
+        return True, message
+    else:
+        message = f"OpenGL Version: {opengl_version} is not supported (must be >= {required_version})."
+        logging.info(message)
+        raise OpenGLIncompatible()
+
+
 def get_superuser_command() -> str:
     if shutil.which('pkexec'):
         return "pkexec"
@@ -396,7 +430,9 @@ class PackageManager:
 
 
 def get_package_manager() -> PackageManager | None:
-    major_ver = distro.major_version()
+    major_ver_str = distro.major_version()
+    # None on rolling/testing releases (e.g. Debian sid)
+    major_ver: int | None = int(major_ver_str) if major_ver_str.isdigit() else None
     os_name = distro.id()
     logging.debug(f"{os_name=}; {major_ver=}")
     # Check for package manager and associated packages.
@@ -415,12 +451,24 @@ def get_package_manager() -> PackageManager | None:
         remove_command = ["apt", "remove", "-y"]
         query_command =  ["dpkg", "-l"]
         query_prefix = '.i  '
+        ubuntu_26_or_newer = os_name == 'ubuntu' and major_ver is not None and major_ver >= 26
+        debian_14_or_newer = os_name == 'debian' and major_ver is not None and major_ver >= 14
         # Set default package list.
         packages = (
             "libfuse2 "  # appimages
-            "binutils wget winbind "  # wine
-            "p7zip-full cabextract " # winetricks
+            "binutils wget winbind libfreetype6 "  # wine tarball
+            "cabextract " # winetricks
+            "xdg-utils " # For xdg-mime needed for custom url scheme registration
+            "mesa-utils "  # verify opengl version
         )
+
+        # p7zip-full was replaced by 7zip
+        if ubuntu_26_or_newer or debian_14_or_newer:
+            packages += "7zip "  # winetricks
+        else:
+            packages += "p7zip-full "  # winetricks
+
+        # Now set the appimage packages, this has changed over time
         # NOTE: Package names changed together for Ubuntu 24+, Debian 13+, and
         # derivatives. This does not include an exhaustive list of distros that
         # use 'apt', so others will have to be added as users report issues.
@@ -430,14 +478,23 @@ def get_package_manager() -> PackageManager | None:
         # - https://en.wikipedia.org/wiki/Elementary_OS
         # - https://github.com/which-distro/os-release/tree/main
         if (
-            (os_name == 'debian' and major_ver >= '13')
-            or (os_name == 'ubuntu' and major_ver >= '24')
-            or (os_name == 'linuxmint' and major_ver >= '22')
-            or (os_name == 'elementary' and major_ver >= '8')
+            (os_name == 'debian' and major_ver is not None and major_ver >= 13)
+            or ubuntu_26_or_newer
         ):
-            packages = (
+            packages += (
+                "libfuse3-4 "  # appimages
+            )
+        elif major_ver is not None and (
+            (os_name == 'ubuntu' and major_ver >= 24)
+            or (os_name == 'linuxmint' and major_ver >= 22)
+            or (os_name == 'elementary' and major_ver >= 8)
+        ):
+            packages += (
                 "libfuse3-3 "  # appimages
-                "binutils wget winbind "  # wine
+            )
+        else:
+            packages += (
+                "libfuse2 "  # appimages
             )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('dnf') is not None:  # rhel, fedora
@@ -459,6 +516,8 @@ def get_package_manager() -> PackageManager | None:
             "fuse fuse-libs "  # appimages
             "mod_auth_ntlm_winbind samba-winbind samba-winbind-clients "  # wine
             "cabextract " # winetricks
+            "xdg-utils " # For xdg-mime needed for custom url scheme registration
+            "glx-utils"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('zypper') is not None:  # OpenSUSE
@@ -473,6 +532,8 @@ def get_package_manager() -> PackageManager | None:
             "samba wget "  # wine
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks
+            "xdg-utils " # For xdg-mime needed for custom url scheme registration
+            "Mesa-demo-x"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('apk') is not None:  # alpine
@@ -484,10 +545,12 @@ def get_package_manager() -> PackageManager | None:
         packages = (
             "bash bash-completion "  # bash support
             "gcompat "  # musl to glibc
-            #"fuse-common fuse fuse3 "  # appimages
+            #"fuse-common fuse fuse3 "  # appimages; incompatible with muslc
             "wget curl "  # network
             "7zip cabextract " # winetricks
             "samba sed grep gawk bash bash-completion "  # other
+            "xdg-utils " # For xdg-mime needed for custom url scheme registration
+            "mesa-demos"  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('pamac') is not None:  # manjaro
@@ -501,6 +564,8 @@ def get_package_manager() -> PackageManager | None:
             "samba wget "  # wine
             "curl gawk grep "  # other
             "7zip cabextract "  # winetricks (7zip used to be called p7zip)
+            "xdg-utils " # For xdg-mime needed for custom url scheme registration
+            "mesa-utils "  # verify opengl version
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('pacman') is not None:  # arch, steamOS
@@ -520,18 +585,22 @@ def get_package_manager() -> PackageManager | None:
                 "lib32-alsa-plugins alsa-lib lib32-alsa-lib libjpeg-turbo lib32-libjpeg-turbo sqlite lib32-sqlite "
                 "libxcomposite lib32-libxcomposite libxinerama lib32-libgcrypt libgcrypt lib32-libxinerama ncurses "
                 "lib32-ncurses ocl-icd lib32-ocl-icd libxslt lib32-libxslt libva lib32-libva gtk3 lib32-gtk3 "
-                "gst-plugins-base-libs lib32-gst-plugins-base-libs vulkan-icd-loader lib32-vulkan-icd-loader"
+                "gst-plugins-base-libs lib32-gst-plugins-base-libs vulkan-icd-loader lib32-vulkan-icd-loader "
+                "xdg-utils " # For xdg-mime needed for custom url scheme registration
+                "mesa-utils "  # verify opengl version
             )
         else:  # arch
             packages = (
                 "fuse2 "  # appimages
-                "binutils libwbclient samba wget "  # wine
-                "p7zip cabextract " # winetricks (p7zip used to be called pzip)
+                "binutils libwbclient samba wget freetype2 "  # wine tarball
+                "7zip cabextract " # winetricks (7zip used to be called pzip then p7zip)
                 "openjpeg2 libxcomposite libxinerama "  # display
                 "ocl-icd vulkan-icd-loader "  # hardware
                 "alsa-plugins gst-plugins-base-libs libpulse openal "  # audio
                 "libva mpg123 v4l-utils "  # video
                 "libxslt sqlite "  # misc
+                "xdg-utils " # For xdg-mime needed for custom url scheme registration
+                "mesa-utils "  # verify opengl version
             )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif os_name == "org.freedesktop.platform":
@@ -900,11 +969,17 @@ def install_dependencies(app: App, target_version=10):
             run_command(command_str, shell=True)
         except subprocess.CalledProcessError as e:
             if e.returncode == 127:
-                logging.error("User cancelled dependency installation.")
+                logging.error("Superuser authentication failed or was cancelled.")
             else:
                 logging.error(f"An error occurred in install_dependencies(): {e}")
                 logging.error(f"Command output: {e.output}")
             install_deps_failed = True
+            app.info(
+                "Failed to install some dependencies: "
+                f"{' '.join(missing_packages + conflicting_packages)}. "
+                "Warning: the app may not function properly, please report this "
+                "and your OS using \"Get Support\"."
+            )
 
 
     if reboot_required:
@@ -923,18 +998,27 @@ def ensure_winetricks(
 ):
     winetricks_path = Path(app.conf.installer_binary_dir) / "winetricks"
 
-    if winetricks_path.exists():
-        # No need to do anything
-        return
-
-    # Symlink if using an appimage
-    if (
-        app.conf.wine_binary_code in ["Recommended", "AppImage"]
-        and app.conf.wine_appimage_path is not None
-        and app.conf.wine_appimage_path.exists()
-    ):
+    if app.conf.wine_appimage_path is not None and app.conf.wine_appimage_path.exists():
+        if winetricks_path.is_symlink() or winetricks_path.is_file():
+            winetricks_path.unlink()
         winetricks_path.symlink_to(app.conf.wine_appimage_path)
         logging.debug("Winetricks symlinked to appimage.")
+        return
+    elif app.conf.is_wine_binary_in_distribution:
+        bundled_winetricks = (
+            Path(app.conf.wine_path_in_distribution).parent / "winetricks"
+        )
+        if bundled_winetricks.is_file():
+            if winetricks_path.is_symlink() or winetricks_path.is_file():
+                winetricks_path.unlink()
+            winetricks_path.symlink_to(bundled_winetricks)
+            logging.debug("Winetricks symlinked to Wine distribution.")
+            return
+
+    if winetricks_path.is_symlink():
+        winetricks_path.unlink()
+
+    if winetricks_path.exists():
         return
 
     # Otherwise download
