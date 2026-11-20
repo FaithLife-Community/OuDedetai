@@ -7,6 +7,14 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from . import constants
 
+# Translation context of every window string (Qt Linguist files in ou_dedetai/i18n).
+CONTEXT = "OuDedetai"
+
+
+def tr(text: str) -> str:
+    """Translate a window string into the desktop's language, if we have it."""
+    return QtCore.QCoreApplication.translate(CONTEXT, text)
+
 BLUE = "#0174b9"          # buttons, links (styled-ui blue5; 5:1 with white)
 BLUE_DARK = "#015d95"     # hover/pressed
 BLUE_ACCENT = "#1e91d6"   # stripes, progress (styled-ui blue4; decoration only)

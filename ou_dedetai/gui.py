@@ -1,6 +1,8 @@
 from PySide6 import QtWidgets
 from ou_dedetai.app import App
 
+from .gui_style import tr
+
 
 class ChoiceGui(QtWidgets.QWidget):
     _default_prompt = "Choose…"
@@ -16,8 +18,8 @@ class ChoiceGui(QtWidgets.QWidget):
         if options:
             self.answer_dropdown.setCurrentIndex(0)
 
-        self.cancel_button = QtWidgets.QPushButton("Cancel")
-        self.okay_button = QtWidgets.QPushButton("Confirm")
+        self.cancel_button = QtWidgets.QPushButton(tr("Cancel"))
+        self.okay_button = QtWidgets.QPushButton(tr("Confirm"))
 
         layout.addWidget(self.question_label, 0, 0)
         layout.addWidget(self.answer_dropdown, 0, 1, 1, 2)
@@ -37,7 +39,7 @@ class InfoGui(QtWidgets.QWidget):
         self.info_text.setReadOnly(True)
         self.info_text.setMinimumWidth(350)
 
-        self.okay_button = QtWidgets.QPushButton("Okay")
+        self.okay_button = QtWidgets.QPushButton(tr("OK"))
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.addStretch()
         button_layout.addWidget(self.okay_button)
@@ -53,7 +55,7 @@ class InstallerGui(QtWidgets.QWidget):
         self.setContentsMargins(5, 5, 5, 5)
         layout = QtWidgets.QGridLayout(self)
 
-        self.product_label = QtWidgets.QLabel("Product & Version:")
+        self.product_label = QtWidgets.QLabel(tr("Product:"))
         self.product_dropdown = QtWidgets.QComboBox()
         self.product_dropdown.setEditable(False)
         self.product_dropdown.addItems(["Logos", "Verbum"])
@@ -62,7 +64,7 @@ class InstallerGui(QtWidgets.QWidget):
                 app.conf._raw.faithlife_product
             )
 
-        self.version_label = QtWidgets.QLabel("Version:")
+        self.version_label = QtWidgets.QLabel(tr("Version:"))
         self.version_dropdown = QtWidgets.QComboBox()
         self.version_dropdown.setEditable(False)
         self.version_dropdown.setFixedWidth(65)
@@ -73,7 +75,7 @@ class InstallerGui(QtWidgets.QWidget):
                 app.conf._raw.faithlife_product_version
             )
 
-        self.release_label = QtWidgets.QLabel("Release:")
+        self.release_label = QtWidgets.QLabel(tr("Release:"))
         self.release_dropdown = QtWidgets.QComboBox()
         self.release_dropdown.setEditable(False)
         if app.conf._raw.faithlife_product_release:
@@ -81,20 +83,20 @@ class InstallerGui(QtWidgets.QWidget):
                 app.conf._raw.faithlife_product_release
             )
 
-        self.wine_label = QtWidgets.QLabel("Wine exe:")
+        self.wine_label = QtWidgets.QLabel(tr("Wine:"))
         self.wine_dropdown = QtWidgets.QComboBox()
         self.wine_dropdown.setEditable(False)
         if app.conf._raw.wine_binary:
             self.wine_dropdown.addItem(app.conf.wine_binary)
 
-        self.skipdeps_label = QtWidgets.QLabel("Install Dependencies:")
+        self.skipdeps_label = QtWidgets.QLabel(tr("Install system packages:"))
         self.skipdeps_checkbox = QtWidgets.QCheckBox()
         self.skipdeps_checkbox.setChecked(
             not app.conf.skip_install_system_dependencies
         )
 
-        self.cancel_button = QtWidgets.QPushButton("Cancel")
-        self.okay_button = QtWidgets.QPushButton("Install")
+        self.cancel_button = QtWidgets.QPushButton(tr("Cancel"))
+        self.okay_button = QtWidgets.QPushButton(tr("Install"))
         self.okay_button.setEnabled(False)
 
         widgets = [

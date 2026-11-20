@@ -27,7 +27,7 @@ each screen should look like.
 | Read Aloud | Akousousin voices are offered in Logos | |
 | Printing | Print preview and printing to PDF (sermon templates use Georgia and Source Sans Pro) | |
 | Troubleshooting | Health checks; Save a support report; Rebuild the index; Reinstall desktop integrations | |
-| Languages | The window follows the desktop's language, e.g. `LANGUAGE=fr ./oudedetai-x86_64` (French, German, Spanish, Portuguese, Korean, Chinese) | |
+| Languages | The window follows the desktop's language, e.g. `LANG=fr_FR.UTF-8 ./oudedetai-x86_64` (French, German, Spanish, Portuguese, Korean, Chinese) | |
 | Image-based systems | Steam Deck / Bazzite / Silverblue: nothing is installed system-wide | |
 
 ## Terminal menu (TUI)

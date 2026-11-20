@@ -158,5 +158,8 @@ support and remote installs. A few common ones:
 
 ## Languages
 
-The window is available in the languages Logos itself offers; it follows your desktop's
-language. The terminal menu and command line are in English.
+The window is available in the languages Logos itself offers: English, Spanish, French,
+German, Portuguese, Korean, and Simplified and Traditional Chinese. It follows your desktop's
+language. Messages from the install steps, the terminal menu and the command line are in
+English. The translations were made with AI help: corrections from native speakers are very
+welcome (see [CONTRIBUTING.md](../CONTRIBUTING.md#translating-the-window)).

@@ -38,12 +38,7 @@ from . import (
 from .gui_app import GuiApp, InstallerWindow, Root, Toplevel
 
 State = ou_dedetai.logos.State
-CONTEXT = "OuDedetai"
-
-
-def tr(text: str) -> str:
-    """Translate a GUI string (Qt Linguist files in ou_dedetai/i18n)."""
-    return QtCore.QCoreApplication.translate(CONTEXT, text)
+tr = gui_style.tr
 
 
 # Opens the preferred Bible (logosref: always uses it) at its start.
@@ -1914,12 +1909,17 @@ _translator: Optional[QtCore.QTranslator] = None
 
 
 def load_translation(app: QtWidgets.QApplication) -> None:
-    """Load the GUI translation for the user's language, if there is one (Spanish so far)."""
+    """Load the window's translation for the desktop's language, if there is one."""
     global _translator
     locale = QtCore.QLocale.system()
     translator = QtCore.QTranslator(app)
     folder = str(Path(__file__).parent / "i18n")
-    if translator.load(locale, "oudedetai", "_", folder):
+    loaded = translator.load(locale, "oudedetai", "_", folder)
+    if not loaded and locale.language() == QtCore.QLocale.Language.Chinese:
+        # Chinese outside mainland China and Taiwan (Hong Kong, Singapore…): by script.
+        traditional = locale.script() == QtCore.QLocale.Script.TraditionalHanScript
+        loaded = translator.load(f"oudedetai_{'zh_TW' if traditional else 'zh_CN'}", folder)
+    if loaded:
         app.installTranslator(translator)
         _translator = translator
 

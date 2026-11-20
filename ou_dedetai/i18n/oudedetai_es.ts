@@ -912,6 +912,62 @@ Si su ventana ya desapareció, Logos se quedó atascado al cerrarse y es seguro 
       <translation>{ok} de {total} necesarios aplicados</translation>
     </message>
     <message>
+      <source>Question</source>
+      <translation>Pregunta</translation>
+    </message>
+    <message>
+      <source>Information</source>
+      <translation>Información</translation>
+    </message>
+    <message>
+      <source>Licence agreement</source>
+      <translation>Contrato de licencia</translation>
+    </message>
+    <message>
+      <source>I agree</source>
+      <translation>Acepto</translation>
+    </message>
+    <message>
+      <source>{product} licence agreement</source>
+      <translation>Contrato de licencia de {product}</translation>
+    </message>
+    <message>
+      <source>Please read {product}'s licence agreement. Installing needs you to accept it.</source>
+      <translation>Lea el contrato de licencia de {product}. Para instalar es necesario aceptarlo.</translation>
+    </message>
+    <message>
+      <source>Error</source>
+      <translation>Error</translation>
+    </message>
+    <message>
+      <source>Cancel</source>
+      <translation>Cancelar</translation>
+    </message>
+    <message>
+      <source>Confirm</source>
+      <translation>Confirmar</translation>
+    </message>
+    <message>
+      <source>Product:</source>
+      <translation>Producto:</translation>
+    </message>
+    <message>
+      <source>Version:</source>
+      <translation>Versión:</translation>
+    </message>
+    <message>
+      <source>Release:</source>
+      <translation>Publicación:</translation>
+    </message>
+    <message>
+      <source>Wine:</source>
+      <translation>Wine:</translation>
+    </message>
+    <message>
+      <source>Install system packages:</source>
+      <translation>Instalar paquetes del sistema:</translation>
+    </message>
+    <message>
       <source>Printing through GDI</source>
       <translation>Impresión mediante GDI</translation>
     </message>

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Refresh the GUI's Qt Linguist files and compile them.
 
-Collects every tr("…") string in ou_dedetai/gui_main.py and the titles/reasons in
+Collects every tr("…") string in ou_dedetai/gui_main.py, gui_app.py and gui.py and the titles/reasons in
 ou_dedetai/wine_settings.py, adds new ones to each ou_dedetai/i18n/oudedetai_<lang>.ts
 (keeping existing translations, marking new ones unfinished), then runs
 pyside6-lrelease to make the .qm files the app loads.
@@ -28,8 +28,9 @@ def gui_strings() -> list[str]:
         if isinstance(text, str) and text and text not in found:
             found.append(text)
 
-    tree = ast.parse((PKG / "gui_main.py").read_text())
-    for node in ast.walk(tree):
+    calls = [node for name in ("gui_main.py", "gui_app.py", "gui.py")
+             for node in ast.walk(ast.parse((PKG / name).read_text()))]
+    for node in calls:
         if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "tr" and node.args:
             arg = node.args[0]
             if isinstance(arg, ast.Constant):

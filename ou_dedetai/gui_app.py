@@ -16,6 +16,7 @@ from ou_dedetai.constants import (
 )
 
 from . import constants, gui, gui_style, installer, system, utils
+from .gui_style import tr
 
 
 class GuiBridge(QtCore.QObject):
@@ -154,18 +155,19 @@ class GuiApp(App):
 
         def ask() -> bool:
             dialog = QtWidgets.QDialog(self.root)
-            dialog.setWindowTitle(f"{product} licence agreement")
+            dialog.setWindowTitle(tr("{product} licence agreement").format(product=product))
             dialog.resize(640, 560)
             layout = QtWidgets.QVBoxLayout(dialog)
-            intro = QtWidgets.QLabel(f"Please read {product}'s licence agreement. Installing needs you to accept it.")
+            intro = QtWidgets.QLabel(tr("Please read {product}'s licence agreement. Installing needs you to "
+                                        "accept it.").format(product=product))
             intro.setWordWrap(True)
             layout.addWidget(intro)
             body = QtWidgets.QPlainTextEdit(text)
             body.setReadOnly(True)
-            body.setAccessibleName("Licence agreement")
+            body.setAccessibleName(tr("Licence agreement"))
             layout.addWidget(body, 1)
             buttons = QtWidgets.QDialogButtonBox()
-            agree = buttons.addButton("I agree", QtWidgets.QDialogButtonBox.ButtonRole.AcceptRole)
+            agree = buttons.addButton(tr("I agree"), QtWidgets.QDialogButtonBox.ButtonRole.AcceptRole)
             buttons.addButton(QtWidgets.QDialogButtonBox.StandardButton.Cancel)
             agree.setProperty("kind", "primary")
             buttons.accepted.connect(dialog.accept)
@@ -195,7 +197,7 @@ class GuiApp(App):
             self._dispatch(
                 lambda: QtWidgets.QMessageBox.critical(
                     self.root,
-                    "Error",
+                    tr("Error"),
                     f"{reason}\n\n{constants.SUPPORT_MESSAGE}",
                 )
             )
@@ -248,7 +250,7 @@ class GuiApp(App):
 class ChoicePopUp(Toplevel):
     def __init__(self, question, options, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Question")
+        self.setWindowTitle(tr("Question"))
         self.answer = None
 
         self.gui = gui.ChoiceGui(self, question, options)
@@ -289,7 +291,7 @@ class ChoicePopUp(Toplevel):
 class InfoPopUp(Toplevel):
     def __init__(self, message: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Info")
+        self.setWindowTitle(tr("Information"))
 
         self.gui = gui.InfoGui(self, message)
         layout = QtWidgets.QVBoxLayout(self)
