@@ -187,16 +187,17 @@ Both use the same back end, so everything above applies to them, apart from the 
 1. **Beta 16 (released 17 Nov)**: main with the new updating code; it can tell Latest from prereleases.
 2. **`next` test builds as OuDedetai prereleases**, `v4.0.0-beta.17.devN`: newer than beta 16, older
    than beta 17, never Latest, so no current install sees them. Testers opt in by downloading one.
-   The first ones are made by hand (draft prerelease, published by a maintainer); a PR adds a
-   workflow for it (`build-next-prerelease.yml`), for the team to review.
+   The *Build next test build (prerelease)* workflow (#570) makes each one as a draft for a
+   maintainer to publish. Run it from `next-translations` (#585, `next` plus the translations), so
+   testers get the window in their language; the notes come from `.github/next-test-build-notes.md`.
 3. **oinos Wine stays a prerelease on wine-appimages until agreed.** Beta 16's default Wine channel
    follows the **Latest** tarball there, so marking an oinos build Latest changes every beta 16
    user's recommended Wine. If oinos is published as a full release early, untick "Set as the latest
    release", or `gh api -X PATCH repos/FaithLife-Community/wine-appimages/releases/<id> -f make_latest=false`.
 4. **When oinos is released**: publish it as Latest, keep `10.8-staging` published as the way back,
-   and release `next`'s work (in the PRs the team prefers) as beta 17 or 4.0.0. Older Ou Dedetai then
-   offers oinos through Update Wine; the extras (DXVK, FFmpeg, self-update) need the newer Ou Dedetai,
-   which sets them up on its next start.
+   merge this branch (#568) and then the translations (#585), and release them as beta 17 or 4.0.0.
+   Older Ou Dedetai then offers oinos through Update Wine; the extras (DXVK, FFmpeg, self-update)
+   need the newer Ou Dedetai, which sets them up on its next start.
 5. `main`'s dev channel still follows test-builds. `next` points Prereleases at OuDedetai prereleases;
    whether `main` does the same is the team's call when `next` is merged.
 
