@@ -203,7 +203,7 @@ class CLI(App):
         # We don't want to display 100% as it doesn't print nicely.
         if percent is not None:
             # -2 is for the brackets, -1 is for the >
-            progress_bar_length = os.get_terminal_size().columns - 2 -1
+            progress_bar_length = shutil.get_terminal_size(fallback=(80, 24)).columns - 2 - 1
             # Subtract one for the >
             chars_of_progress = math.floor(float(progress_bar_length) * percent / 100) #noqa: E501
             chars_remaining = progress_bar_length - chars_of_progress
