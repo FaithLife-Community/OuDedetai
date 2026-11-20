@@ -1900,8 +1900,28 @@ def _qt_app() -> QtWidgets.QApplication:
         QtWidgets.QApplication([constants.BINARY_NAME])
     app.setApplicationName(constants.APP_NAME)
     app.setDesktopFileName(constants.BINARY_NAME)
+    load_translation(app)
     gui_style.apply(app)
     return app
+
+
+_translator: Optional[QtCore.QTranslator] = None
+
+
+def load_translation(app: QtWidgets.QApplication) -> None:
+    """Load the window's translation for the desktop's language, if there is one."""
+    global _translator
+    locale = QtCore.QLocale.system()
+    translator = QtCore.QTranslator(app)
+    folder = str(Path(__file__).parent / "i18n")
+    loaded = translator.load(locale, "oudedetai", "_", folder)
+    if not loaded and locale.language() == QtCore.QLocale.Language.Chinese:
+        # Chinese outside mainland China and Taiwan (Hong Kong, Singapore…): by script.
+        traditional = locale.script() == QtCore.QLocale.Script.TraditionalHanScript
+        loaded = translator.load(f"oudedetai_{'zh_TW' if traditional else 'zh_CN'}", folder)
+    if loaded:
+        app.installTranslator(translator)
+        _translator = translator
 
 
 def start(ephemeral_config: EphemeralConfiguration, install: bool = False) -> int:
