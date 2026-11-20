@@ -215,8 +215,9 @@ On a fresh install (Troubleshooting → Remove everything, or a spare machine):
 6. Settings: Wine settings list, Work offline (then Update must refuse to go online), Wine builds.
 7. Developer options: winetricks (offers missing tools), choose an AppImage runner on a system without
    libfuse2 (offers FUSE, or unpacks).
-8. Update Akousousin: no offer when up to date; Logos can stay open.
-9. Troubleshooting: health checks, support report, Remove everything (after a backup).
+8. Update Akousousin: no offer when up to date; greyed out while Logos runs (it registers in the prefix).
+9. Troubleshooting: health checks, support report, Remove everything (after a backup). Stop: polite
+   close, Force leaves no Wine running; buttons that change Logos's files are greyed out while it runs.
 10. TUI (run it from a terminal) and the command-line options above.
 11. Spanish: `LANGUAGE=es`.
 12. Steam Deck / Bazzite: nothing installed system-wide.

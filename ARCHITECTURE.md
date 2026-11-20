@@ -8,7 +8,7 @@
   `_ask()`/`_info()`/`_status()`.
 - UI implementations:
   - [ou_dedetai/cli.py](ou_dedetai/cli.py) — `CLI`
-  - [ou_dedetai/tui_app.py](ou_dedetai/tui_app.py) — `TUI` (curses/dialog)
+  - [ou_dedetai/tui_app.py](ou_dedetai/tui_app.py) — `TUI` (Textual)
   - [ou_dedetai/gui_main.py](ou_dedetai/gui_main.py) — `MainWindow` (Qt/PySide6): simple view,
     install guide, full view (Home/Settings/Troubleshooting), tray. Background work reports back
     through the `Signals` object; see [NEXT.md](NEXT.md).
@@ -75,5 +75,22 @@ main() → setup_config() → run(ephemeral_config, action)
 | UI | Interaction model | Notable detail |
 |----|-------------------|----------------|
 | `CLI` | Stdout + blocking stdin in a background thread | Queues hand prompts/responses across threads |
-| `TUI` | Curses screens (`MenuScreen`, `ConsoleScreen`, `HeaderScreen`) | Menu choices call operations directly |
-| `GuiApp` | Tkinter `InstallerWindow` + `ControlWindow` | Callbacks dispatch operations via `start_thread()` |
+| `TUI` | Textual screens (menus, console, prompts) | Menu choices call operations directly |
+| `MainWindow` (`GuiApp`) | Qt window: simple view, install guide, full view; tray while Logos runs | Operations run via `start_thread()`; results come back to the window through `Signals` |
+
+## Use these instead of writing your own
+
+Most operations need one of these; adding a second way to do the same thing is the
+most common review comment.
+
+| Need | Use |
+|------|-----|
+| Download a file or fetch a URL (progress, retries, offline mode) | `network.logos_reuse_download` (cached, size-checked), or `network._net_get` |
+| Latest release of a GitHub project | `app.conf._network._repo_version` (cached 12 h) or `network._get_release_data` (fresh) |
+| Run Wine or a Windows program in the prefix | `wine.run_wine_process` / `run_wine_during_install` (waits, logs, raises on failure) |
+| Run any other program | `system.run_program` (system libraries, not the binary's bundled ones) or `system.run_command` |
+| Read the prefix's registry (no Wine process) | `wine.read_registry`, `wine.reg_string`; write one value with `wine.reg_add` |
+| Offer a system package a feature needs | `system.offer_packages` (never on image-based systems) |
+| Compare release versions | `utils.is_newer_version` |
+| Is Wine our oinos build? | `wine.wine_supports_logos_updates(wine.get_wine_release(binary)[0])` (cached per binary) |
+| Is anything still running in the prefix? | `control.leftover_wine`; end it with `wine.wineserver_kill` |
