@@ -942,12 +942,14 @@ def _package_manager_name() -> Optional[str]:
     return Path(package_manager.install[0]).name if package_manager else None
 
 
-def offer_packages(app: App, packages: list[str], question: str, why: str) -> bool:
+def offer_packages(app: App, packages: list[str], question: str, why: str,
+                   without: str = "") -> bool:
     """Offer to install just these system packages; True if they were installed.
 
     Ou Dedetai doesn't install system packages up front: each feature that needs one
     asks for it here. Never on image-based systems (their system files are replaced on
-    update), and never fatal."""
+    update), and never fatal: a failed install is reported (with `without`, what that
+    means for the feature) and the caller carries on."""
     package_manager = None if is_image_based_os() else get_package_manager()
     if package_manager is None:
         return False
@@ -960,6 +962,7 @@ def offer_packages(app: App, packages: list[str], question: str, why: str) -> bo
         run_command([app.superuser_command, *install, *packages])
     except (OSError, subprocess.CalledProcessError) as error:
         logging.warning(f"Installing {packages} failed: {error}")
+        app.status(f"Couldn't install {', '.join(packages)} (the log has the details). {without}".strip(), 0)
         return False
     return True
 
@@ -1008,7 +1011,8 @@ def offer_winetricks_tools(app: App) -> None:
         return
     manager = _package_manager_name() or ""
     packages = [WINETRICKS_TOOLS[tool].get(manager, tool) for tool in missing]
-    if offer_packages(app, packages, "Install them now?", context):
+    if offer_packages(app, packages, "Install them now?", context,
+                      without="winetricks may not manage everything."):
         app.status(f"Installed {', '.join(packages)}.", 100)
 
 
@@ -1026,7 +1030,8 @@ def offer_wl_clipboard(app: App) -> None:
         return
     offer_packages(app, ["wl-clipboard"], "Install wl-clipboard too?",
                    "The Logos look-up shortcut uses it to read text you've highlighted. Without it, "
-                   "the shortcut only reads text you've copied.")
+                   "the shortcut only reads text you've copied.",
+                   without="The look-up shortcut will only read text you've copied.")
 
 
 def install_dependencies(app: App, target_version=10):

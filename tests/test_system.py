@@ -274,6 +274,15 @@ class TestWinetricksTools(unittest.TestCase):
             system.offer_winetricks_tools(self.app)
         run.assert_not_called()
 
+    def test_a_failed_install_is_reported(self):
+        self.app.approve.return_value = True
+        with patch.object(system, "missing_winetricks_tools", return_value=["unzip"]), \
+                patch.object(system, "run_command", side_effect=subprocess.CalledProcessError(100, ["apt"])):
+            system.offer_winetricks_tools(self.app)
+        message = self.app.status.call_args.args[0]
+        self.assertIn("Couldn't install unzip", message)
+        self.assertIn("winetricks may not manage everything", message)
+
 
 class TestStartupEnvironment(unittest.TestCase):
     def test_main_keeps_the_environment_but_restores_library_path(self):
