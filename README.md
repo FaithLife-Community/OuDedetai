@@ -4,59 +4,45 @@
 
 # Ou Dedetai
 
-> **You're on the `next` branch:** a preview of the next version for testing and review. See
-> [NEXT.md](NEXT.md) for what's new, why, the latest test build and the release plan.
-
 >Remember Jesus Christ, risen from the dead, the offspring of David, as preached in my gospel, for which I am suffering, bound with chains as a criminal. But **the word** of God **is not bound!**
 >
 >ἀλλʼ **ὁ λόγος** τοῦ θεοῦ **οὐ δέδεται**  
 
 —Second Timothy 2:8–9 [ESV](https://biblia.com/bible/esv/2-timothy/2/8-9), [NA<sup>28</sup>](https://biblia.com/bible/ubs5/2-timothy/2/9)
 
-## Logos Bible Software on Linux
+## Manages Logos Bible Software via Wine
 
-Ou Dedetai installs [FaithLife](https://faithlife.com/)'s [Logos Bible Software](https://www.logos.com/)
-(or Verbum) on Linux, keeps it running well under [Wine](https://www.winehq.org/), and keeps it
-up to date. It is made by the FaithLife Community and licensed under the MIT License.
+This repository contains a Python program for installing and maintaining [FaithLife](https://faithlife.com/)'s [Logos Bible (Verbum) Software](https://www.logos.com/) via [Wine](https://www.winehq.org/).
 
-![Ou Dedetai: Run Logos, Update, Stop](docs/images/simple-run.png)
+This program is created and maintained by the FaithLife Community and is licensed under the MIT License.
 
-- **One click to install.** No administrator rights or system packages needed: Ou Dedetai
-  brings its own Wine build, tested with Logos, and keeps everything in your home folder.
-- **Run, update, stop.** Logos updates itself; Ou Dedetai updates Wine and itself. Stop lets
-  Logos finish syncing before it closes.
-- **Shows what it does.** Every Wine setting it applies is listed with the reason Logos needs
-  it, and Troubleshooting has health checks, a one-click support report and repair tools.
-- **Optional extras:** natural Read Aloud voices and dictation
-  ([Akousousin](https://github.com/jg00dman/akousousin)), and the
-  [Logos desktop integrations](https://github.com/FaithLife-Community/logos-desktop-integrations)
-  for KDE Plasma and GNOME (search, look-up shortcut, reading plans, widgets).
-- **Works offline** when you need it to.
+## oudedetai binary
 
-## Getting started
+The main program is a distributable executable binary and contains Python itself and all necessary Python packages.
 
+When running the program, it will attempt to determine your operating system and package manager.
+It will then attempt to install all needed system dependencies during the installation of Logos.
+When the installation is finished, it will place two shortcuts on your computer: one will launch Logos directly; the other will launch the Control Panel.
+
+To access the GUI version of the program, double-click the executable in your file browser or on your desktop, and then follow the prompts.
+
+The program can also be run from source and should be run from a Python virtual environment.
+See below.
+
+## Install Guide (for users)
+
+For an installation guide with pictures and video, see the wiki's [Install Guide](https://github.com/FaithLife-Community/OuDedetai/wiki/Install-Guide).
+
+In Summary:
 ```bash
-wget https://github.com/FaithLife-Community/OuDedetai/releases/latest/download/oudedetai-x86_64
-chmod +x oudedetai-x86_64
-./oudedetai-x86_64
+wget https://github.com/FaithLife-Community/OuDedetai/releases/latest/download/oudedetai
+chmod +x ./oudedetai
+DIALOG=tk ./oudedetai
 ```
 
-Opened from a file manager it shows the window; from a terminal it opens a terminal menu
-(`DIALOG=tk ./oudedetai-x86_64` for the window). Press **Install**, and when it's done, **Run
-Logos**. Ou Dedetai adds Logos and itself to your app menu.
+NOTE: You can run **Ou Dedetai** using the Steam Proton Experimental binary, which often has the latest and greatest updates to make Logos run even smoother. The script should be able to find the binary automatically, unless your Steam install is located outside of your HOME directory.
 
-The [user guide](docs/user-guide.md) walks through every screen, with pictures, and lists the
-command-line options.
-
-## Getting help
-
-Use Troubleshooting → **Save a support report…** in Ou Dedetai and attach the file when you
-[open an issue](https://github.com/FaithLife-Community/OuDedetai/issues).
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for running from source and building, and
-[ARCHITECTURE.md](ARCHITECTURE.md) for how the code is organised.
+If you want to install your distro's dependencies outside of the script, please see the [System Dependencies wiki page](https://github.com/FaithLife-Community/OuDedetai/wiki/System-Dependencies).
 
 ---
 

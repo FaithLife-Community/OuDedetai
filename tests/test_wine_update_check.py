@@ -44,37 +44,3 @@ class TestSameVersionUpdate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class TestRecommendedVersionForTarballs(unittest.TestCase):
-    """An unpacked tarball must be compared with the channel's tarball (e.g. an oinos rc
-    prerelease), not with the latest AppImage release."""
-
-    def recommended(self, wine_binary, in_distribution, tag="11.22-oinos-pre-b1e3dff"):
-        from ou_dedetai import config, constants
-        conf = mock.Mock()
-        conf.wine_binary = wine_binary if wine_binary else constants.WINE_RECOMMENDED_TARBALL_SIGIL
-        conf.is_wine_binary_in_distribution = in_distribution
-        conf._wine_tarball_release.version = tag
-        conf.wine_download_file_name = "wine-staging_10.8-x86_64.AppImage"
-        return config.Config.wine_recommended_version.fget(conf)
-
-    def test_installed_tarball_uses_the_channel_release(self):
-        self.assertEqual(self.recommended(INSTALLED, True), "11.22")
-
-    def test_while_installing(self):
-        self.assertEqual(self.recommended(None, False), "11.22")
-
-    def test_appimage_installs_unchanged(self):
-        self.assertEqual(self.recommended("/x/wine.AppImage", False), "10.8")
-
-    def test_a_newer_rc_of_the_same_version_is_offered(self):
-        app = mock.Mock()
-        app.conf.wine_appimage_path = None
-        app.conf.is_wine_binary_in_distribution = True
-        app.conf.wine_binary = "/x/data/bin/wine-distribution/wine-custom_11.22_oinos-pre-a525d53-x86_64/bin/wine"
-        app.conf.wine_recommended_version = self.recommended(app.conf.wine_binary, True)
-        app.conf._wine_tarball_release.download_url = (
-            "https://e/wine-custom_11.22_oinos-pre-b1e3dff-x86_64.tar.xz")
-        with mock.patch.object(utils.wine, "get_wine_release", return_value=(WineRelease(11, 22, "oinos"), "")):
-            self.assertEqual(utils.compare_recommended_wine_version(app)[0], 0)

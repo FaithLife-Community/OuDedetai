@@ -5,7 +5,7 @@
 You can clone the repo and install the app from source. To do so, you will need to ensure a few prerequisites:
 1. Install build dependencies
 2. Clone this repository
-3. Build/install Python 3.12 (or newer)
+3. Build/install Python 3.12 and Tcl/Tk
 4. Set up a virtual environment
 
 ### Install build dependencies
@@ -15,32 +15,28 @@ e.g. for debian-based systems:
 sudo apt-get install git build-essential gdb lcov pkg-config \
     libbz2-dev libffi-dev libgdbm-dev libgdbm-compat-dev liblzma-dev \
     libncurses5-dev libreadline6-dev libsqlite3-dev libssl-dev \
-    lzma lzma-dev uuid-dev zlib1g-dev
+    lzma lzma-dev python3-tk tk-dev uuid-dev zlib1g-dev
 ```
 *See Python's [Build dependencies](https://devguide.python.org/getting-started/setup-building/index.html#build-dependencies) section for further info.*
-
-The window uses Qt (PySide6, installed by pip below). Qt's X11/Wayland plugins need a few
-system libraries that some minimal installs lack, e.g. on Debian/Ubuntu:
-```
-sudo apt-get install libegl1 libgl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0 \
-    libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0
-```
-(the same list CI installs in `.github/workflows/run-tests.yml`).
 
 ### Clone this repository
 ```
 git clone 'https://github.com/FaithLife-Community/OuDedetai.git'
 ```
 
-### Install Python 3.12
-Your system might already include Python 3.12 or newer:
+### Install Python 3.12 and Tcl/Tk
+Your system might already include Python 3.12 built with Tcl/Tk. This will verify
+the installation:
 ```
 $ python3 --version
 Python 3.12.5
+$ python3 -m tkinter # should open a basic Tk window
 ```
-If your Python version is < 3.12, install 3.12 using your system's package manager or
-compile it from source using the following guide or `scripts/ensure-python.sh`. Release
-binaries are built with 3.12.
+If your Python version is < 3.12, then you might want to install 3.12 and tcl/tk
+using your system's package manager or compile it from source using the
+following guide or the script provided in `scripts/ensure-python.sh`. This is
+because the app is built using 3.12 and might have errors if run with other
+versions.
 
 **Install & build python 3.12 using the script:**
 ```
@@ -86,25 +82,10 @@ OuDedetai$ echo "export LD_LIBRARY_PATH" >> env/bin/activate
 OuDedetai$ source env/bin/activate # activate the env
 (env) OuDedetai$ python --version # verify python version
 Python 3.12.5
+(env) OuDedetai$ python -m tkinter # verify that tkinter test window opens
 (env) OuDedetai$ pip install .[build] # install python packages
 (env) OuDedetai$ pip install .[dev] # optional: install mypy + ruff for linting/type-checking
 (env) OuDedetai$ python -m ou_dedetai.main --help # run the script
-(env) OuDedetai$ DIALOG=tk python -m ou_dedetai.main # open the window
-```
-
-### Tests, lint and types
-```
-./scripts/run-tests.sh   # unittest; test_network.py needs the internet
-ruff check
-mypy ou_dedetai
-```
-CI runs the tests on every pull request.
-
-### Screenshots for the docs
-The pictures in `docs/images/` are drawn from stand-in data, so they never show anyone's
-install. After changing the window, regenerate them:
-```
-QT_QPA_PLATFORM=offscreen python scripts/make-screenshots.py docs/images
 ```
 
 ### Building using docker
