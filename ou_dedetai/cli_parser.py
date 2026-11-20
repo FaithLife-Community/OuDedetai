@@ -81,6 +81,11 @@ def get_parser():
         '-q', '--quiet', action='store_true',
         help='Suppress all non-error output',
     )
+    cfg.add_argument(
+        '--offline', action='store_true',
+        help='Never connect to the internet during this run (no update checks, no downloads). '
+        'Also set with OUDEDETAI_OFFLINE=1, or saved as a setting in the GUI.',
+    )
 
     # Define runtime actions (mutually exclusive).
     grp = parser.add_argument_group(
@@ -100,8 +105,9 @@ def get_parser():
         help='update the installed FaithLife app to the latest release',
     )
     cmd.add_argument(
-        '--run-installed-app', '-C', action='store_true',
-        help='run installed FaithLife app',
+        '--run-installed-app', '-C', nargs='?', const=True, metavar='LINK',
+        help='run installed FaithLife app; with a logos4:/libronixdls: LINK, open it '
+             '(handed straight to Logos if it is already running)',
     )
     cmd.add_argument(
         '--stop-installed-app', action='store_true',
@@ -133,6 +139,18 @@ def get_parser():
         help="re-apply the installer's Wine settings to an existing install",
     )
     cmd.add_argument(
+        '--open-todays-reading', action='store_true',
+        help="open today's first reading-plan entry in Logos (needs the desktop integrations)",
+    )
+    cmd.add_argument(
+        '--show-wine-config', action='store_true',
+        help='list the Wine settings Ou Dedetai applies, whether each is set, and why',
+    )
+    cmd.add_argument(
+        '--update-akousousin', action='store_true',
+        help='Install the latest stable Akousousin tar bundle and refresh Wine registration.',
+    )
+    cmd.add_argument(
         '--backup', action='store_true',
         help='backup current data',
     )
@@ -162,16 +180,37 @@ def get_parser():
         help='enable/disable app logs',
     )
     cmd.add_argument(
-        '--toggle-media-support', action='store_true',
-        help='enable/disable experimental media support',
-    )
-    cmd.add_argument(
         '--create-shortcuts', action='store_true',
         help='[re-]create app shortcuts',
     )
     cmd.add_argument(
+        '--install-desktop-integrations', action='store_true',
+        help='install or update the Logos desktop integrations (KDE Plasma or GNOME)',
+    )
+    cmd.add_argument(
         '--uninstall', action='store_true',
         help='Completely delete the faithlife software from your system',
+    )
+    cmd.add_argument(
+        '--set-update-channel', choices=['releases', 'prereleases'],
+        help='update Ou Dedetai and Wine to releases, or to prereleases (test builds of the next version)',
+    )
+    cmd.add_argument(
+        '--set-wine-channel', choices=['stable', 'dev'],
+        help='which Wine builds "Recommended" means: stable (current release) or dev (newest prerelease)',
+    )
+    cmd.add_argument(
+        '--set-offline', choices=['on', 'off'],
+        help='work offline from now on (no update checks or downloads), or go back online',
+    )
+    cmd.add_argument(
+        '--set-renderer', choices=['dxvk', 'gl', 'vulkan', 'gdi'],
+        help="switch Wine's graphics renderer for Logos (dxvk falls back to gl where the GPU can't run it)",
+    )
+    cmd.add_argument(
+        '--purge', action='store_true',
+        help='remove everything Ou Dedetai installed: Logos/Verbum and its data, settings, logs, '
+             'cache and shortcuts; asks about Akousousin and the desktop integrations (-y says yes to all)',
     )
     cmd.add_argument(
         '--dirlink', action='store_true',
@@ -299,6 +338,24 @@ def parse_database_command(args, ephemeral_config):
     raise RuntimeError(f"Unknown database command: {args.database_command}")
 
 
+def _tray_wanted(config: EphemeralConfiguration) -> bool:
+    """Use the tray when there's a display, the GUI isn't turned off and Qt loads.
+
+    Over SSH, with --dialog cli/tty or OUDEDETAI_NO_TRAY=1, the shortcut keeps today's
+    command-line behaviour."""
+    if os.getenv("OUDEDETAI_NO_TRAY", "").strip().lower() in ("1", "true", "yes", "on"):
+        return False
+    if config.dialog and config.dialog != "tk":
+        return False
+    if not (os.getenv("DISPLAY") or os.getenv("WAYLAND_DISPLAY")):
+        return False
+    try:
+        import PySide6.QtWidgets  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfiguration], None]]:
     from . import main
     if args.config:
@@ -364,12 +421,23 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
     if args.i_agree_to_faithlife_terms:
         ephemeral_config.agreed_to_faithlife_terms = True
 
+    if args.offline or os.getenv("OUDEDETAI_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on"):
+        ephemeral_config.offline = True
+
 
     def cli_operation(action: str) -> EphemeralConfiguration:
         """Wrapper for a function pointer to a given function under CLI
 
         Lazily instantiates CLI at call-time"""
         def _run(config: EphemeralConfiguration):
+            if action == 'run_installed_app' and _tray_wanted(config):
+                # The Logos shortcut: start Logos and sit in the tray while it runs.
+                from . import gui_main
+                try:
+                    gui_main.run_with_tray(config)
+                    return
+                except (ImportError, RuntimeError, OSError):
+                    logging.exception("Couldn't start the tray; running Logos from the command line instead")
             getattr(cli.CLI(config), action)()
         output = _run
         output.__name__ = action
@@ -380,20 +448,28 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
         'backup',
         'create_shortcuts',
         'edit_config',
+        'install_desktop_integrations',
         'install_dependencies',
         'install_icu',
         'remove_index_files',
         'uninstall',
+        'purge',
+        'set_update_channel',
+        'set_wine_channel',
+        'set_offline',
+        'set_renderer',
         'remove_library_catalog',
         'restore',
         'run_indexing',
         'run_installed_app',
         'update_installed_app',
         'update_wine_config',
+        'show_wine_config',
+        'open_todays_reading',
+        'update_akousousin',
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
-        'toggle_media_support',
         'update_self',
         'update_latest_appimage',
         'wine',
@@ -404,6 +480,10 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
     run_action = None
     for arg in action_names:
         if getattr(args, arg) or getattr(args, arg) == []:
+            if arg in ("set_update_channel", "set_wine_channel", "set_offline", "set_renderer"):
+                ephemeral_config.cli_choice = getattr(args, arg)
+            if arg == "run_installed_app" and isinstance(getattr(args, arg), str):
+                ephemeral_config.logos_link = getattr(args, arg)
             if arg == "set_appimage":
                 ephemeral_config.wine_appimage_path = getattr(args, arg)[0]
                 if not utils.file_exists(ephemeral_config.wine_appimage_path):

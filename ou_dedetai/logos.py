@@ -7,6 +7,7 @@ from enum import Enum
 import logging
 import psutil
 import threading
+from typing import Optional
 
 from ou_dedetai import constants, database
 from ou_dedetai.app import App
@@ -15,6 +16,10 @@ from ou_dedetai.config import get_logos_user_id
 from . import system
 from . import utils
 from . import wine
+
+
+# How long start() waits for Logos's processes before giving up (a slow first start included)
+STARTING_TIMEOUT = 300
 
 
 class State(Enum):
@@ -27,6 +32,8 @@ class State(Enum):
 class LogosManager:
     def __init__(self, app: App):
         self.logos_state = State.STOPPED
+        self.starting_since = 0.0
+        """When start() last ran: how long Logos's processes have had to appear"""
         self.indexing_state = State.STOPPED
         self.app = app
         self.processes: dict[str, subprocess.Popen] = {}
@@ -62,6 +69,10 @@ class LogosManager:
         if self.logos_state == State.STARTING:
             if login_running or cef_running:
                 self.logos_state = State.RUNNING
+            elif (not splash_running and self.starting_since
+                    and time.monotonic() - self.starting_since > STARTING_TIMEOUT):
+                logging.warning(f"Logos didn't start within {STARTING_TIMEOUT} seconds.")
+                self.logos_state = State.STOPPED
         elif self.logos_state == State.RUNNING:
             if not any((splash_running, login_running, cef_running)):
                 self.stop()
@@ -88,7 +99,53 @@ class LogosManager:
             if exe_path:
                 self.existing_processes[exe_path] = system.get_pids(exe_path)
 
+    def hand_off_link(self) -> bool:
+        """If Logos is already running, pass the pending link straight to it.
+
+        Returns True when it did, so nothing else (tray, monitoring, a second start)
+        happens: that is the sign-in callback's path and must stay a plain hand-off."""
+        link = self.app.conf._overrides.logos_link
+        if not link:
+            return False
+        self.monitor()
+        if self.logos_state not in (State.STARTING, State.RUNNING):
+            return False
+        self.send_link(link)
+        self.app.conf._overrides.logos_link = None
+        return True
+
+    def send_link(self, url: str) -> None:
+        """Pass a link to the running Logos, as Logos.exe <link> does on Windows."""
+        logging.info(f"Handing Logos a {url.split(':', 1)[0]}: link.")
+        if not self._run_quietly(self.app.conf.logos_exe, [url], timeout=60):
+            logging.warning("Logos took over a minute to take the link.")
+
+    def _run_quietly(self, exe: Optional[str], args: list[str], timeout: float, kill_late: bool = False) -> bool:
+        """Run a Windows program in the prefix, output discarded; False if it took longer
+        than `timeout` seconds (it's then stopped with kill_late, otherwise left running)."""
+        with open(os.devnull, "w") as devnull:
+            process = wine.run_wine_process(self.app, self.app.conf.wine_binary, devnull, devnull,
+                                            exe=exe, exe_args=args)
+        if process is None:
+            return True
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            if kill_late:
+                process.kill()
+            return False
+        return True
+
+    def reap_finished(self):
+        """Collect the exit of Wine processes we started that have ended on their own
+        (e.g. the user closed Logos). Otherwise they stay as <defunct> entries while
+        Ou Dedetai runs, and tools looking for Logos.exe think it's still running."""
+        for name, process in list(self.processes.items()):
+            if process.poll() is not None:
+                del self.processes[name]
+
     def monitor(self):
+        self.reap_finished()
         if self.app.is_installed():
             self.get_logos_pids()
             try:
@@ -156,6 +213,7 @@ class LogosManager:
 
     def start(self):
         self.logos_state = State.STARTING
+        self.starting_since = time.monotonic()
         wine_release, _ = wine.get_wine_release(self.app.conf.wine_binary)
 
         def run_logos():
@@ -168,14 +226,21 @@ class LogosManager:
             self.set_auto_updates(False)
             if not self.app.conf.logos_exe:
                 raise ValueError("Could not find installed Logos EXE to run")
+            # A link from the link handler (sign-in, Bible links) goes on Logos's command
+            # line, as Logos.exe <link> does on Windows. Used once.
+            link = self.app.conf._overrides.logos_link
+            self.app.conf._overrides.logos_link = None
             process = wine.run_wine_application(
                 self.app,
                 self.app.conf.wine_binary,
-                exe=self.app.conf.logos_exe
+                exe=self.app.conf.logos_exe,
+                exe_args=[link] if link else None,
             )
             if process is not None:
                 self.processes[self.app.conf.logos_exe] = process
-            self.logos_state = State.RUNNING
+            # Stay STARTING: monitor() moves to RUNNING once Logos's processes appear.
+            # Marked RUNNING here, a monitor() call made before Wine has started
+            # Logos.exe would see "running, but no processes" and stop it again.
 
         # Ensure wine version is compatible with Logos release version.
         good_wine, reason = wine.check_wine_rules(
@@ -295,6 +360,99 @@ class LogosManager:
         self.logos_state = State.STOPPED
         # The Logos process has exited, if we wait here it hangs
         # wine.wineserver_wait(self.app)
+
+    # How long a polite close may take before the user is offered a forced one.
+    CLOSE_PATIENCE = 60
+    # Logos counts as busy (probably syncing or saving) above this CPU use or disk writing.
+    BUSY_CPU_PERCENT = 5.0
+    BUSY_WRITE_BYTES = 256 * 1024
+
+    def request_close(self) -> None:
+        """Ask Logos to close, as clicking its window's close button does (Wine's taskkill
+        without /F sends WM_CLOSE), so it can finish syncing and ask about unsaved work."""
+        exe = Path(self.app.conf.logos_exe).name if self.app.conf.logos_exe else "Logos.exe"
+        logging.info(f"Asking {exe} to close.")
+        if not self._run_quietly("taskkill", ["/IM", exe], timeout=30, kill_late=True):
+            logging.warning("taskkill took over 30 seconds.")
+
+    def _logos_processes(self) -> list:
+        return [p for procs in self.existing_processes.values() for p in procs
+                if isinstance(p, psutil.Process)]
+
+    def busy(self, interval: float = 1.0) -> bool:
+        """Whether Logos appears to be working, e.g. syncing with Faithlife or saving:
+        noticeable CPU use or disk writing over `interval` seconds. A Logos that is only
+        waiting (say on an "unsaved changes?" question) is idle. A guess, not a promise."""
+        processes = self._logos_processes()
+        before: dict[int, int] = {}
+        for p in processes:
+            try:
+                p.cpu_percent(None)
+                before[p.pid] = p.io_counters().write_bytes
+            except (psutil.Error, AttributeError):
+                pass
+        time.sleep(interval)
+        cpu = 0.0
+        written = 0
+        for p in processes:
+            try:
+                cpu += p.cpu_percent(None)
+                written += p.io_counters().write_bytes - before.get(p.pid, 0)
+            except (psutil.Error, AttributeError):
+                pass
+        return cpu > self.BUSY_CPU_PERCENT or written > self.BUSY_WRITE_BYTES
+
+    def close(self, timeout: float = CLOSE_PATIENCE, progress=None) -> bool:
+        """Ask Logos to close and wait while it does. Returns True once it has closed, or
+        False after `timeout` idle seconds (it may be asking a question): nothing is ever
+        forced here. While Logos is busy (probably syncing) the wait goes on.
+        `progress(busy, idle_seconds)` is called about once a second; returning True
+        stops the wait (False is returned)."""
+        if self._closed():
+            return True
+        self.request_close()
+        idle_since = time.monotonic()
+        while True:
+            busy = self.busy()
+            if self._closed():
+                return True
+            if busy:
+                idle_since = time.monotonic()
+            idle = time.monotonic() - idle_since
+            if progress and progress(busy, idle):
+                return False
+            if idle > timeout:
+                logging.info("Logos is still open after being asked to close.")
+                return False
+
+    def close_or_force(self) -> None:
+        """Stop for the CLI and TUI: close politely, and force it only if the user agrees."""
+        def progress(busy: bool, _idle: float) -> None:
+            self.app.status("Logos appears to be syncing or saving; waiting for it to finish…" if busy
+                            else "Waiting for Logos to close…")
+        if self.close(progress=progress):
+            self.app.status("Logos has closed.", 100)
+            return
+        if self.app.conf._overrides.assume_yes:
+            self.app.status("Logos is still open; not forcing it to close unattended.")
+            return
+        if self.app.approve(
+            "Force Logos to close?",
+            "Logos hasn't closed. It may be asking you something (check its window). Forcing it to "
+            "close can lose changes that haven't synced to your Faithlife account yet.",
+        ):
+            self.force_close()
+
+    def force_close(self) -> None:
+        """Force Logos to close, then end whatever else is still running in its Wine prefix
+        (wineserver, services, leftover CEF processes), so nothing is left behind (#412).
+        Only after the user has agreed: unsynced changes may be lost."""
+        self.stop()
+        wine.wineserver_kill(self.app)
+
+    def _closed(self) -> bool:
+        self.monitor()
+        return self.logos_state == State.STOPPED
 
     def end_processes(self):
         for process_name, process in self.processes.items():
@@ -418,17 +576,7 @@ class LogosManager:
                 state = state_enabled
 
         logging.info(f"Setting app logging to '{state}'.")
-        exe_args = [
-            'add', 'HKCU\\Software\\Logos4\\Logging', '/v', 'Enabled',
-            '/t', 'REG_DWORD', '/d', value, '/f'
-        ]
-        process = wine.run_wine_during_install(
-            app=self.app,
-            wine_binary=self.app.conf.wine_binary,
-            exe='reg',
-            exe_args=exe_args
-        )
-        if process:
-            process.wait()
+        wine.reg_add(self.app, self.app.conf.wine_binary, 'HKCU\\Software\\Logos4\\Logging', 'Enabled',
+                     'REG_DWORD', value)
         wine.wineserver_wait(self.app)
         self.app.conf.faithlife_product_logging = state == state_enabled

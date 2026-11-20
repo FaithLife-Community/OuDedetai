@@ -16,6 +16,7 @@ class TestSetWine(unittest.TestCase):
         self.app.conf.installer_binary_dir = str(self.bindir)
         self.app.conf.wine_appimage_link_file_name = "selected_wine.AppImage"
         self.app.conf.wine_download_file_name = "wine-recommended.AppImage"
+        self.app.conf.wine_prefix = str(self.tmp / "prefix")  # none yet: nothing to update
 
     def test_an_appimage_replaces_a_tarball_wine(self):
         for name in ("wine", "wine64", "wineserver"):

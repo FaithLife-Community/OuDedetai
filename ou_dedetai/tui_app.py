@@ -21,6 +21,7 @@ from ou_dedetai.config import EphemeralConfiguration
 
 from . import control, msg
 from . import constants
+from . import desktop_integrations
 from . import installer
 from . import logos
 from . import system
@@ -264,6 +265,9 @@ class TextualUI(TextualApp[None]):
         self.query_one("#main-menu", OptionList).focus()
         self.set_interval(2.5, self._monitor_tick)
         self.domain.status("TUI ready")
+        # Once, on KDE Plasma or GNOME: offer the Logos desktop integrations
+        self.domain.start_thread(desktop_integrations.offer_or_notice_update, app=self.domain)
+        self.domain.start_thread(installer.offer_to_replace_installed, self.domain)
 
     def _monitor_tick(self) -> None:
         try:
@@ -553,8 +557,10 @@ class TUI(App):
             self.ui._populate_main_menu()
 
         elif self.conf._raw.faithlife_product and choice == f"Stop {self.conf.faithlife_product}":
-            self.logos.stop()
-            self.ui._populate_main_menu()
+            def _close() -> None:
+                self.logos.close_or_force()
+                self.ui.call_from_thread(self.ui.go_to_main_menu)
+            threading.Thread(target=_close, daemon=True).start()
 
         elif choice == "Run Indexing":
             self.logos.index()
@@ -605,9 +611,6 @@ class TUI(App):
         elif choice == "Update to Latest Wine":
             self.start_thread(installer.update_to_latest_wine, self)
             self.go_to_main_menu()
-        elif choice == "Toggle experimental media support":
-            self.start_thread(wine.toggle_media_support, self)
-            self.go_to_main_menu()
         elif choice == "Set Windows Version for Logos":
             self.ui.push_screen(MenuModal("Windows Version for Logos", constants.WINDOWS_VERSIONS),
                                 callback=self.win_ver_logos_select)
@@ -630,16 +633,37 @@ class TUI(App):
                 self.conf.reload()
             elif choice == f"Check for {constants.APP_NAME} Updates":
                 utils.check_for_updates(self, force=True)
-            elif choice == "Change FaithLife Release Channel":
+            elif choice.startswith(("Change FaithLife Release Channel", "Change Logos Release Channel",
+                                    "Change Verbum Release Channel")):
                 self.conf.toggle_faithlife_product_release_channel()
-            elif choice == f"Change {constants.APP_NAME} Release Channel":
+            elif choice.startswith(f"Change {constants.APP_NAME} Release Channel"):
                 self.conf.toggle_installer_release_channel()
-            elif choice == "Change Wine Release Channel":
+            elif choice.startswith("Updates ("):
+                self.conf.update_channel = "stable" if self.conf.update_channel == "dev" else "dev"
+                self.status("Updates: prereleases (test builds of the next version)."
+                            if self.conf.update_channel == "dev" else
+                            "Updates: releases. You stay on this version until a release catches up.")
+            elif choice.startswith("Wine Builds"):
                 self.conf.toggle_wine_release_channel()
+                self.status(f"Wine builds: {WINE_CHANNELS.get(self.conf.wine_release_channel)}")
+            elif choice.startswith("Work Offline"):
+                self.conf.offline_mode = not self.conf.offline_mode
+                self.status("Offline: no update checks or downloads." if self.conf.offline_mode
+                            else "Online again.")
+            elif choice == "Show Wine Settings":
+                from ou_dedetai import wine_settings
+                self.info(wine_settings.format_report(
+                    wine_settings.report_for_app(self), wine_settings.renderer_summary(self)))
+            elif choice in ("Install Desktop Integrations", "Update Desktop Integrations"):
+                self.start_thread(desktop_integrations.install, self)
+            elif choice == "Remove Everything":
+                self.start_thread(control.purge, self)
             elif choice == "Install Dependencies":
                 utils.install_dependencies(self)
             elif choice == "Update Wine Configuration":
                 installer.update_wine_config(self)
+            elif choice == "Update Akousousin":
+                self.start_thread(system.update_akousousin, self)
             elif choice == "Install ICU":
                 wine.enforce_icu_data_files(self)
             elif choice == "Create Desktop Shortcuts":
@@ -650,8 +674,6 @@ class TUI(App):
             elif choice == "Check OpenGL":
                 _, reason = system.check_opengl_version(self)
                 self.status(reason)
-            elif choice == "Uninstall":
-                control.uninstall(self)
             elif choice == "Update to Latest AppImage":
                 installer.update_to_latest_wine(self)
         except UserExitedFromAsk:
@@ -681,8 +703,8 @@ class TUI(App):
     def renderer_select(self, choice: str | None) -> None:
         if choice in ("gdi", "gl", "dxvk", "vulkan"):
             self._run_wine_setting(
-                f"set renderer to {choice}", wine.set_renderer,
-                self, self.conf.wine64_binary, choice
+                f"set renderer to {choice}",
+                lambda: self.status(wine.select_renderer(self, choice)),
             )
         else:
             self.go_to_main_menu()
@@ -707,11 +729,11 @@ class TUI(App):
 
     def set_wineconfig_menu_options(self) -> list[str]:
         settings = wine.read_wine_config(self)
+        renderer = wine.get_effective_renderer(self)
         return [
-            f"Set Renderer (Current: {settings.renderer or 'Unknown'})",
+            f"Set Renderer (Current: {renderer or 'Unknown'})",
             "Set Runner (AppImage or tarball)",
             "Update to Latest Wine",
-            "Toggle experimental media support",
             f"Set Windows Version for Logos (Current: {settings.windows_version or 'Default'})",
             f"Set Windows Version for Indexer (Current: {settings.indexer_version or 'Default'})",
             "Return to Main Menu",
@@ -720,16 +742,23 @@ class TUI(App):
     def set_utilities_menu_options(self) -> list[str]:
         labels: list[str] = []
         if self.is_installed():
-            labels.extend(["Remove Library Catalog", "Remove All Index Files", "Install ICU"])
+            labels.extend(["Remove Library Catalog", "Remove All Index Files", "Install ICU", "Update Akousousin"])
         if (
             self.is_installed()
             or Path(self.conf.config_file_path).exists()
             or (getattr(self.conf._raw, "install_dir", None) and Path(self.conf._raw.install_dir).exists())
         ):
-            labels.append("Uninstall")
+            labels.append("Remove Everything")
         labels.extend([f"Check for {constants.APP_NAME} Updates", "Install Dependencies"])
         if self.is_installed():
-            labels.append("Update Wine Configuration")
+            labels.extend(["Update Wine Configuration", "Show Wine Settings"])
+            if desktop_integrations.desktop():
+                labels.append("Update Desktop Integrations" if desktop_integrations.is_installed()
+                              else "Install Desktop Integrations")
+        channel = self.conf.wine_release_channel
+        labels.append(f"Updates (Current: {'Prereleases' if self.conf.update_channel == 'dev' else 'Releases'})")
+        labels.append(f"Wine Builds (Current: {WINE_CHANNELS.get(channel, channel)})")
+        labels.append(f"Work Offline (Current: {'On' if self.conf.offline_mode else 'Off'})")
         labels.extend(["Edit Config", "Reload Config"])
         if self.is_installed():
             labels.extend([
@@ -744,6 +773,10 @@ class TUI(App):
         labels.append("Check OpenGL")
         labels.append("Return to Main Menu")
         return labels
+
+
+# Wine release channels, as Settings names them in the window.
+WINE_CHANNELS = {"stable": "Current release", "dev": "Prerelease (newest oinos)"}
 
 
 def control_panel_app(ephemeral_config: EphemeralConfiguration) -> None:

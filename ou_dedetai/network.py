@@ -26,6 +26,38 @@ from . import constants
 from . import utils
 
 
+def _offline_by_environment() -> bool:
+    return os.getenv("OUDEDETAI_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+_offline = _offline_by_environment()
+
+
+class OfflineError(requests.exceptions.ConnectionError):
+    """Raised instead of connecting while offline mode is on."""
+
+    def __init__(self, url: str = "") -> None:
+        super().__init__(f"Offline mode is on: not connecting to {url or 'the internet'}.")
+
+
+def set_offline(value: bool) -> None:
+    """Turn offline mode on or off for every request this process makes."""
+    global _offline
+    _offline = bool(value) or _offline_by_environment()
+
+
+def is_offline() -> bool:
+    return _offline
+
+
+def _ensure_online(url: str) -> None:
+    """Raise instead of connecting while offline mode is on (header lookups; _net_get
+    checks the same flag and returns None instead)."""
+    if _offline:
+        logging.info(f"Offline mode: skipped {url}")
+        raise OfflineError(url)
+
+
 def _request_headers(url: str) -> dict[str, str]:
     headers = {"Accept-Encoding": "identity"}
     if urlparse(url).netloc.lower() == "api.github.com":
@@ -109,8 +141,11 @@ class UrlProps(Props):
     def _get_headers(self) -> requests.structures.CaseInsensitiveDict:
         logging.debug(f"Getting headers from {self.path}.")
         try:
+            _ensure_online(self.path)
             headers = _request_headers(self.path)
             r = requests.head(self.path, allow_redirects=True, headers=headers)
+        except OfflineError:
+            return requests.structures.CaseInsensitiveDict()
         except requests.exceptions.ConnectionError:
             logging.critical("Failed to connect to the server.")
             return requests.structures.CaseInsensitiveDict()
@@ -222,7 +257,9 @@ class CachedRequests:
         - Either an empty new one
         - Or the existing one
         """
-        if force or not self._is_fresh():
+        if _offline and not force:
+            logging.debug("Offline mode: keeping the last-known cache")
+        elif force or not self._is_fresh():
             logging.debug("Cleaning out cache…")
             self = CachedRequests(last_updated=time.time())
             self._write()
@@ -242,6 +279,12 @@ class NetworkRequests:
         hook: Callable[[], None] | None = None
     ) -> None:
         self._cache = CachedRequests.load().ensure_fresh(force=force_clean or False)
+        self._cache._update_hook = hook
+
+    def clear_cache(self) -> None:
+        """Forget every cached lookup, so the next ones ask the servers ("Check for updates now")."""
+        hook = self._cache._update_hook
+        self._cache = self._cache.ensure_fresh(force=True)
         self._cache._update_hook = hook
 
     def _faithlife_product_releases(
@@ -400,7 +443,9 @@ class NetworkRequests:
 
         repositories = {
             "stable": ("FaithLife-Community/OuDedetai", "latest"),
-            "dev": ("FaithLife-Community/test-builds", "prerelease"),
+            # Published test builds of the next version (v4.0.0-beta.17.devN). Releases from
+            # main follow Latest, which a prerelease never is, so they don't see these.
+            "dev": ("FaithLife-Community/OuDedetai", "prerelease"),
         }
 
         try:
@@ -483,6 +528,11 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
     # - Check available disk space before starting download
     logging.debug(f"Download source: {url}")
     logging.debug(f"Download destination: {target}")
+    if _offline:
+        logging.info(f"Offline mode: not downloading {url}")
+        if app:
+            app.status("Offline mode is on, so nothing was downloaded.")
+        return None
     target_props = FileProps(target)  # sets path and size attribs
     if app and target_props.path:
         app.status(f"Downloading {target_props.path.name}…", 0)
@@ -640,6 +690,9 @@ def _get_asset_url(release: dict, asset_name: Optional[str] = None) -> str:
                 asset for asset in assets if asset.get("name") == "oudedetai"
             ]
         assets = matching_assets
+    if not assets and asset_name is None and release.get("tarball_url"):
+        # A release with no attached files (e.g. logos-desktop-integrations): its source archive.
+        return str(release["tarball_url"])
     if not assets:
         raise ValueError(f"Could not find asset {asset_name!r} in release {release.get('tag_name')}")
     download_url = assets[0].get("browser_download_url")

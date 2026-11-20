@@ -1,3 +1,4 @@
+import functools
 import re
 import tarfile
 from dataclasses import dataclass
@@ -55,11 +56,34 @@ def get_devel_or_stable(version: str) -> str:
         return 'devel'
 
 
+def appimage_env(binary: str | Path, env: dict[str, str]) -> dict[str, str]:
+    """A Wine AppImage that can't mount itself (no FUSE) runs by unpacking itself."""
+    if str(binary).lower().endswith(".appimage") and system.appimage_needs_extract(str(binary)):
+        env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
+    return env
+
+
+def _wine_version_output(binary: str) -> str:
+    env = appimage_env(binary, system.fix_ld_library_path(None))
+    return subprocess.check_output([binary, "--version"], encoding='utf-8', env=env).strip()
+
+
+@functools.lru_cache(maxsize=16)
+def _cached_wine_version_output(binary: str, _mtime: float) -> str:
+    return _wine_version_output(binary)
+
+
 # FIXME: consider raising exceptions on error
 def get_wine_release(binary: str) -> tuple[Optional[WineRelease], str]:
-    cmd = [binary, "--version"]
     try:
-        version_string = subprocess.check_output(cmd, encoding='utf-8').strip()
+        # The window asks on every refresh; running an AppImage's --version means mounting it.
+        # A build that's replaced in place gets a new mtime, so it's asked again.
+        try:
+            mtime = os.stat(binary).st_mtime
+        except OSError:
+            version_string = _wine_version_output(binary)
+        else:
+            version_string = _cached_wine_version_output(os.path.realpath(binary), mtime)
         logging.debug(f"Version string: {str(version_string)}")
         branch: Optional[str]
         try:
@@ -114,23 +138,32 @@ def wine_supports_logos_updates(wine_release: Optional[WineRelease]) -> bool:
     return wine_release is not None and wine_release.release == OINOS_WINE_BRANCH
 
 
+def reg_add(app: App, wine_binary: str | Path, key: str, name: str, kind: str, data: str | list[str]) -> bool:
+    """Set one registry value with Wine's reg.exe (waits for it); False if it couldn't run.
+
+    A list is written as REG_MULTI_SZ: reg.exe splits its data on a literal "\\0"."""
+    if isinstance(data, list):
+        data = "\\0".join(data)
+    process = run_wine_during_install(app, wine_binary, exe='reg',
+                                      exe_args=['add', key, '/v', name, '/t', kind, '/d', data, '/f'])
+    return process is not None
+
+
 def allow_logos_updates(app: App, wine_binary: str):
     """Lets Logos's own updates finish under an oinos Wine build."""
-    process = run_wine_during_install(
-        app,
-        wine_binary,
-        exe='reg',
-        exe_args=[
-            'add', 'HKCU\\Software\\Wine\\MSI',
-            '/v', 'IgnoreFailedActions',
-            '/t', 'REG_MULTI_SZ',
-            # wine's reg.exe splits REG_MULTI_SZ data on a literal "\0"
-            '/d', "\\0".join(LOGOS_IGNORED_MSI_ACTIONS),
-            '/f',
-        ]
-    )
-    if process is not None:
-        process.wait()
+    reg_add(app, wine_binary, 'HKCU\\Software\\Wine\\MSI', 'IgnoreFailedActions', 'REG_MULTI_SZ',
+            LOGOS_IGNORED_MSI_ACTIONS)
+    use_ffmpeg_media(app, wine_binary)
+
+
+def use_ffmpeg_media(app: App, wine_binary: str):
+    """Video and audio through our builds' FFmpeg media source (oinos only).
+
+    Otherwise Wine uses GStreamer, which needs the system's H.264/AAC plugins
+    (gstreamer1.0-libav etc.), and Ou Dedetai doesn't install system packages: on
+    e.g. Kubuntu Logos's videos wouldn't play."""
+    reg_add(app, wine_binary, 'HKCU\\Software\\Wine\\MediaFoundation', 'DisableGstByteStreamHandler',
+            'REG_DWORD', '1')
 
 
 @dataclass
@@ -258,20 +291,95 @@ def check_wine_version_and_branch(release_version: Optional[str], test_binary,
     return True, "None"
 
 
+# Wine asks to download Wine Mono and Wine Gecko whenever it creates or updates a
+# prefix; Logos needs neither. Leave the two DLLs out only while wineboot runs: Wine's
+# loader still needs mscoree.dll for Logos's .NET assemblies ("IL-only binary
+# System.Runtime.dll cannot be loaded" without it), so never in normal runs.
+NO_MONO_GECKO = "mscoree=;mshtml="
+
+
+def prepare_prefix(app: App, wine64_binary: Optional[str] = None, init: bool = False) -> None:
+    """Create (init) or update the prefix without Wine's pop-ups.
+
+    Run with no display, so wineboot's "The Wine configuration is being updated" window
+    can't appear; if that fails (some Wine builds need a display), run normally."""
+    from ou_dedetai.control import leftover_wine
+    binary = wine64_binary or app.conf.wine64_binary
+    command = [binary, "wineboot", "--init" if init else "--update"]
+    # If Wine is already running here (Logos open), don't wait for it to exit.
+    busy = bool(leftover_wine(app.conf.wine_prefix))
+    env = get_wine_env(app, NO_MONO_GECKO)
+    headless = {k: v for k, v in env.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
+    # Without DISPLAY/WAYLAND_DISPLAY Wine's Wayland driver still finds the default
+    # "wayland-0" socket, so the window appeared anyway: leave both drivers out too
+    # (Wine then uses its null driver).
+    headless["WINEDLLOVERRIDES"] = f"{headless.get('WINEDLLOVERRIDES', '')};winex11.drv=;winewayland.drv="
+    for attempt in (headless, env):
+        logging.debug(f"Running: {' '.join(command)} (headless: {attempt is headless})")
+        try:
+            result = subprocess.run(command, env=attempt, capture_output=True, text=True, timeout=900)
+        except (OSError, subprocess.SubprocessError) as error:
+            logging.warning(f"wineboot failed: {error}")
+            continue
+        logging.debug(f"wineboot exited {result.returncode}: {result.stderr[-2000:]}")
+        # Let the prefix's processes (explorer started without a display) finish.
+        if not busy:
+            wineserver_wait(app)
+        if result.returncode == 0:
+            return
+    if init:
+        raise subprocess.CalledProcessError(1, command)
+
+
+def update_prefix_for_new_wine(app: App) -> None:
+    """After switching to another Wine build: an existing prefix is updated now, quietly.
+
+    Left to Wine, the update happens when Logos next starts, with Wine's
+    "configuration is being updated" window and its offer to install Wine Mono."""
+    if (Path(app.conf.wine_prefix) / "system.reg").is_file():
+        app.status("Updating the Wine prefix for this Wine build…")
+        prepare_prefix(app)
+
+
 def initializeWineBottle(wine64_binary: str, app: App):
     app.status("Initializing wine bottle…")
     logging.debug(f"{wine64_binary=}")
-    # Avoid wine-mono window
-    wine_dll_override="mscoree="
-    logging.debug(f"Running: {wine64_binary} wineboot --init")
-    run_wine_during_install(
-        app=app,
-        wine_binary=wine64_binary,
-        exe='wineboot',
-        exe_args=['--init'],
-        init=True,
-        additional_wine_dll_overrides=wine_dll_override
-    )
+    prepare_prefix(app, wine64_binary, init=True)
+
+
+_SECTION_RE = re.compile(r"^\[(?P<key>[^\]]+)\][^\n]*\n(?P<body>.*?)(?=^\[|\Z)", re.MULTILINE | re.DOTALL)
+_VALUE_RE = re.compile(r'^"(?P<name>(?:[^"\\]|\\.)*)"=(?P<value>.*)$', re.MULTILINE)
+
+
+def parse_reg_file(path: Path) -> dict[str, dict[str, str]]:
+    """Parse a Wine registry file into {lower-case key: {lower-case value name: raw value}}.
+
+    Keys are as Wine writes them in the file (relative to the hive, single backslashes)."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    result: dict[str, dict[str, str]] = {}
+    for section in _SECTION_RE.finditer(text):
+        key = section.group("key").replace("\\\\", "\\").lower()
+        values = result.setdefault(key, {})
+        for match in _VALUE_RE.finditer(section.group("body")):
+            name = match.group("name").replace("\\\\", "\\").lower()
+            values[name] = match.group("value")
+    return result
+
+
+def read_registry(app: App, hive: str = "user") -> dict[str, dict[str, str]]:
+    """The prefix's user.reg (or system.reg) read straight from the file: no Wine process
+    is started, so it's quick and safe while Logos is running."""
+    return parse_reg_file(Path(app.conf.wine_prefix) / f"{hive}.reg")
+
+
+def reg_string(raw: Optional[str]) -> Optional[str]:
+    """A REG_SZ value as parse_reg_file returns it ('"gl"') without its quotes; None if absent."""
+    if raw is None or not (raw.startswith('"') and raw.endswith('"')):
+        return None
+    return raw[1:-1].replace("\\\\", "\\")
 
 
 @dataclass(frozen=True)
@@ -282,35 +390,12 @@ class RelevantWineRegistrySettings:
 
 
 def read_wine_config(app: App) -> RelevantWineRegistrySettings:
-    path = Path(app.conf.wine_prefix) / "user.reg"
-    try:
-        lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
-    except FileNotFoundError:
-        return RelevantWineRegistrySettings(None, None, None)
-    except OSError:
-        logging.exception("Could not read Wine settings from %s", path)
-        return RelevantWineRegistrySettings(None, None, None)
-
-    sections: dict[str, dict[str, str]] = {}
-    section: Optional[str] = None
-    for line in lines:
-        match = re.match(r"^\[([^]]+)\](?:\s|$)", line)
-        if match:
-            section = match.group(1).casefold().replace("\\\\", "\\")
-            sections.setdefault(section, {})
-        elif section is not None:
-            match = re.match(r'^"([^"]+)"="([^"]*)"', line)
-            if match:
-                sections[section][match.group(1).casefold()] = match.group(2)
-
-    renderer = sections.get(r"software\wine\direct3d", {}).get("renderer")
-    windows_version = sections.get(r"software\wine", {}).get("version")
-    product = app.conf.faithlife_product
-    indexer_version = sections.get(
-        rf"software\wine\appdefaults\{product}indexer.exe".casefold(), {}
-    ).get("version")
+    sections = read_registry(app)
+    windows_version = reg_string(sections.get(r"software\wine", {}).get("version"))
+    indexer_key = rf"software\wine\appdefaults\{app.conf.faithlife_product}indexer.exe".lower()
+    indexer_version = reg_string(sections.get(indexer_key, {}).get("version"))
     return RelevantWineRegistrySettings(
-        renderer=renderer,
+        renderer=get_renderer(app),
         windows_version=windows_version,
         indexer_version=indexer_version or windows_version,
     )
@@ -336,21 +421,8 @@ def set_win_version(app: App, exe: str, windows_version: str):
         )
 
     elif exe == "indexer":
-        reg = f"HKCU\\Software\\Wine\\AppDefaults\\{app.conf.faithlife_product}Indexer.exe"
-        exe_args = [
-            'add',
-            reg,
-            "/v", "Version",
-            "/t", "REG_SZ",
-            "/d", f"{windows_version}", "/f",
-            ]
-        process = run_wine_during_install(
-            app,
-            app.conf.wine_binary,
-            exe='reg',
-            exe_args=exe_args
-        )
-        if process is None:
+        key = f"HKCU\\Software\\Wine\\AppDefaults\\{app.conf.faithlife_product}Indexer.exe"
+        if not reg_add(app, app.conf.wine_binary, key, "Version", "REG_SZ", windows_version):
             app.exit("Failed to spawn command to set windows version for indexer")
 
 
@@ -437,30 +509,8 @@ def disable_winemenubuilder(app: App, wine64_binary: str):
 
 def get_renderer(app: App) -> Optional[str]:
     """Get the configured Wine Direct3D renderer."""
-    user_reg = Path(app.conf.wine_prefix) / "user.reg"
-    if not user_reg.is_file():
-        logging.debug("Wine user.reg not found: %s", user_reg)
-        return None
-
-    try:
-        contents = user_reg.read_text()
-        section = re.search(
-            r'^\[Software\\\\Wine\\\\Direct3D\].*?(?=^\[|\Z)',
-            contents,
-            re.MULTILINE | re.DOTALL | re.IGNORECASE,
-        )
-        if section:
-            renderer = re.search(
-                r'^"renderer"="([^"]+)"',
-                section.group(),
-                re.MULTILINE | re.IGNORECASE,
-            )
-            if renderer:
-                return renderer.group(1).lower()
-    except OSError:
-        logging.exception("Failed to read Wine renderer configuration")
-
-    return None
+    renderer = reg_string(read_registry(app).get(r"software\wine\direct3d", {}).get("renderer"))
+    return renderer.lower() if renderer else None
 
 
 def set_renderer(app: App, wine64_binary: str, value: str):
@@ -473,34 +523,100 @@ def set_renderer(app: App, wine64_binary: str, value: str):
     wine_reg_install(app, name, reg_text, wine64_binary)
 
 
-def media_support_enabled(app: App) -> bool:
-    user_reg = Path(app.conf.wine_prefix) / "user.reg"
-    if not user_reg.is_file():
-        return False
-    media = re.search(
-        r'^\[Software\\\\Wine\\\\MediaFoundation\].*?(?=^\[|\Z)',
-        user_reg.read_text(), re.MULTILINE | re.DOTALL | re.IGNORECASE,
-    )
-    return get_renderer(app) == "gl" and media is not None and re.search(
-        r'^"DisableGstByteStreamHandler"=dword:0*1\s*$', media.group(), re.MULTILINE | re.IGNORECASE,
-    ) is not None
+# DXVK in our oinos builds: they ship FaithLife-Community/dxvk (Logos fixes) together with
+# two scripts, run with WINEPREFIX set:
+#   dxvk-install    installs DXVK if the GPU has the Vulkan 1.4 DXVK needs and exits 0;
+#                   otherwise takes out any DXVK it installed, sets Wine's OpenGL renderer
+#                   (renderer=gl) and exits 3
+#   dxvk-uninstall  goes back to Wine's own Direct3D
+# The AppImage runs them as "<AppImage> dxvk-install"; the tarball has them in bin/ next to wine.
+# Wine itself never falls back between renderers: with renderer=vulkan (or DXVK) on a GPU that
+# can't do it, Direct3D fails and Logos draws everything in software, with no video picture.
+DXVK_DLLS = ("d3d8", "d3d9", "d3d10core", "d3d11", "dxgi")
 
 
-def toggle_media_support(app: App):
-    enabled = media_support_enabled(app)
-    renderer = "gdi" if enabled else "gl"
-    handler = "-" if enabled else "dword:00000001"
-    reg_text = rf'''REGEDIT4
+def dxvk_tool_command(app: App, tool: str) -> Optional[list[str]]:
+    """Command running the Wine build's dxvk-install or dxvk-uninstall, or None without one."""
+    appimage = app.conf.wine_appimage_path
+    if appimage is not None:
+        return [str(appimage), tool]
+    script = Path(app.conf.wine_binary).parent / tool
+    if script.is_file():
+        return [str(script)]
+    return None
 
-[HKEY_CURRENT_USER\Software\Wine\Direct3D]
-"renderer"="{renderer}"
 
-[HKEY_CURRENT_USER\Software\Wine\MediaFoundation]
-"DisableGstByteStreamHandler"={handler}
-'''
-    wine_reg_install(app, "toggle-media-support.reg", reg_text, app.conf.wine64_binary)
-    state = "disabled" if enabled else "enabled"
-    app.status(f"Experimental media support {state}. Restart {app.conf.faithlife_product}.", 100)
+def run_dxvk_tool(app: App, tool: str) -> Optional[int]:
+    """Runs dxvk-install or dxvk-uninstall; returns its exit code, or None if this Wine has none."""
+    command = dxvk_tool_command(app, tool)
+    if command is None:
+        return None
+    try:
+        result = subprocess.run(command, env=get_wine_env(app), capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.SubprocessError) as e:
+        logging.warning(f"Failed to run {tool}: {e}")
+        return None
+    logging.debug(f"{tool} exited with {result.returncode}: {result.stdout.strip()} {result.stderr.strip()}")
+    # An AppImage without the tool hands the name to Wine, which fails with another code.
+    if tool == "dxvk-install" and result.returncode not in (0, 3):
+        return None
+    return result.returncode
+
+
+def dxvk_enabled(app: App) -> bool:
+    """Whether the prefix has DXVK's DLLs set to native (as dxvk-install does)."""
+    overrides = read_registry(app).get(r"software\wine\dlloverrides", {})
+    value = reg_string(overrides.get("d3d9") or overrides.get("*d3d9"))
+    return (value or "").lower() == "native"
+
+
+def get_effective_renderer(app: App) -> Optional[str]:
+    """"dxvk" when DXVK is installed in the prefix, otherwise Wine's renderer setting."""
+    return "dxvk" if dxvk_enabled(app) else get_renderer(app)
+
+
+def set_dxvk_or_gl(app: App) -> Optional[str]:
+    """DXVK where the GPU supports it, otherwise Wine's OpenGL renderer.
+
+    Returns "dxvk" or "gl", or None if this Wine build doesn't ship dxvk-install."""
+    code = run_dxvk_tool(app, "dxvk-install")
+    if code is None:
+        return None
+    wineserver_wait(app)
+    return "dxvk" if code == 0 else "gl"
+
+
+def set_default_renderer(app: App):
+    """The renderer a new or repaired prefix gets.
+
+    Our oinos builds fix the menu glitches and popup crashes that Wine's Direct3D renderers
+    have with Logos, so with them use DXVK, or OpenGL where the GPU can't run DXVK. Any other
+    Wine keeps renderer=gdi."""
+    wine_release, _ = get_wine_release(app.conf.wine_binary)
+    if wine_supports_logos_updates(wine_release):
+        result = set_dxvk_or_gl(app)
+        if result is None:
+            result = "gl"
+            set_renderer(app, app.conf.wine64_binary, "gl")
+        logging.info(f"oinos Wine: renderer set to {result}.")
+        return
+    logging.debug("Setting renderer=gdi in wineprefix registry.")
+    set_renderer(app, app.conf.wine64_binary, "gdi")
+
+
+def select_renderer(app: App, choice: str) -> str:
+    """Switches the prefix to gdi, gl, vulkan or dxvk; returns a message for the user."""
+    if choice == "dxvk":
+        result = set_dxvk_or_gl(app)
+        if result is None:
+            return "This Wine build doesn't include DXVK; renderer unchanged."
+        if result == "gl":
+            return "This GPU can't run DXVK (it needs Vulkan 1.4); using Wine's OpenGL renderer instead."
+        return "Renderer set to DXVK."
+    if dxvk_enabled(app) and run_dxvk_tool(app, "dxvk-uninstall") is not None:
+        wineserver_wait(app)
+    set_renderer(app, app.conf.wine64_binary, choice)
+    return f"Renderer set to {choice}"
 
 
 def set_fontsmoothing_to_rgb(app: App, wine64_binary: str):
@@ -546,20 +662,7 @@ FONT_REPLACEMENTS: dict[str, list[str]] = {
 def set_font_replacements(app: App, wine64_binary: str):
     key = "HKCU\\Software\\Wine\\Fonts\\Replacements"
     for family, replacements in FONT_REPLACEMENTS.items():
-        # wine's reg.exe splits REG_MULTI_SZ data on a literal "\0"
-        process = run_wine_during_install(
-            app,
-            wine64_binary,
-            exe='reg',
-            exe_args=[
-                'add', key,
-                '/v', family,
-                '/t', 'REG_MULTI_SZ',
-                '/d', "\\0".join(replacements),
-                '/f',
-            ]
-        )
-        if process is None:
+        if not reg_add(app, wine64_binary, key, family, 'REG_MULTI_SZ', replacements):
             app.exit(f"Failed to spawn command to set font replacement for {family}")
     wineserver_wait(app)
 
@@ -581,6 +684,42 @@ def configure_printing(app: App, wine64_binary: str):
     wine_reg_install(app, name, reg_text, wine64_binary)
 
 
+# Reads the licence agreement from the installer with Windows Installer's own scripting
+# (msi.dll automation, run by cscript in the prefix): the text Faithlife's installer
+# shows on its licence page. Nothing extra to install.
+_LICENCE_VBS = r'''Set installer = CreateObject("WindowsInstaller.Installer")
+Set db = installer.OpenDatabase(WScript.Arguments(0), 0)
+Set view = db.OpenView("SELECT `Text` FROM `Control` WHERE `Type`='ScrollableText'")
+view.Execute
+Set rec = view.Fetch
+If Not rec Is Nothing Then
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set f = fso.CreateTextFile(WScript.Arguments(1), True, True)
+    f.Write rec.StringData(1)
+    f.Close
+End If
+'''
+
+
+def msi_licence_text(app: App, msi_path: str) -> Optional[str]:
+    """The installer's licence agreement as plain text, or None if it can't be read."""
+    with tempfile.TemporaryDirectory(prefix="oudedetai-licence-") as tmp:
+        script, out = Path(tmp) / "licence.vbs", Path(tmp) / "licence.txt"
+        script.write_text(_LICENCE_VBS)
+
+        def win(path: Path | str) -> str:
+            return "Z:" + str(Path(path).absolute()).replace("/", "\\")
+        try:
+            run_wine_completed_process(app, app.conf.wine64_binary, exe="cscript",
+                                       exe_args=["//nologo", win(script), win(msi_path), win(out)])
+            rtf = out.read_text(encoding="utf-16")
+        except (OSError, UnicodeError, subprocess.SubprocessError) as error:
+            logging.info(f"Couldn't read the licence from the installer: {error}")
+            return None
+    text = utils.rtf_to_text(rtf).strip()
+    return text or None
+
+
 def install_msi(app: App):
     app.status(f"Running MSI installer: {app.conf.faithlife_installer_name}.")
     # Define the Wine executable and initial arguments for msiexec
@@ -594,11 +733,11 @@ def install_msi(app: App):
     # Since the launcher only prompts for EULA, and askes where to install 
     # (which is pointless as it's in it's own wine prefix), we can just skip the interaction
     # entirely once we confirm the user has agreed to EULA (for Faithlife's sake)
-    if (
-        app.conf._overrides.agreed_to_faithlife_terms or
-        app.approve_or_exit("Do you agree to Faithlife's EULA? https://faithlife.com/terms")
-    ):
-        exe_args.append("/passive")
+    if not app.conf._overrides.agreed_to_faithlife_terms:
+        product = app.conf.faithlife_product
+        if not app.agree_to_licence(product, msi_licence_text(app, exe_args[1])):
+            app.exit(f"{product} can't be installed without accepting its licence agreement.", intended=True)
+    exe_args.append("/passive")
 
     # Add MST transform if needed
     release_version = app.conf.installed_faithlife_product_release or app.conf.faithlife_product_release
@@ -666,6 +805,11 @@ def install_fonts(app: App):
         # but in reality it's not.
         if registry_key == f"{f}.ttf" and (fonts_dir / f"{f}.ttf").exists():
             logging.debug(f"Found font {f} already in fonts dir, no need to install.")
+            continue
+        if shutil.which("cabextract") is None:
+            # winetricks needs cabextract to unpack the font. The font replacements
+            # (Arial → Liberation Sans) cover Arial, so carry on without it.
+            logging.warning(f"cabextract not found: not installing {f}; the font replacements cover it.")
             continue
         # Font isn't installed, continue to install with winetricks.
         app.status(f"Configuring font: {f}…", i / len(fonts))
@@ -797,7 +941,30 @@ def run_wine_application(
         )
 
 
+# Registry writes are safe to repeat. A rare Wine start-up crash (a new process jumping
+# to a bad entry address before it has run anything; seen once on Bazzite with
+# reg.exe, exit code 5) shouldn't stop an install, so these get one retry.
+_IDEMPOTENT_TOOLS = ("reg", "regedit.exe")
+
+
 def run_wine_during_install(
+    app: App,
+    wine_binary: str | Path,
+    exe=None,
+    exe_args=list(),
+    init=False,
+    additional_wine_dll_overrides: Optional[str] = None,
+) -> Optional[subprocess.Popen[bytes]]:
+    try:
+        return _run_wine_during_install_once(app, wine_binary, exe, exe_args, init, additional_wine_dll_overrides)
+    except subprocess.CalledProcessError as error:
+        if exe not in _IDEMPOTENT_TOOLS:
+            raise
+        logging.warning(f"{exe} failed ({error.returncode}); trying once more.")
+        return _run_wine_during_install_once(app, wine_binary, exe, exe_args, init, additional_wine_dll_overrides)
+
+
+def _run_wine_during_install_once(
     app: App,
     wine_binary: str | Path,
     exe=None,
@@ -940,10 +1107,11 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
     winepath = Path(app.conf.wine_binary)
     if winepath.name != 'wine64':  # AppImage
         winepath = Path(app.conf.wine64_binary)
+    overrides = app.conf.wine_dll_overrides
     wine_env_defaults = {
         'WINE': str(winepath),
         'WINEDEBUG': app.conf.wine_debug,
-        'WINEDLLOVERRIDES': app.conf.wine_dll_overrides,
+        'WINEDLLOVERRIDES': overrides,
         'WINELOADER': str(winepath),
         'WINEPREFIX': app.conf.wine_prefix,
         'WINESERVER': app.conf.wineserver_binary,
@@ -953,6 +1121,8 @@ def get_wine_env(app: App, additional_wine_dll_overrides: Optional[str]=None) ->
 
     if additional_wine_dll_overrides is not None:
         wine_env["WINEDLLOVERRIDES"] += ";" + additional_wine_dll_overrides
+
+    appimage_env(app.conf.wine_binary, wine_env)
 
     updated_env = {k: wine_env.get(k) for k in wine_env_defaults.keys()}
 
@@ -965,9 +1135,30 @@ def is_wine_tarball(path: Path) -> bool:
     return path.is_file() and path.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz"))
 
 
+def _unpacked_wine_build(app: App) -> Optional[Path]:
+    """The recommended tarball's build if it's already unpacked here (its folder is named
+    after the tarball, as utils.installed_wine_build_name expects), so choosing or
+    updating to a build we already have doesn't download and unpack it again."""
+    if app.conf.wine_binary != constants.WINE_RECOMMENDED_TARBALL_SIGIL:
+        return None
+    build = utils.wine_build_name(Path(app.conf.wine_download_file_name).name)
+    build_dir = Path(app.conf.wine_distribution_dir) / build
+    wine_path = build_dir / "bin" / "wine"
+    if wine_path.is_file() and (build_dir / "bin" / "wineserver").is_file():
+        return wine_path
+    return None
+
+
 def setup_wine(app: App):
     from .installer import download_wine, create_wine_symlinks
-    downloaded_file = download_wine(app)
+    unpacked = _unpacked_wine_build(app)
+    if unpacked is not None:
+        app.status(f"Using {unpacked.parent.parent.name}, already on this computer…")
+        app.conf.wine_binary = str(unpacked.absolute())
+        app.conf.wine_appimage_path = None
+        downloaded_file = None
+    else:
+        downloaded_file = download_wine(app)
     if downloaded_file is None and is_wine_tarball(Path(app.conf.wine_binary)):
         # A tarball chosen with "Choose File" is unpacked like a downloaded one.
         downloaded_file = Path(app.conf.wine_binary)
@@ -999,3 +1190,6 @@ def setup_wine(app: App):
         app.conf.wine_appimage_path = None
 
     create_wine_symlinks(app)
+    if app.conf.wine_appimage_path is not None:
+        system.ensure_appimage_runtime(app, str(app.conf.wine_appimage_path))
+    update_prefix_for_new_wine(app)

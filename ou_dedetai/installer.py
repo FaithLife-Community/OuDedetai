@@ -6,9 +6,11 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+
 from ou_dedetai.app import App, UserExitedFromAsk
 
 from . import constants
+from . import desktop_integrations
 from . import network
 from . import system
 from . import utils
@@ -70,7 +72,10 @@ def ensure_sys_deps(app: App):
     app.installer_step += 1
     app.status("Ensuring system dependencies are met…")
 
-    if not app.conf.skip_install_system_dependencies:
+    if not constants.INSTALL_SYSTEM_PACKAGES:
+        # FIXME: remove the package lists once testing confirms they aren't needed.
+        logging.info("System packages not installed (set OUDEDETAI_INSTALL_DEPS=1 to install them).")
+    elif not app.conf.skip_install_system_dependencies:
         utils.install_dependencies(app)
         logging.debug("> Done.")
     else:
@@ -153,12 +158,10 @@ def check_for_known_bugs(app: App):
             logging.warning("Detected chromium based browser")
         elif snap_or_flatpak_detected:
             logging.warning("Detected snap or flatpak browser")
-        if app.conf.wine_binary == constants.WINE_RECOMMENDED_SIGIL:
-            logging.info("Switching user to the beta wine branch due to issue #435")
-            app.conf.wine_binary = constants.WINE_BETA_SIGIL
-        elif app.conf.wine_binary == constants.WINE_BETA_SIGIL:
-            # No need to do anything
-            pass
+        if app.conf.wine_binary in (constants.WINE_RECOMMENDED_SIGIL, constants.WINE_RECOMMENDED_TARBALL_SIGIL,
+                                    constants.WINE_BETA_SIGIL):
+            # The recommended Wine (the bundled build) has the fix.
+            logging.info("Recommended Wine already includes the fix for issue #435")
         else:
             logging.warning("Sign In button may not launch the browser due to issue #435")
 
@@ -203,7 +206,11 @@ def check_system_compatibility(app: App):
 
 def update_to_latest_wine(app: App):
     """Update a managed Wine installation to the currently recommended build."""
-    if app.conf.wine_appimage_path is not None:
+    if app.conf.wine_appimage_path is not None and app.conf.wine_release_channel == "dev":
+        # Prereleases: an AppImage install moves onto the oinos tarball.
+        app.conf.wine_appimage_path = None
+        app.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL
+    elif app.conf.wine_appimage_path is not None:
         app.conf.wine_binary = constants.WINE_RECOMMENDED_APPIMAGE_SIGIL
     elif app.conf.is_wine_binary_in_distribution:
         app.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL
@@ -211,7 +218,55 @@ def update_to_latest_wine(app: App):
         logging.debug("System wine detected - cowardly refusing to upgrade")
         return
 
+    was_oinos = _running_oinos(app)
     setup_wine(app)
+    _finish_wine_switch(app, was_oinos)
+
+
+def use_wine_release(app: App, channel: str) -> None:
+    """Switch to the newest Wine bundle (tarball) on a release channel: "dev" for the newest
+    oinos prerelease, "stable" for the newest full release. Later updates follow that channel."""
+    app.conf.wine_release_channel = channel
+    app.conf.wine_appimage_path = None
+    app.conf.wine_binary = constants.WINE_RECOMMENDED_TARBALL_SIGIL
+    was_oinos = _running_oinos(app)
+    setup_wine(app)
+    _finish_wine_switch(app, was_oinos)
+
+
+def use_wine_file(app: App, path: str) -> None:
+    """Switch to a Wine AppImage or tarball chosen from the computer, then apply Ou Dedetai's
+    settings for it, as the other ways of changing Wine do."""
+    was_oinos = _running_oinos(app)
+    app.conf.wine_appimage_path = path
+    utils.set_appimage_symlink(app)
+    _finish_wine_switch(app, was_oinos)
+
+
+def _running_oinos(app: App) -> bool:
+    try:
+        release, _ = wine.get_wine_release(app.conf.wine_binary)
+    except Exception as e:  # no Wine yet, or one that won't run
+        logging.debug(f"Couldn't read the Wine version: {e}")
+        return False
+    return wine.wine_supports_logos_updates(release)
+
+
+def _finish_wine_switch(app: App, was_oinos: bool = True) -> None:
+    """After a new Wine build is in place: apply Ou Dedetai's settings for it (e.g. an
+    AppImage install moving onto oinos gets FFmpeg media and Logos self-updates), and say
+    plainly that Logos can be started.
+
+    Moving onto oinos from another Wine also sets the renderer oinos installs get (DXVK, or
+    OpenGL where the GPU can't run it): the old renderer was chosen for the old Wine."""
+    if (Path(app.conf.wine_prefix) / "system.reg").is_file():
+        if not was_oinos and _running_oinos(app):
+            app.status("Choosing the renderer for this Wine build…")
+            wine.set_default_renderer(app)
+        app.status("Applying Ou Dedetai's settings for this Wine build…")
+        apply_wine_config(app)
+    build = utils.installed_wine_build_name(app) or "the new build"
+    app.status(f"Wine is ready ({build}). You can start {app.conf.faithlife_product}.", 100)
 
 
 def download_wine(app: App) -> Optional[Path]:
@@ -313,11 +368,13 @@ def ensure_wineprefix_config(app: App):
     app.installer_step += 1
     app.status("Ensuring wineprefix configuration…")
 
-    # Force renderer=gdi in registry.
-    logging.debug("Setting renderer=gdi in wineprefix registry.")
-    wine.set_renderer(app=app, wine64_binary=app.conf.wine64_binary, value="gdi")
+    # renderer: DXVK or gl with our oinos Wine builds, gdi with others.
+    wine.set_default_renderer(app)
 
     apply_wine_config(app)
+
+    # Speech: install Akousousin if needed and register it with this new prefix.
+    system.ensure_akousousin(app=app)
 
 
 def apply_wine_config(app: App):
@@ -338,6 +395,15 @@ def apply_wine_config(app: App):
     logging.debug("Configuring wineprefix for printing.")
     wine.configure_printing(app=app, wine64_binary=app.conf.wine64_binary)
 
+    # Stand-ins for Windows fonts Logos uses; WPF fails fast if even Arial is missing.
+    wine.set_font_replacements(app, app.conf.wine64_binary)
+
+    # Our own Wine builds: Logos may update itself, and media goes through FFmpeg.
+    # (Also re-applied each time Logos starts; done here so a fresh install is complete.)
+    release, _ = wine.get_wine_release(app.conf.wine_binary)
+    if wine.wine_supports_logos_updates(release):
+        wine.allow_logos_updates(app, app.conf.wine64_binary)
+
 
 def update_wine_config(app: App):
     """Re-apply the install's Wine settings to an existing install."""
@@ -353,6 +419,10 @@ def update_wine_config(app: App):
         return
     app.status("Updating Wine configuration…")
     apply_wine_config(app)
+    # Speech: install and register Akousousin if it's missing. An installed one is
+    # left alone; "Update Akousousin" updates and re-registers it.
+    if not system.akousousin_installed():
+        system.ensure_akousousin(app=app)
     app.status("Wine configuration updated.")
 
 
@@ -363,10 +433,6 @@ def ensure_fonts(app: App):
     app.installer_step += 1
 
     wine.install_fonts(app)
-
-    # Open stand-ins for Windows fonts Logos needs (print preview crashes without them).
-    app.status("Configuring font replacements…")
-    wine.set_font_replacements(app, app.conf.wine64_binary)
 
 
 def ensure_icu_data_files(app: App):
@@ -407,10 +473,28 @@ def ensure_product_installed(app: App):
     # Clear installed version cache
     app.conf._installed_faithlife_product_release = None
 
+    ensure_beta_product_logging(app)
+
     # Clean up temp files, etc.
     utils.clean_all()
 
     logging.debug(f"> {app.conf.logos_exe=}")
+
+
+def ensure_beta_product_logging(app: App):
+    """Beta/dev builds: turn on Logos's own logging unless the user has chosen.
+
+    A crash dump only shows that a .NET exception went unhandled; Logos.log says
+    which one. Release builds keep logging off. FIXME: drop once 4.0.0 is out."""
+    if "beta" not in constants.LLI_CURRENT_VERSION and "dev" not in constants.LLI_CURRENT_VERSION:
+        return
+    if app.conf._raw.faithlife_product_logging is not None:
+        return  # the user turned it on or off themselves
+    logging.info("Beta build: enabling Logos logging so crashes can be diagnosed.")
+    try:
+        app.logos.switch_logging(action='enable')
+    except Exception:
+        logging.warning("Couldn't enable Logos logging.", exc_info=True)
 
 
 def ensure_config_file(app: App):
@@ -439,6 +523,41 @@ def ensure_launcher_executable(app: App):
         logging.debug(f"> File exists?: {launcher_exe}: {launcher_exe.is_file()}")
     else:
         app.status("Running from source. Skipping launcher copy.")
+
+
+def offer_to_replace_installed(app: App) -> bool:
+    """When a newer Ou Dedetai (e.g. a downloaded test build) is run from somewhere other than
+    the install, offer to put it in place of the installed copy, so the shortcuts, the tray and
+    updates all use it. An older one is never put in place: Ou Dedetai doesn't go back.
+    Returns True if it was replaced."""
+    if constants.RUNMODE != "binary" or not app.conf._raw.install_dir:
+        return False
+    launcher = Path(app.conf.install_dir) / constants.BINARY_NAME
+    running = Path(os.path.realpath(sys.executable))
+    if not launcher.is_file() or running == Path(os.path.realpath(launcher)):
+        return False
+    try:
+        installed = utils.get_lli_release_version(launcher)
+    except (OSError, subprocess.SubprocessError) as e:
+        logging.debug(f"Couldn't read the installed Ou Dedetai's version: {e}")
+        return False
+    if not utils.is_newer_version(constants.LLI_CURRENT_VERSION, installed, strict=True):
+        return False
+    if not app.approve(
+        f"Use this {constants.APP_NAME} ({constants.LLI_CURRENT_VERSION}) from now on?",
+        f"It replaces the installed {constants.APP_NAME} ({installed}) in {app.conf.install_dir}, "
+        "so the app menu, the Logos shortcuts and updates all use it. "
+        "There's no going back to the older version.",
+    ):
+        return False
+    temporary = launcher.with_name(f"{constants.BINARY_NAME}.new")
+    shutil.copy(running, temporary)
+    temporary.chmod(0o755)
+    temporary.replace(launcher)  # works even while the old copy is running
+    logging.info(f"Replaced {launcher} ({installed}) with {running} ({constants.LLI_CURRENT_VERSION}).")
+    create_launcher_shortcuts(app)
+    app.status(f"{constants.APP_NAME} {constants.LLI_CURRENT_VERSION} is now the installed copy.", 100)
+    return True
 
 
 def ensure_launcher_shortcuts(app: App):
@@ -472,6 +591,7 @@ def install(app: App):
     app.status("Install Complete!", 100)
     # Trigger a config update event to refresh the UIs
     app._config_updated_event.set()
+    desktop_integrations.offer(app)
 
 
 def get_progress_pct(current, total):
@@ -543,8 +663,10 @@ def create_desktop_file(
         wm_class: str | None = None,
         additional_keywords: list[str] | None = None,
         mime_types: list[str] | None = None,
-        terminal: Optional[bool] = None
+        terminal: Optional[bool] = None,
+        actions: list[tuple[str, str, str]] | None = None,
 ):
+    """``actions`` are right-click entries: (id, name, command)."""
     contents = f"""[Desktop Entry]
 Name={app_name}
 Type=Application
@@ -567,6 +689,11 @@ Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(addit
     else:
         contents += "StartupNotify=false\n"
 
+    if actions:
+        contents += f"Actions={';'.join(a[0] for a in actions)};\n"
+        for action_id, name, command in actions:
+            contents += f"\n[Desktop Action {action_id}]\nName={name}\nExec={command}\n"
+
     xdg_data_home = Path(constants.XDG_DATA_HOME)
     launcher_path = xdg_data_home / "applications" / filename
     if launcher_path.is_file():
@@ -580,6 +707,16 @@ Keywords=Logos;Verbum;FaithLife;Bible;Control;Christianity;Jesus;{";".join(addit
         f.write(contents)
     os.chmod(launcher_path, 0o755)
     return launcher_path
+
+
+def copy_icons(install_dir: str | Path, flproduct: str) -> None:
+    """Copy our icons next to the install, replacing older ones (the shortcuts point here)."""
+    app_dir = Path(install_dir) / "data"
+    app_dir.mkdir(exist_ok=True)
+    for src in (constants.APP_IMAGE_DIR / "icon.png", constants.APP_IMAGE_DIR / f"{flproduct}-128-icon.png"):
+        target = app_dir / src.name
+        if not target.is_file() or target.read_bytes() != src.read_bytes():
+            shutil.copy(src, target)
 
 
 def create_launcher_shortcuts(app: App):
@@ -616,12 +753,7 @@ def create_launcher_shortcuts(app: App):
         logging.info(f"Not creating launcher shortcuts, {constants.RUNMODE} already handles this")
         return
 
-    for src, path in [(app_icon_src, app_icon_path), (logos_icon_src, logos_icon_path)]:
-        if not path.is_file():
-            app_dir.mkdir(exist_ok=True)
-            shutil.copy(src, path)
-        else:
-            logging.info(f"Icon found at {path}.")
+    copy_icons(installdir, flproduct)
 
     # Create Logos/Verbum desktop file.
     logos_path = create_desktop_file(
@@ -632,7 +764,13 @@ def create_launcher_shortcuts(app: App):
         exec_cmd=f"{oudedetai_executable} --run-installed-app",
         icon_path=logos_icon_path,
         wm_class=f"{flproduct.lower()}.exe",
-        additional_keywords=["Catholic"] if flproduct == "Verbum" else None
+        additional_keywords=["Catholic"] if flproduct == "Verbum" else None,
+        # Right-click entries. A fixed list (saved layouts live in the Run menu and tray).
+        actions=[
+            ("todays-reading", "Today's reading", f"{oudedetai_executable} --open-todays-reading"),
+            ("stop", f"Stop {flproduct}", f"{oudedetai_executable} --stop-installed-app"),
+            ("oudedetai", constants.APP_NAME, oudedetai_executable),
+        ],
     )
     logging.debug(f"> File exists?: {logos_path}: {logos_path.is_file()}")
     # Create Ou Dedetai desktop file.
@@ -661,16 +799,14 @@ def create_launcher_shortcuts(app: App):
         filename=url_handler_desktop_filename,
         app_name=f"{flproduct} URL Handler",
         comment="Handles logos4: and libronixdls: URL Schemes",
-        exec_cmd=(
-            f"/bin/sh -c \""
-            f"({oudedetai_executable} --wine '{app.conf.logos_exe_windows_path.replace('\\', '\\\\')}' ''%u'') "
-            "|| (echo 'Failed to spawn logos. If you are logging in please hit the link for not being redirected "
-            "automatically then the link for still having trouble. If you contact support please attach this log'"
-            "; sleep 60; exit 1); wait\""
-        ),
+        # Logos running: the link is handed straight to it, through Wine.
+        # Not running: Logos starts the normal way with the link, so the tray and
+        # Ou Dedetai's monitoring come up as from the shortcut. Errors go to the log
+        # (Troubleshooting → Save a support report) instead of a terminal window.
+        exec_cmd=f"{oudedetai_executable} --run-installed-app %u",
         icon_path=app_icon_path,
         mime_types=["x-scheme-handler/logos4", "x-scheme-handler/libronixdls"],
-        terminal=True
+        terminal=False
     )
     # For most users Logos will be "installed" at this point, if we fail here there is no easy
     # way in the current flow to re-apply these - and this isn't required for Logos to function,

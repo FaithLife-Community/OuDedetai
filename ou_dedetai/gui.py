@@ -1,453 +1,154 @@
-from tkinter import Toplevel
-from tkinter import BooleanVar
-from tkinter import font
-from tkinter import IntVar
-from tkinter import messagebox
-from tkinter import simpledialog
-from tkinter import StringVar
-from tkinter import Text
-from tkinter.ttk import Button
-from tkinter.ttk import Checkbutton
-from tkinter.ttk import Combobox
-from tkinter.ttk import Frame
-from tkinter.ttk import Label
-from tkinter.ttk import Progressbar
-from tkinter.ttk import Radiobutton
-from tkinter.ttk import Separator
-
+from PySide6 import QtWidgets
 from ou_dedetai.app import App
 
-from . import constants
+from .gui_style import tr
 
 
-class ChoiceGui(Frame):
-    _default_prompt: str = "Choose…"
+class ChoiceGui(QtWidgets.QWidget):
+    _default_prompt = "Choose…"
 
     def __init__(self, root, question: str, options: list[str], **kwargs):
-        super(ChoiceGui, self).__init__(root, **kwargs)
-        self.italic = font.Font(slant='italic')
-        self.config(padding=5)
-        self.grid(row=0, column=0, sticky='nwes')
+        super().__init__(root)
+        self.setContentsMargins(5, 5, 5, 5)
+        layout = QtWidgets.QGridLayout(self)
 
-        # Label Row
-        self.question_label = Label(self, text=question)
-        # drop-down menu
-        self.answer_var = StringVar(value=self._default_prompt)
-        self.answer_dropdown = Combobox(self, textvariable=self.answer_var)
-        self.answer_dropdown.config(postcommand=self._configure_dropdown)
-        self.answer_dropdown['values'] = options
-        if len(options) > 0:
-            self.answer_dropdown.set(options[0])
+        self.question_label = QtWidgets.QLabel(question)
+        self.answer_dropdown = QtWidgets.QComboBox()
+        self.answer_dropdown.addItems(options)
+        if options:
+            self.answer_dropdown.setCurrentIndex(0)
 
-        # Cancel/Okay buttons row.
-        self.cancel_button = Button(self, text="Cancel")
-        self.okay_button = Button(self, text="Confirm")
+        self.cancel_button = QtWidgets.QPushButton(tr("Cancel"))
+        self.okay_button = QtWidgets.QPushButton(tr("Confirm"))
 
-        # Place widgets.
-        row = 0
-        self.question_label.grid(column=0, row=row, sticky='nws', pady=2, padx=8)
-        self.columnconfigure(1, weight=1)
-        self.answer_dropdown.grid(column=1, row=row, sticky='ew', pady=2, columnspan=2)
-        row += 1
-        self.cancel_button.grid(column=1, row=row, sticky='e', pady=2)
-        self.okay_button.grid(column=2, row=row, sticky='e', pady=2)
-
-    def _configure_dropdown(self):
-        tk = self.answer_dropdown.tk
-        popdown = tk.call('ttk::combobox::PopdownWindow', self.answer_dropdown)
-        listbox = f'{popdown}.f.l'
-        scrollbar = f'{popdown}.f.xscroll'
-        if not tk.call('winfo', 'exists', scrollbar):
-            tk.call('ttk::scrollbar', scrollbar, '-orient', 'horizontal',
-                    '-command', (listbox, 'xview'))
-            tk.call('grid', scrollbar, '-row', 1, '-column', 0, '-sticky', 'ew')
-            tk.call(listbox, 'configure', '-xscrollcommand', (scrollbar, 'set'))
+        layout.addWidget(self.question_label, 0, 0)
+        layout.addWidget(self.answer_dropdown, 0, 1, 1, 2)
+        layout.addWidget(self.cancel_button, 1, 1)
+        layout.addWidget(self.okay_button, 1, 2)
 
 
-class InfoGui(Frame):
-    _default_prompt: str = "Info"
+class InfoGui(QtWidgets.QWidget):
+    _default_prompt = "Info"
 
     def __init__(self, root, message: str, **kwargs):
-        super(InfoGui, self).__init__(root, **kwargs)
-        self.italic = font.Font(slant='italic')
-        self.config(padding=5)
-        self.grid(row=0, column=0, sticky='nwes')
+        super().__init__(root)
+        self.setContentsMargins(5, 5, 5, 5)
+        layout = QtWidgets.QVBoxLayout(self)
 
-        # Label Row
-        h = len(message.split('\n')) - 1
-        self.info_text = Text(self, height=h)
-        self.info_text.insert(1.0, message)
-        self.info_text.config(state='disabled')
+        self.info_text = QtWidgets.QPlainTextEdit(message)
+        self.info_text.setReadOnly(True)
+        self.info_text.setMinimumWidth(350)
 
-        # Cancel/Okay buttons row.
-        self.okay_button = Button(self, text="Okay")
+        self.okay_button = QtWidgets.QPushButton(tr("OK"))
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(self.okay_button)
 
-        # Place widgets.
-        row = 0
-        self.info_text.grid(column=0, row=row, sticky='nws', pady=2, padx=8)
-        row += 1
-        self.okay_button.grid(column=2, row=row, sticky='e', pady=2)
+        layout.addWidget(self.info_text)
+        layout.addLayout(button_layout)
 
 
-class InstallerGui(Frame):
+class InstallerGui(QtWidgets.QWidget):
     def __init__(self, root, app: App, **kwargs):
-        super(InstallerGui, self).__init__(root, **kwargs)
-
-        self.italic = font.Font(slant='italic')
-        self.config(padding=5)
-        self.grid(row=0, column=0, sticky='nwes')
-
+        super().__init__(root)
         self.app = app
+        self.setContentsMargins(5, 5, 5, 5)
+        layout = QtWidgets.QGridLayout(self)
 
-        # Product/Version row.
-        self.product_label = Label(self, text="Product & Version: ")
-        # product drop-down menu
-        self.productvar = StringVar(value='Choose product…')
-        self.product_dropdown = Combobox(self, textvariable=self.productvar)
-        self.product_dropdown.state(['readonly'])
-        self.product_dropdown['values'] = ('Logos', 'Verbum')
-        if app.conf._raw.faithlife_product in self.product_dropdown['values']:
-            self.product_dropdown.set(app.conf._raw.faithlife_product)
-        # version drop-down menu
-        self.versionvar = StringVar()
-        self.version_dropdown = Combobox(
-            self,
-            width=5,
-            textvariable=self.versionvar
-        )
-        self.version_dropdown.state(['readonly'])
-        #TODO: Remove this dropdown
-        self.version_dropdown['values'] = ('10')
-        self.versionvar.set(self.version_dropdown['values'][0])
-        if app.conf._raw.faithlife_product_version in self.version_dropdown['values']:
-            self.version_dropdown.set(app.conf._raw.faithlife_product_version)
+        self.product_label = QtWidgets.QLabel(tr("Product:"))
+        self.product_dropdown = QtWidgets.QComboBox()
+        self.product_dropdown.setEditable(False)
+        self.product_dropdown.addItems(["Logos", "Verbum"])
+        if app.conf._raw.faithlife_product:
+            self.product_dropdown.setCurrentText(
+                app.conf._raw.faithlife_product
+            )
 
-        # Release row.
-        self.release_label = Label(self, text="Release: ")
-        # release drop-down menu
-        self.releasevar = StringVar(value='Choose release…')
-        self.release_dropdown = Combobox(self, textvariable=self.releasevar)
-        self.release_dropdown.state(['readonly'])
-        self.release_dropdown['values'] = []
+        self.version_label = QtWidgets.QLabel(tr("Version:"))
+        self.version_dropdown = QtWidgets.QComboBox()
+        self.version_dropdown.setEditable(False)
+        self.version_dropdown.setFixedWidth(65)
+        # TODO: Remove this dropdown.
+        self.version_dropdown.addItems(["10"])
+        if app.conf._raw.faithlife_product_version:
+            self.version_dropdown.setCurrentText(
+                app.conf._raw.faithlife_product_version
+            )
+
+        self.release_label = QtWidgets.QLabel(tr("Release:"))
+        self.release_dropdown = QtWidgets.QComboBox()
+        self.release_dropdown.setEditable(False)
         if app.conf._raw.faithlife_product_release:
-            self.release_dropdown['values'] = [app.conf._raw.faithlife_product_release]
-            self.releasevar.set(app.conf._raw.faithlife_product_release)
+            self.release_dropdown.addItem(
+                app.conf._raw.faithlife_product_release
+            )
 
-        # Wine row.
-        self.wine_label = Label(self, text="Wine exe: ")
-        self.winevar = StringVar()
-        self.wine_dropdown = Combobox(self, textvariable=self.winevar)
-        self.wine_dropdown.state(['readonly'])
-        self.wine_dropdown['values'] = []
-        # Conditional only if wine_binary is actually set, don't prompt if it's not
-        if self.app.conf._raw.wine_binary:
-            self.wine_dropdown['values'] = [self.app.conf.wine_binary]
-            self.winevar.set(self.app.conf.wine_binary)
+        self.wine_label = QtWidgets.QLabel(tr("Wine:"))
+        self.wine_dropdown = QtWidgets.QComboBox()
+        self.wine_dropdown.setEditable(False)
+        if app.conf._raw.wine_binary:
+            self.wine_dropdown.addItem(app.conf.wine_binary)
 
-        # Skip Dependencies row.
-        self.skipdeps_label = Label(self, text="Install Dependencies: ")
-        self.skipdepsvar = BooleanVar(value=not self.app.conf.skip_install_system_dependencies) 
-        self.skipdeps_checkbox = Checkbutton(self, variable=self.skipdepsvar)
-
-        # Cancel/Okay buttons row.
-        self.cancel_button = Button(self, text="Cancel")
-        self.okay_button = Button(self, text="Install")
-        self.okay_button.state(['disabled'])
-
-        # Place widgets.
-        row = 0
-        self.product_label.grid(column=0, row=row, sticky='nws', pady=2)
-        self.product_dropdown.grid(column=1, row=row, sticky='w', pady=2)
-        self.version_dropdown.grid(column=2, row=row, sticky='w', pady=2)
-        row += 1
-        self.release_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.release_dropdown.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        self.wine_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.wine_dropdown.grid(column=1, row=row, columnspan=3, sticky='we', pady=2)
-        row += 1
-        self.skipdeps_label.grid(column=0, row=row, sticky='nws', pady=2)
-        self.skipdeps_checkbox.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        self.cancel_button.grid(column=3, row=row, sticky='e', pady=2)
-        self.okay_button.grid(column=4, row=row, sticky='e', pady=2)
-        row += 1
-
-class StatusGui(Frame):
-    def __init__(self, root, *args, **kwargs):
-        super(StatusGui, self).__init__(root, **kwargs)
-        self.config(padding=5)
-        self.grid(row=0, column=0, sticky='nwes')
-
-        self.statusvar = StringVar()
-        self.message_label = Label(self, textvariable=self.statusvar, wraplength=350, justify="left") 
-        # Progress bar
-        self.progressvar = IntVar(value=0)
-        self.progress = Progressbar(
-            self,
-            mode='indeterminate',
-            orient='horizontal',
-            variable=self.progressvar,
-            # This length sets the minimum length of the progress bar
-            length=350
+        self.skipdeps_label = QtWidgets.QLabel(tr("Install system packages:"))
+        self.skipdeps_checkbox = QtWidgets.QCheckBox()
+        self.skipdeps_checkbox.setChecked(
+            not app.conf.skip_install_system_dependencies
         )
-        self.progress.state(['disabled'])
+
+        self.cancel_button = QtWidgets.QPushButton(tr("Cancel"))
+        self.okay_button = QtWidgets.QPushButton(tr("Install"))
+        self.okay_button.setEnabled(False)
+
+        widgets = [
+            (self.product_label, self.product_dropdown),
+            (self.version_label, self.version_dropdown),
+            (self.release_label, self.release_dropdown),
+            (self.wine_label, self.wine_dropdown),
+            (self.skipdeps_label, self.skipdeps_checkbox),
+        ]
+
+        for row, (label, widget) in enumerate(widgets):
+            layout.addWidget(label, row, 0)
+            layout.addWidget(widget, row, 1, 1, 3)
+
+        layout.addWidget(self.cancel_button, 5, 2)
+        layout.addWidget(self.okay_button, 5, 3)
+
+
+class StatusGui(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QtWidgets.QVBoxLayout(self)
+        self.message_label = QtWidgets.QLabel()
+        self.message_label.setWordWrap(True)
+        self.progress = QtWidgets.QProgressBar()
+        self.progress.setRange(0, 0)
+        self.progress.setVisible(False)
+        layout.addWidget(self.message_label)
+        layout.addWidget(self.progress)
+
+    def set_status(self, message: str, percent: int | None = None):
+        self.message_label.setText(message.strip())
+        if percent is None:
+            self.progress.setRange(0, 0)
+            self.progress.setVisible(True)
+        else:
+            self.progress.setRange(0, 100)
+            self.progress.setValue(percent)
+            self.progress.setVisible(percent > 0)
 
 
 class StatusWithLabelGui(StatusGui):
     def __init__(self, root, label: str, *args, **kwargs):
-        super(StatusWithLabelGui, self).__init__(root, **kwargs)
+        super().__init__(root, **kwargs)
 
-        self.app_label = Label(self, text=label, font=('TkDefaultFont', 16))
-        self.app_label.grid(column=0, row=0, sticky='we', pady=2)
-        Separator(self, orient='horizontal').grid(column=0, row=1, sticky='ew')
-        self.message_label.grid(column=0, row=2, sticky='we', pady=2)
-        self.progress.grid(column=0, row=3, sticky='we', pady=2)
+        self.app_label = QtWidgets.QLabel(label)
+        self.app_label.setStyleSheet("font-size: 16pt;")
 
-
-class ControlGui(StatusGui):
-    def __init__(self, root, *args, **kwargs):
-        super(ControlGui, self).__init__(root, **kwargs)
-
-        # Run/install app button
-        self.app_buttonvar = StringVar()
-        self.app_buttonvar.set("Install")
-        self.app_label = Label(self, text="FaithLife app")
-        self.app_button = Button(self, textvariable=self.app_buttonvar)
-
-        self.app_install_advancedvar = StringVar()
-        self.app_install_advancedvar.set("Advanced Install")
-        self.app_install_advanced = Button(self, textvariable=self.app_install_advancedvar) 
-
-        # Installed app actions
-        # -> Run indexing, Remove library catalog, Remove all index files
-        s1 = Separator(self, orient='horizontal')
-        self.actionsvar = StringVar()
-        self.actions_label = Label(self, text="App actions: ")
-        self.run_indexing_radio = Radiobutton(
-            self,
-            text="Run indexing",
-            variable=self.actionsvar,
-            value='run-indexing',
+        self.layout().insertWidget(0, self.app_label)
+        self.layout().insertWidget(
+            1,
+            QtWidgets.QFrame(
+                frameShape=QtWidgets.QFrame.Shape.HLine
+            ),
         )
-        self.remove_library_catalog_radio = Radiobutton(
-            self,
-            text="Remove library catalog",
-            variable=self.actionsvar,
-            value='remove-library-catalog',
-        )
-        self.remove_index_files_radio = Radiobutton(
-            self,
-            text="Remove all index files",
-            variable=self.actionsvar,
-            value='remove-index-files',
-        )
-        self.uninstall_radio = Radiobutton(
-            self,
-            text="Uninstall",
-            variable=self.actionsvar,
-            value='uninstall',
-        )
-        self.install_icu_radio = Radiobutton(
-            self,
-            text="Install/Update ICU files",
-            variable=self.actionsvar,
-            value='install-icu',
-        )
-        self.actions_button = Button(self, text="Run action")
-        self.actions_button.state(['disabled'])
-        s2 = Separator(self, orient='horizontal')
-
-        # Edit config button
-        self.config_label = Label(self, text="Edit config file")
-        self.config_button = Button(self, text="Edit …")
-        # Install deps button
-        self.deps_label = Label(self, text="Install dependencies")
-        self.deps_button = Button(self, text="Install")
-        # Update Wine configuration button
-        self.wine_config_label = Label(self, text="Update Wine configuration")
-        self.wine_config_button = Button(self, text="Update")
-        # Update Faithlife product button
-        self.update_product_labelvar = StringVar(value="Update Faithlife Product")
-        self.update_product_label = Label(self, textvariable=self.update_product_labelvar)
-        self.update_product_button = Button(self, text="Update")
-        # Backup/restore data buttons
-        self.backups_label = Label(self, text="Backup/restore data")
-        self.backup_button = Button(self, text="Backup")
-        self.restore_button = Button(self, text="Restore")
-        # The normal text has three lines. Make this the same 
-        # in order for tkinker to know how large to draw it
-        self.update_lli_label = Label(self, text=f"Update {constants.APP_NAME}\n\n")
-        self.update_lli_button = Button(self, text="Update")
-        # AppImage buttons
-        self.latest_appimage_label = Label(
-            self,
-            text="Update to Latest AppImage"
-        )
-        self.latest_appimage_button = Button(self, text="Run")
-        self.set_appimage_label = Label(self, text="Set Runner (AppImage or tarball)")
-        self.set_appimage_button = Button(self, text="Run")
-        # App logging toggle
-        self.loggingstatevar = StringVar(value='Enable')
-        self.logging_label = Label(self, text="Toggle app logging")
-        self.logging_button = Button(self, textvariable=self.loggingstatevar)
-        self.media_label = Label(self, text="Toggle experimental media support")
-        self.media_button = Button(self, text="Enable", state='disabled')
-        # Support options
-        self.support_state_var = StringVar(value='Get Support')
-        self.support_label = Label(self, text="Troubleshooting")
-        self.support_button = Button(self, textvariable=self.support_state_var)
-        # Separator
-        s3 = Separator(self, orient='horizontal')
-
-        # Place widgets.
-        row = 0
-        self.app_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.app_button.grid(column=1, row=row, sticky='w', pady=2)
-        self.show_advanced_install_button()
-        row += 1
-        s1.grid(column=0, row=1, columnspan=3, sticky='we', pady=2)
-        row += 1
-        self.actions_label.grid(column=0, row=row, sticky='e', padx=20, pady=2)
-        self.run_indexing_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
-        row += 1
-        self.remove_library_catalog_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
-        row += 1
-        self.actions_button.grid(column=0, row=row, sticky='e', padx=20, pady=2)
-        self.remove_index_files_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
-        row += 1
-        self.uninstall_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
-        row += 1
-        self.install_icu_radio.grid(column=1, row=row, sticky='w', pady=2, columnspan=2)
-        row += 1
-        s2.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)
-        row += 1
-        self.config_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.config_button.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        self.deps_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.deps_button.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        self.wine_config_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.wine_config_button.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        self.update_product_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.update_product_button.grid(column=1, row=row, sticky='w', pady=2)
-        # row += 1
-        # self.backups_label.grid(column=0, row=row, sticky='w', pady=2)
-        # self.backup_button.grid(column=1, row=row, sticky='w', pady=2)
-        # self.restore_button.grid(column=2, row=row, sticky='w', pady=2)
-        row += 1
-        self.update_lli_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.update_lli_button.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        self.latest_appimage_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.latest_appimage_button.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        self.set_appimage_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.set_appimage_button.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        self.logging_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.logging_button.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        self.media_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.media_button.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        self.support_label.grid(column=0, row=row, sticky='w', pady=2)
-        self.support_button.grid(column=1, row=row, sticky='w', pady=2)
-        row += 1
-        s3.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)
-        row += 1
-        self.message_label.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)
-        row += 1
-        self.progress.grid(column=0, row=row, columnspan=3, sticky='we', pady=2)
-
-    def show_advanced_install_button(self):
-        self.app_install_advanced.grid(column=2, row=0, sticky='w', pady=2)
-
-
-class ToolTip:
-    def __init__(self, widget, text):
-        self.widget = widget
-        self.text = text
-        self.tooltip_visible = False
-        self.tooltip_window = None
-
-        self.widget.bind("<Enter>", self.show_tooltip)
-        self.widget.bind("<Leave>", self.hide_tooltip)
-
-    def show_tooltip(self, event=None):
-        if not self.tooltip_visible:
-            x, y, _, _ = self.widget.bbox("insert")
-            x += self.widget.winfo_rootx() + self.widget.winfo_width() // 2 - 200
-            y += self.widget.winfo_rooty() - 25
-
-            self.tooltip_window = Toplevel(self.widget)
-            self.tooltip_window.wm_overrideredirect(True)
-            self.tooltip_window.wm_geometry(f"+{x}+{y}")
-
-            label = Label(
-                self.tooltip_window,
-                text=self.text,
-                justify="left",
-                background="#eeeeee",
-                relief="solid",
-                padding=4,
-                borderwidth=1,
-                foreground="#000000",
-                wraplength=192
-            )
-            label.pack(ipadx=1)
-
-            self.tooltip_visible = True
-
-    def hide_tooltip(self, event=None):
-        if self.tooltip_visible:
-            self.tooltip_visible = False
-        if self.tooltip_window:
-            self.tooltip_window.destroy()
-
-
-class PromptGui(Frame):
-    def __init__(self, root, title="", prompt="", **kwargs):
-        super(PromptGui, self).__init__(root, **kwargs)
-        self.options = {"title": title, "prompt": prompt}
-        if title is not None:
-            self.options['title'] = title
-        if prompt is not None:
-            self.options['prompt'] = prompt
-        self.root = root
-
-    def draw_prompt(self):
-        text = "Store Password"
-        store_button = Button(
-            self.root,
-            text=text,
-            command=lambda: input_prompt(self.root, text, self.options)
-        )
-        store_button.pack(pady=20)
-
-
-def show_error(message, fatal=True, detail=None, app=None, parent=None):
-    title = "Error"
-    if fatal:
-        title = "Fatal Error"
-
-    kwargs = {'message': message}
-    if parent and hasattr(app, parent):
-        kwargs['parent'] = app.__dict__.get(parent)
-    if detail:
-        kwargs['detail'] = detail
-    messagebox.showerror(title, **kwargs)
-    if fatal and hasattr(app, 'root'):
-        app.root.destroy()
-
-
-def ask_question(question, secondary):
-    return messagebox.askquestion(question, secondary)
-
-
-def input_prompt(root, title, prompt):
-    # Prompt for the password
-    input = simpledialog.askstring(title, prompt, show='*', parent=root)
-    return input

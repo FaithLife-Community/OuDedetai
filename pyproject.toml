@@ -8,6 +8,7 @@ dependencies = [
 #    "certifi",
 #    "charset-normalizer",
     "distro",
+    "PySide6",
 #    "idna",
     "packaging",
     "psutil",
@@ -38,7 +39,7 @@ version = {attr = "ou_dedetai.constants.LLI_CURRENT_VERSION"}
 where = ["."]
 
 [tool.setuptools.package-data]
-"ou_dedetai.img" = ["*icon.png"]
+"ou_dedetai.img" = ["*icon.png", "check.svg"]
 
 [tool.ruff]
 line-length = 120

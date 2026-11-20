@@ -59,7 +59,7 @@ class TestLogosUpdates(unittest.TestCase):
         app = mock.Mock()
         with mock.patch.object(wine, "run_wine_during_install") as run:
             wine.allow_logos_updates(app, "/fake/wine")
-        args = run.call_args.kwargs["exe_args"]
+        args = run.call_args_list[0].kwargs["exe_args"]
         self.assertEqual(run.call_args.kwargs["exe"], "reg")
         self.assertEqual(args[1], "HKCU\\Software\\Wine\\MSI")
         self.assertEqual(args[args.index("/v") + 1], "IgnoreFailedActions")

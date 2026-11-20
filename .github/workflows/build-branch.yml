@@ -35,7 +35,7 @@ jobs:
         include:
           - runner: ubuntu-22.04
             arch: x86_64
-          - runner: ubuntu-22.04-arm
+          - runner: ubuntu-24.04-arm
             arch: arm
     outputs:
       bin_name_x86_64: ${{ steps.pyinstaller.outputs.bin_name_x86_64 }}
@@ -59,6 +59,12 @@ jobs:
         python-version: '3.12'
         cache: pip
 
+    - name: Install Qt platform libraries
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libegl1 libgl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0 \
+          libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0
+
     - name: Install dependencies
       run: |
         # apt-get install python3-tk
@@ -73,6 +79,11 @@ jobs:
         BIN_NAME="oudedetai-${ARCH}"
         echo "bin_name_${ARCH}=$BIN_NAME" >> $GITHUB_OUTPUT
         mv dist/oudedetai "dist/$BIN_NAME"
+
+    - name: Smoke test packaged Qt imports
+      env:
+        QT_QPA_PLATFORM: offscreen
+      run: dist/${{ steps.pyinstaller.outputs.bin_name_x86_64 || steps.pyinstaller.outputs.bin_name_arm }} --help
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
