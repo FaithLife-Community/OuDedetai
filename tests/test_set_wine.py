@@ -19,6 +19,7 @@ class TestSetWine(unittest.TestCase):
         self.app.conf.wine_prefix = str(self.tmp / "prefix")  # none yet: nothing to update
 
     def test_an_appimage_replaces_a_tarball_wine(self):
+        # an install running an unpacked tarball
         for name in ("wine", "wine64", "wineserver"):
             (self.bindir / name).symlink_to("/old/distribution/bin/wine")
         self.app.conf.wine_binary = "/old/distribution/bin/wine"
@@ -33,6 +34,19 @@ class TestSetWine(unittest.TestCase):
         self.assertEqual(os.readlink(self.bindir / "selected_wine.AppImage"), str(copied))
         for name in ("wine", "wine64", "wineserver", "winetricks"):
             self.assertEqual(os.readlink(self.bindir / name), "./selected_wine.AppImage")
+
+    def test_an_appimage_updates_an_existing_prefix_without_mono(self):
+        # #576: otherwise Wine updates the prefix on Logos's next start and offers Wine Mono
+        prefix = self.tmp / "prefix"
+        prefix.mkdir()
+        (prefix / "system.reg").write_text("")
+        appimage = self.tmp / "wine-custom_11.22-x86_64.AppImage"
+        appimage.write_text("")
+        self.app.conf.wine_appimage_path = str(appimage)
+        with mock.patch.object(utils, "check_appimage", return_value=True), \
+                mock.patch.object(utils.wine, "prepare_prefix") as prepare:  # via update_prefix_for_new_wine
+            utils.set_appimage_symlink(self.app)
+        prepare.assert_called_once_with(self.app)
 
     def test_a_tarball_is_unpacked_through_setup_wine(self):
         tarball = self.tmp / "wine-custom_11.22_oinos-pre-x-x86_64.tar.xz"

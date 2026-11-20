@@ -109,9 +109,26 @@ class TestAppUtils(unittest.TestCase):
         ]
         self.assertEqual(utils.get_wine_options(self.app), options)
 
-    @unittest.skip("Test not feasible.")
     def test_set_appimage_symlink(self):
-        pass
+        import shutil
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'download.AppImage'
+            shutil.copy(TESTDATADIR / 'wine_tiny_v2.AppImage', source)
+            source.chmod(0o640)
+            bindir = root / 'bin'
+            bindir.mkdir()
+            self.app.conf.wine_appimage_path = source
+            self.app.conf.installer_binary_dir = str(bindir)
+            self.app.conf.wine_appimage_link_file_name = 'selected_wine.AppImage'
+            self.app.conf.wine_download_file_name = 'recommended.AppImage'
+            self.app.conf.wine_prefix = str(root / 'prefix')
+            utils.set_appimage_symlink(self.app)
+            destination = bindir / source.name
+            self.app.exit.assert_not_called()
+            self.assertEqual(destination.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(self.app.conf.wine_binary, str(destination))
+            self.assertEqual((bindir / 'wine').resolve(), destination)
 
     @unittest.skip("Test not feasible.")
     def test_update_to_latest_recommended_appimage(self):
@@ -324,3 +341,13 @@ class TestGeneralUtils(unittest.TestCase):
     @unittest.skip("Test requires oudedetai binary.")
     def test_update_to_latest_lli_release(self):
         pass
+
+
+class TestRtfToText(unittest.TestCase):
+    def test_licence_like_rtf(self):
+        from ou_dedetai import utils
+        rtf = (r"{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fnil Tahoma;}}{\colortbl ;\red0\green0\blue0;}"
+               r"{\*\generator Riched20}\viewkind4\uc1\pard\b END USER LICENSE AGREEMENT\b0\par"
+               r"\par Faithlife\rquote s software \'96 read carefully.\par Price: 5\'80 \u8364? \{ok\}\par}")
+        self.assertEqual(utils.rtf_to_text(rtf).strip(),
+                         "END USER LICENSE AGREEMENT\n\nFaithlife’s software – read carefully.\nPrice: 5€ € {ok}")
