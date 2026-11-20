@@ -14,8 +14,7 @@
     through the `Signals` object; see [NEXT.md](NEXT.md).
   - [ou_dedetai/gui_app.py](ou_dedetai/gui_app.py) + [ou_dedetai/gui.py](ou_dedetai/gui.py) — `GuiApp`
     base (prompts, licence dialog) and the "Choose options" installer dialog;
-    [ou_dedetai/gui_style.py](ou_dedetai/gui_style.py) — palette and stylesheet;
-    [ou_dedetai/i18n](ou_dedetai/i18n) — translations
+    [ou_dedetai/gui_style.py](ou_dedetai/gui_style.py) — palette and stylesheet
 - [ou_dedetai/main.py](ou_dedetai/main.py) — entry point / dispatcher.
 - Domain modules:
   - [ou_dedetai/installer.py](ou_dedetai/installer.py) — install orchestration (`ensure_*` functions)

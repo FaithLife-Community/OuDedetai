@@ -100,17 +100,6 @@ mypy ou_dedetai
 ```
 CI runs the tests on every pull request.
 
-### Translating the window
-The window's text is translated with Qt Linguist files in `ou_dedetai/i18n/`
-(`oudedetai_<language>.ts`, compiled to `.qm`). After changing text in `gui_main.py` or
-`wine_settings.py`:
-```
-python scripts/update-translations.py        # add new strings to every language, compile
-python scripts/update-translations.py fr     # add or refresh one language
-```
-New strings are marked unfinished until translated (edit the `.ts` file, or open it in Qt
-Linguist). The command line and terminal menu are English only, as are log messages.
-
 ### Screenshots for the docs
 The pictures in `docs/images/` are drawn from stand-in data, so they never show anyone's
 install. After changing the window, regenerate them:

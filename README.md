@@ -31,7 +31,7 @@ up to date. It is made by the FaithLife Community and licensed under the MIT Lic
   ([Akousousin](https://github.com/jg00dman/akousousin)), and the
   [Logos desktop integrations](https://github.com/FaithLife-Community/logos-desktop-integrations)
   for KDE Plasma and GNOME (search, look-up shortcut, reading plans, widgets).
-- **Works offline** when you need it to, and in the languages Logos itself offers.
+- **Works offline** when you need it to.
 
 ## Getting started
 
@@ -55,7 +55,7 @@ Use Troubleshooting → **Save a support report…** in Ou Dedetai and attach th
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for running from source, building and translating, and
+See [CONTRIBUTING.md](CONTRIBUTING.md) for running from source and building, and
 [ARCHITECTURE.md](ARCHITECTURE.md) for how the code is organised.
 
 ---

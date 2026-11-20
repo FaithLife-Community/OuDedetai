@@ -40,7 +40,6 @@ where = ["."]
 
 [tool.setuptools.package-data]
 "ou_dedetai.img" = ["*icon.png", "check.svg"]
-"ou_dedetai.i18n" = ["*.qm"]
 
 [tool.ruff]
 line-length = 120

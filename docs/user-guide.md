@@ -155,11 +155,3 @@ support and remote installs. A few common ones:
 | `oudedetai --wine winecfg` | Run a Windows program in Logos's Wine prefix |
 
 `oudedetai --help` lists them all.
-
-## Languages
-
-The window is available in the languages Logos itself offers: English, Spanish, French,
-German, Portuguese, Korean, and Simplified and Traditional Chinese. It follows your desktop's
-language. Messages from the install steps, the terminal menu and the command line are in
-English. The translations were made with AI help: corrections from native speakers are very
-welcome (see [CONTRIBUTING.md](../CONTRIBUTING.md#translating-the-window)).

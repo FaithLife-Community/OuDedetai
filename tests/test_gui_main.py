@@ -336,19 +336,5 @@ class TestInstallGuide(unittest.TestCase):
         self.assertTrue(all(title for _, title, _ in gui_main.INSTALL_STEPS))
 
 
-class TestSpanish(unittest.TestCase):
-    def test_spanish_translation_loads(self):
-        app = gui_main._qt_app()
-        translator = QtCore.QTranslator()
-        folder = str(Path(gui_main.__file__).parent / "i18n")
-        self.assertTrue(translator.load(QtCore.QLocale("es_ES"), "oudedetai", "_", folder))
-        app.installTranslator(translator)
-        try:
-            self.assertEqual(gui_main.tr("Run {product}"), "Ejecutar {product}")
-            self.assertEqual(gui_main.tr("Printing through GDI"), "Impresión mediante GDI")
-        finally:
-            app.removeTranslator(translator)
-
-
 if __name__ == "__main__":
     unittest.main()

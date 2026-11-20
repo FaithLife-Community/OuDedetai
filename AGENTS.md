@@ -25,7 +25,6 @@ and creates desktop shortcuts.
 
 - **Run:** `python -m ou_dedetai.main --help`
 - **Window:** `DIALOG=tk python -m ou_dedetai.main` (from a terminal the default is the TUI)
-- **Translations:** `python scripts/update-translations.py` after changing window text
 - **Doc screenshots:** `QT_QPA_PLATFORM=offscreen python scripts/make-screenshots.py docs/images`
 - **Tests:** `./scripts/run-tests.sh`
 - **Lint:** `ruff check`

@@ -114,11 +114,6 @@ shows the window. Between prereleases, every commit can also be built with the
   servers each time. Troubleshooting → More → *Check for updates now* clears it and checks at once.
 - **Look**: Faithlife's colours and type, our blue Ou Dedetai icon on the window; the Logos/Verbum
   icon only next to the product name.
-- **Translations** of the window into the languages Logos offers: Spanish, French, German,
-  Portuguese, Korean, and Simplified and Traditional Chinese (`ou_dedetai/i18n`, Qt Linguist files;
-  `scripts/update-translations.py` extracts strings). It follows the desktop's language; Chinese
-  outside mainland China and Taiwan picks by script. AI-translated: corrections from native speakers
-  welcome. Messages from the install steps and the command line and TUI stay in English.
 - **Docs**: [docs/user-guide.md](docs/user-guide.md) with screenshots of every screen
   (`scripts/make-screenshots.py`).
 - **Accessibility**: buttons sized by their text, keyboard-reachable, named for screen readers; nothing
@@ -223,8 +218,7 @@ On a fresh install (Troubleshooting → Remove everything, or a spare machine):
 9. Troubleshooting: health checks, support report, Remove everything (after a backup). Stop: polite
    close, Force leaves no Wine running; buttons that change Logos's files are greyed out while it runs.
 10. TUI (run it from a terminal) and the command-line options above.
-11. Languages: `LANG=fr_FR.UTF-8` (or de_DE, es_ES, pt_BR, ko_KR, zh_CN, zh_TW, zh_HK).
-12. Steam Deck / Bazzite: nothing installed system-wide.
+11. Steam Deck / Bazzite: nothing installed system-wide.
 
 ## Known gaps
 
@@ -251,4 +245,3 @@ On a fresh install (Troubleshooting → Remove everything, or a spare machine):
 | Quiet prefix set-up, FFmpeg/self-update settings, licence text | `ou_dedetai/wine.py` |
 | Link hand-off | `ou_dedetai/logos.py` (`hand_off_link`), `ou_dedetai/installer.py` (link handler) |
 | Desktop integrations bridge | `ou_dedetai/desktop_integrations.py` |
-| Translations | `ou_dedetai/i18n/`, `scripts/update-translations.py` |
