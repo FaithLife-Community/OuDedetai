@@ -154,6 +154,9 @@ def clear_layout(layout: QtWidgets.QLayout) -> None:
         item = layout.takeAt(0)
         widget = item.widget() if item is not None else None
         if widget is not None:
+            # Detach now: deleteLater alone leaves the old rows drawn under the new ones
+            # until the event loop next runs.
+            widget.setParent(None)
             widget.deleteLater()
 
 
@@ -1769,6 +1772,7 @@ class CloseLogosDialog(QtWidgets.QDialog):
                                  "it to close is safe."))
         else:
             self.text.setText(tr("Waiting for Logos to close…"))
+        self.adjustSize()  # a wrapped label doesn't grow its dialog by itself
 
     def _force(self) -> None:
         answer = QtWidgets.QMessageBox.warning(
