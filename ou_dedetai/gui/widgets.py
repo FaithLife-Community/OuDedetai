@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
 )
 from ou_dedetai.app import App
 
-from .gui_style import tr
+from .style import tr
 
 
 class ChoiceGui(QWidget):

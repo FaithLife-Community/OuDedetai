@@ -37,14 +37,14 @@ from PySide6.QtGui import QAction, QDesktopServices
 import ou_dedetai.logos
 from ou_dedetai.config import EphemeralConfiguration
 
-from . import (
-    backup, constants, control, desktop_integrations, gui, gui_style, installer, network,
-    system, utils, wine, wine_settings,
+from .. import (
+    backup, constants, control, desktop_integrations, installer, network, system, utils, wine, wine_settings,
 )
-from .gui_app import GuiApp, InstallerWindow, Root, Toplevel
+from . import style, widgets
+from .app import GuiApp, InstallerWindow, Root, Toplevel
 
 State = ou_dedetai.logos.State
-tr = gui_style.tr
+tr = style.tr
 
 
 # Opens the preferred Bible (logosref: always uses it) at its start.
@@ -247,7 +247,7 @@ class InstallGuide(QWidget):
 
     def set_product(self, product: str, icon_path) -> None:
         self.title.setText(tr("Installing {product}").format(product=product_name(product)))
-        self.icon.setPixmap(gui_style.pixmap(icon_path, 44))
+        self.icon.setPixmap(style.pixmap(icon_path, 44))
 
     def update_status(self, message: str) -> None:
         """Tick off the steps; the window's own status bar shows the message and progress."""
@@ -293,10 +293,10 @@ class MainWindow(GuiApp):
     """The GUI front end: simple view, install guide and full view."""
 
     def __init__(self, root: Root, ephemeral_config: EphemeralConfiguration, show: bool = True):
-        self.status_gui = gui.StatusGui()
+        self.status_gui = widgets.StatusGui()
         super().__init__(root, self.status_gui, ephemeral_config)
         self.root.setWindowTitle(constants.APP_NAME)
-        self.root.setWindowIcon(gui_style.app_icon())
+        self.root.setWindowIcon(style.app_icon())
         self._plans: list[dict] = []
         self._layouts: list[str] = []
         self.while_closed: list[QWidget] = []
@@ -555,7 +555,7 @@ class MainWindow(GuiApp):
         sv.setSpacing(2)
         brand = QHBoxLayout()
         icon = QLabel()
-        icon.setPixmap(gui_style.pixmap(constants.APP_IMAGE_DIR / "icon.png", 36))
+        icon.setPixmap(style.pixmap(constants.APP_IMAGE_DIR / "icon.png", 36))
         brand.addWidget(icon)
         names = QVBoxLayout()
         n = label(constants.APP_NAME, "brand")
@@ -999,8 +999,8 @@ class MainWindow(GuiApp):
         else:
             title = tr("Install {product}").format(product=product_name(product))
             state_line = tr("Not installed yet")
-        self.s_icon.setPixmap(gui_style.pixmap(icon, 64))
-        self.h_icon.setPixmap(gui_style.pixmap(icon, 56))
+        self.s_icon.setPixmap(style.pixmap(icon, 64))
+        self.h_icon.setPixmap(style.pixmap(icon, 56))
         self.s_title.setText(title)
         self.h_title.setText(title)
         self.s_state.setText(state_line)
@@ -1695,7 +1695,7 @@ class CloseLogosDialog(QDialog):
         self.on_closed = on_closed
         self.cancelled = False
         self.setWindowTitle(tr("Closing Logos"))
-        self.setWindowIcon(gui_style.app_icon())
+        self.setWindowIcon(style.app_icon())
         v = QVBoxLayout(self)
         self.text = label(tr("Asking Logos to close…"))
         self.text.setMinimumWidth(380)
@@ -1772,7 +1772,7 @@ class TrayController(QObject):
         self.seen_running = False
         self.tray: Optional[QSystemTrayIcon] = None
         if QSystemTrayIcon.isSystemTrayAvailable():
-            self.tray = QSystemTrayIcon(gui_style.app_icon())
+            self.tray = QSystemTrayIcon(style.app_icon())
             self.tray.setToolTip(constants.APP_NAME)
             menu = QMenu()
             menu.aboutToShow.connect(lambda: self._fill(menu))
@@ -1867,7 +1867,7 @@ def _qt_app() -> QApplication:
         QApplication([constants.BINARY_NAME])
     app.setApplicationName(constants.APP_NAME)
     app.setDesktopFileName(constants.BINARY_NAME)
-    gui_style.apply(app)
+    style.apply(app)
     return app
 
 

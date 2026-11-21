@@ -14,8 +14,9 @@ from ou_dedetai.app import App
 from ou_dedetai.config import EphemeralConfiguration
 from ou_dedetai.constants import PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE, PROMPT_OPTION_NEW_FILE
 
-from . import constants, gui, gui_style, installer, system, utils
-from .gui_style import tr
+from .. import constants, installer, system, utils
+from . import style, widgets
+from .style import tr
 
 
 class GuiBridge(QObject):
@@ -41,7 +42,7 @@ class Root(QMainWindow):
         super().__init__()
         self.classname = kwargs.get("className", constants.BINARY_NAME)
         self.icon = constants.APP_IMAGE_DIR / "icon.png"
-        self.setWindowIcon(gui_style.app_icon())
+        self.setWindowIcon(style.app_icon())
 
     def set_content(self, widget):
         self.setCentralWidget(widget)
@@ -51,7 +52,7 @@ class Toplevel(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setModal(True)
-        self.setWindowIcon(gui_style.app_icon())
+        self.setWindowIcon(style.app_icon())
 
 
 class GuiApp(App):
@@ -59,7 +60,7 @@ class GuiApp(App):
 
     _exit_option: Optional[str] = None
 
-    def __init__(self, root: Root, status_gui: gui.StatusGui, ephemeral_config: EphemeralConfiguration, **kwargs):
+    def __init__(self, root: Root, status_gui: widgets.StatusGui, ephemeral_config: EphemeralConfiguration, **kwargs):
         super().__init__(ephemeral_config)
         self.root = root
         self._status_gui = status_gui
@@ -246,7 +247,7 @@ class ChoicePopUp(Toplevel):
         self.setWindowTitle(tr("Question"))
         self.answer = None
 
-        self.gui = gui.ChoiceGui(self, question, options)
+        self.gui = widgets.ChoiceGui(self, question, options)
         layout = QVBoxLayout(self)
         layout.addWidget(self.gui)
 
@@ -260,7 +261,7 @@ class ChoicePopUp(Toplevel):
 
     def confirm(self):
         answer = self.gui.answer_dropdown.currentText()
-        if answer and answer != gui.ChoiceGui._default_prompt:
+        if answer and answer != widgets.ChoiceGui._default_prompt:
             self.answer = answer
             self.accept()
 
@@ -286,7 +287,7 @@ class InfoPopUp(Toplevel):
         super().__init__(parent)
         self.setWindowTitle(tr("Information"))
 
-        self.gui = gui.InfoGui(self, message)
+        self.gui = widgets.InfoGui(self, message)
         layout = QVBoxLayout(self)
         layout.addWidget(self.gui)
 
@@ -312,7 +313,7 @@ class InstallerWindow(QObject):
         self.app = app
         self.conf = app.conf
         self.start_thread = app.start_thread
-        self.gui = gui.InstallerGui(self.win, app)
+        self.gui = widgets.InstallerGui(self.win, app)
         self.installer_step = 0
         self.installer_step_count = 0
 
@@ -458,17 +459,17 @@ def start_gui_app(
     recovery: Optional[Callable[[App], None]] = None,
     install_only: bool = False,
 ):
-    """Open the GUI (gui_main.MainWindow). With `recovery`, repair first; with
+    """Open the GUI (window.MainWindow). With `recovery`, repair first; with
     `install_only`, start installing straight away."""
-    from . import gui_main
+    from . import window
 
     if recovery is None:
-        return gui_main.start(ephemeral_config, install=install_only)
+        return window.start(ephemeral_config, install=install_only)
 
-    app = gui_main._qt_app()
+    app = window._qt_app()
     root = Root()
     root.setWindowTitle(f"{constants.APP_NAME}")
-    status_gui = gui.StatusWithLabelGui(root, "Repairing your Logos install")
+    status_gui = widgets.StatusWithLabelGui(root, "Repairing your Logos install")
     root.set_content(status_gui)
     root.adjustSize()
     root.show()
@@ -479,7 +480,7 @@ def start_gui_app(
             recovery(recovery_app)
         except Exception:
             logging.exception("Recovery failed")
-        recovery_app._dispatch(lambda: gui_main.MainWindow(root, ephemeral_config))
+        recovery_app._dispatch(lambda: window.MainWindow(root, ephemeral_config))
 
     threading.Thread(target=recover, name=f"{constants.APP_NAME} recovery", daemon=True).start()
     return app.exec()

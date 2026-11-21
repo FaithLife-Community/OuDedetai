@@ -432,9 +432,9 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
         def _run(config: EphemeralConfiguration):
             if action == 'run_installed_app' and _tray_wanted(config):
                 # The Logos shortcut: start Logos and sit in the tray while it runs.
-                from . import gui_main
+                from .gui import window
                 try:
-                    gui_main.run_with_tray(config)
+                    window.run_with_tray(config)
                     return
                 except (ImportError, RuntimeError, OSError):
                     logging.exception("Couldn't start the tray; running Logos from the command line instead.")
