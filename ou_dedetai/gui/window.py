@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QObject, QSize, QTimer, Signal
+from PySide6.QtCore import QLocale, QObject, QSize, QTimer, QTranslator, Signal
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QFrame, QHBoxLayout, QLabel, QMessageBox, QSizePolicy, QStackedWidget, QVBoxLayout,
     QWidget,
@@ -379,8 +379,28 @@ def _qt_app() -> QApplication:
         QApplication([constants.BINARY_NAME])
     app.setApplicationName(constants.APP_NAME)
     app.setDesktopFileName(constants.BINARY_NAME)
+    load_translation(app)
     style.apply(app)
     return app
+
+
+_translator: Optional[QTranslator] = None
+
+
+def load_translation(app: QApplication) -> None:
+    """Load the window's translation for the desktop's language, if there is one."""
+    global _translator
+    locale = QLocale.system()
+    translator = QTranslator(app)
+    folder = str(Path(__file__).parent.parent / "i18n")
+    loaded = translator.load(locale, "oudedetai", "_", folder)
+    if not loaded and locale.language() == QLocale.Language.Chinese:
+        # Chinese outside mainland China and Taiwan (Hong Kong, Singapore…): by script.
+        traditional = locale.script() == QLocale.Script.TraditionalHanScript
+        loaded = translator.load(f"oudedetai_{'zh_TW' if traditional else 'zh_CN'}", folder)
+    if loaded:
+        app.installTranslator(translator)
+        _translator = translator
 
 
 def start(ephemeral_config: EphemeralConfiguration, install: bool = False) -> int:

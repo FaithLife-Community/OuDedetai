@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QFont, QIcon, QPalette, QPixmap
 
 from .. import constants
 
-# Translation context of every window string: tr() marks text for translation.
+# Translation context of every window string (Qt Linguist files in ou_dedetai/i18n).
 CONTEXT = "OuDedetai"
 
 
