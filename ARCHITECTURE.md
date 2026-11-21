@@ -9,13 +9,21 @@
 - UI implementations:
   - [ou_dedetai/cli.py](ou_dedetai/cli.py) — `CLI`
   - [ou_dedetai/tui_app.py](ou_dedetai/tui_app.py) — `TUI` (Textual)
-  - [ou_dedetai/gui_main.py](ou_dedetai/gui_main.py) — `MainWindow` (Qt/PySide6): simple view,
-    install guide, full view (Home/Settings/Troubleshooting), tray. Background work reports back
-    through the `Signals` object; see [NEXT.md](NEXT.md).
-  - [ou_dedetai/gui_app.py](ou_dedetai/gui_app.py) + [ou_dedetai/gui.py](ou_dedetai/gui.py) — `GuiApp`
-    base (prompts, licence dialog) and the "Choose options" installer dialog;
-    [ou_dedetai/gui_style.py](ou_dedetai/gui_style.py) — palette and stylesheet;
-    [ou_dedetai/i18n](ou_dedetai/i18n) — translations
+  - [ou_dedetai/gui/](ou_dedetai/gui/) — the Qt (PySide6) window:
+    - [window.py](ou_dedetai/gui/window.py) — `MainWindow`: its views (simple, install guide, full
+      view with Home/Settings/Troubleshooting), pages and refresh. Background work reports back
+      through the `Signals` object; see [NEXT.md](NEXT.md).
+    - [mixins/](ou_dedetai/gui/mixins/) — one mixin per feature, which `MainWindow` inherits: simple
+      view, Home, Settings, Troubleshooting, install, Logos, updates, Wine builds, integrations,
+      Akousousin. [mixins/base.py](ou_dedetai/gui/mixins/base.py) lists what they use from the
+      window and from each other (for mypy; an empty class at run time).
+    - [blocks.py](ou_dedetai/gui/blocks.py) (labels, buttons, cards, rows),
+      [install_guide.py](ou_dedetai/gui/install_guide.py), [tray.py](ou_dedetai/gui/tray.py),
+      [close_dialog.py](ou_dedetai/gui/close_dialog.py).
+    - [app.py](ou_dedetai/gui/app.py) + [widgets.py](ou_dedetai/gui/widgets.py) — `GuiApp` base
+      (prompts, licence dialog) and the "Choose options" installer dialog;
+      [style.py](ou_dedetai/gui/style.py) — palette and stylesheet.
+  - [ou_dedetai/i18n](ou_dedetai/i18n) — the window's translations
 - [ou_dedetai/main.py](ou_dedetai/main.py) — entry point / dispatcher.
 - Domain modules:
   - [ou_dedetai/installer.py](ou_dedetai/installer.py) — install orchestration (`ensure_*` functions)
@@ -93,4 +101,4 @@ most common review comment.
 | Offer a system package a feature needs | `system.offer_packages` (never on image-based systems) |
 | Compare release versions | `utils.is_newer_version` |
 | Is Wine our oinos build? | `wine.wine_supports_logos_updates(wine.get_wine_release(binary)[0])` (cached per binary) |
-| Is anything still running in the prefix? | `control.leftover_wine`; end it with `wine.wineserver_kill` |
+| Is anything still running in the prefix? | `wine.leftover_wine`; end it with `wine.wineserver_kill` |
