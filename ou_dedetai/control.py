@@ -16,6 +16,7 @@ from zipfile import ZipFile
 
 from ou_dedetai import constants
 from ou_dedetai import system
+from ou_dedetai import wine
 from ou_dedetai.app import App
 
 
@@ -102,28 +103,8 @@ def uninstall(app: App):
     app.conf.reload()
 
 
-def leftover_wine(prefix: str | None) -> list[int]:
-    """PIDs of Wine processes still running in this prefix."""
-    import psutil  # type: ignore[import-untyped]
-    if not prefix:
-        return []
-    want = str(Path(prefix).resolve())
-    pids = []
-    for process in psutil.process_iter(["pid", "name"]):
-        try:
-            name = (process.info["name"] or "").lower()
-            if not (name.startswith("wine") or name.endswith(".exe")):
-                continue
-            env_prefix = process.environ().get("WINEPREFIX")
-            if env_prefix and str(Path(env_prefix).resolve()) == want:
-                pids.append(process.info["pid"])
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
-            pass
-    return pids
-
-
 def _kill(pids: list[int]) -> None:
-    import psutil
+    import psutil  # type: ignore[import-untyped]
     processes = []
     for pid in pids:
         try:
@@ -133,10 +114,6 @@ def _kill(pids: list[int]) -> None:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
     psutil.wait_procs(processes, timeout=10)
-
-
-# Desktop entries and URL handlers create_launcher_shortcuts writes.
-URL_SCHEMES = ("x-scheme-handler/logos4", "x-scheme-handler/libronixdls")
 
 
 def _raw_paths(app: App) -> tuple[Path | None, Path | None]:
@@ -184,7 +161,7 @@ def _forget_url_handlers() -> None:
             lines = mimeapps.read_text().splitlines(keepends=True)
         except FileNotFoundError:
             continue
-        kept = [line for line in lines if line.split("=", 1)[0].strip() not in URL_SCHEMES]
+        kept = [line for line in lines if line.split("=", 1)[0].strip() not in constants.URL_SCHEMES]
         if kept != lines:
             mimeapps.write_text("".join(kept))
     if shutil.which("update-desktop-database"):
@@ -247,7 +224,7 @@ def purge(app: App) -> bool:
 
     app.status("Stopping Wine…")
     _, prefix = _raw_paths(app)
-    _kill(leftover_wine(app.conf._overrides.wine_prefix or (str(prefix) if prefix else None)))
+    _kill(wine.leftover_wine(app.conf._overrides.wine_prefix or (str(prefix) if prefix else None)))
     if with_aks:
         app.status("Removing Akousousin…")
         _purge_akousousin(app)
@@ -280,8 +257,7 @@ def purge(app: App) -> bool:
 
 
 def get_support(app: App) -> str:
-    """Creates a zip file with all the information to enable support and opens support
-    """
+    """Creates a zip file with all the information to enable support and opens support."""
 
     # Save in ~/Downloads or ~/
     output_dir = Path(os.path.expanduser("~/Downloads"))
@@ -322,7 +298,7 @@ def get_support(app: App) -> str:
                 wine_settings.report_for_app(app), wine_settings.renderer_summary(app)
             ))
         except Exception:
-            logging.exception("Failed to add the Wine settings report to the support package")
+            logging.exception("Failed to add the Wine settings report to the support package.")
 
         if Path("/etc/os-release").exists():
             zip.write("/etc/os-release")

@@ -2,10 +2,10 @@
 
 Each entry says what a setting is for and how to recognise it in the prefix's
 registry files, so every interface can show what is set and why (GUI Settings
-page, ``--show-wine-config``, the support report). Applying the settings is still
-done by ``installer.apply_wine_config`` and the functions it calls in ``wine``.
+page, `--show-wine-config`, the support report). Applying the settings is still
+done by `installer.apply_wine_config` and the functions it calls in `wine`.
 
-Reading is done from ``user.reg``/``system.reg`` directly: it needs no Wine process,
+Reading is done from `user.reg`/`system.reg` directly: it needs no Wine process,
 so it is fast and safe while Logos is running.
 """
 import logging
@@ -14,6 +14,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional
 
+from ou_dedetai import constants
 from ou_dedetai.app import App
 
 from . import wine
@@ -34,7 +35,7 @@ class State(str, Enum):
 
 @dataclass(frozen=True)
 class RegCheck:
-    """One registry value to look for. ``key`` is relative to HKCU unless ``hklm``."""
+    """One registry value to look for. `key` is relative to HKCU unless `hklm`."""
     key: str
     name: str
     # Predicate on the raw value text as Wine stores it (e.g. '"native"', 'dword:00000001').
@@ -80,11 +81,7 @@ def _contains(text: str) -> Callable[[str], bool]:
     return lambda raw: text.lower() in raw.lower()
 
 
-def _present(raw: str) -> bool:
-    return True
-
-
-_DLL = "Software\\Wine\\DllOverrides"
+_DLL = constants.REG_WINE_DLL_OVERRIDES
 
 SETTINGS: tuple[WineSetting, ...] = (
     WineSetting(
@@ -107,7 +104,7 @@ SETTINGS: tuple[WineSetting, ...] = (
         title="Font replacements",
         reason="Maps Windows fonts Logos expects to open fonts; print preview crashes without them.",
         checks=tuple(
-            RegCheck("Software\\Wine\\Fonts\\Replacements", family, _present, ", ".join(subs))
+            RegCheck(constants.REG_WINE_FONT_REPLACEMENTS, family, lambda raw: True, ", ".join(subs))
             for family, subs in wine.FONT_REPLACEMENTS.items()
         ),
     ),
@@ -121,7 +118,7 @@ SETTINGS: tuple[WineSetting, ...] = (
         id="logos-self-update",
         title="Logos can update itself",
         reason="Lets Logos's own updates finish under this Wine instead of failing part-way.",
-        checks=(RegCheck("Software\\Wine\\MSI", "IgnoreFailedActions",
+        checks=(RegCheck(constants.REG_WINE_MSI, "IgnoreFailedActions",
                          _contains(wine.LOGOS_IGNORED_MSI_ACTIONS[0]), wine.LOGOS_IGNORED_MSI_ACTIONS[0]),),
         needed_with=lambda ctx: ctx.oinos,
     ),
@@ -129,7 +126,7 @@ SETTINGS: tuple[WineSetting, ...] = (
         id="media",
         title="Video and audio through FFmpeg",
         reason="Plays Logos's videos and audiobooks with the FFmpeg built into this Wine, not the system's GStreamer.",
-        checks=(RegCheck("Software\\Wine\\MediaFoundation", "DisableGstByteStreamHandler", _dword(1), "1"),),
+        checks=(RegCheck(constants.REG_WINE_MEDIA_FOUNDATION, "DisableGstByteStreamHandler", _dword(1), "1"),),
         needed_with=lambda ctx: ctx.oinos,
     ),
     WineSetting(
@@ -147,9 +144,6 @@ SETTINGS: tuple[WineSetting, ...] = (
         needed_with=lambda ctx: not ctx.oinos,
     ),
 )
-
-
-parse_reg_file = wine.parse_reg_file
 
 
 def configured_wine_binary(app: App) -> Optional[str]:
@@ -182,13 +176,11 @@ def _context(app: App) -> SettingsContext:
 
 
 def report(
-    prefix: Path,
-    context: SettingsContext,
-    settings: tuple[WineSetting, ...] = SETTINGS,
+    prefix: Path, context: SettingsContext, settings: tuple[WineSetting, ...] = SETTINGS
 ) -> list[SettingReport]:
-    """What each setting looks like in the prefix at ``prefix``."""
-    user = parse_reg_file(prefix / "user.reg")
-    system = parse_reg_file(prefix / "system.reg")
+    """What each setting looks like in the prefix at `prefix`."""
+    user = wine.parse_reg_file(prefix / "user.reg")
+    system = wine.parse_reg_file(prefix / "system.reg")
     reports = []
     for setting in settings:
         needed = setting.needed_with(context) if setting.needed_with else True

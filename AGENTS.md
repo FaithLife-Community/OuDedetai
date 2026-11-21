@@ -51,6 +51,8 @@ and creates desktop shortcuts.
 - Keep [ou_dedetai/config.py](ou_dedetai/config.py) fully typed — it has a stricter
   mypy override (`disallow_untyped_calls`); the rest of the package allows untyped defs.
 - Domain logic must not hard-code a single UI — go through the abstract `App` interface.
+- A new window feature is a mixin in [ou_dedetai/gui/mixins/](ou_dedetai/gui/mixins/); add what it
+  uses from the window or other mixins to `WindowBase` in `mixins/base.py`.
 - Reuse the shared helpers (downloads, running programs, registry, package offers,
   version comparison): see "Use these instead of writing your own" in
   [ARCHITECTURE.md](ARCHITECTURE.md).

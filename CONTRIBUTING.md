@@ -102,7 +102,7 @@ CI runs the tests on every pull request.
 
 ### Translating the window
 The window's text is translated with Qt Linguist files in `ou_dedetai/i18n/`
-(`oudedetai_<language>.ts`, compiled to `.qm`). After changing text in `gui_main.py` or
+(`oudedetai_<language>.ts`, compiled to `.qm`). After changing text in `ou_dedetai/gui/` or
 `wine_settings.py`:
 ```
 python scripts/update-translations.py        # add new strings to every language, compile

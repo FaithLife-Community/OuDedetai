@@ -2,7 +2,7 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 
-from ou_dedetai.gui_app import GuiApp, GuiBridge, QtWidgets
+from ou_dedetai.gui.app import GuiApp, GuiBridge, QMessageBox
 
 
 def _approve_on_worker(app, question):
@@ -25,14 +25,14 @@ class TestGuiAppApprove(unittest.TestCase):
         self.app._dispatch = lambda fn, wait=True: GuiApp._dispatch(self.app, fn, wait)
         self.app._bridge.invoke.emit.side_effect = lambda request: GuiBridge._run(None, request)
 
-    @patch("ou_dedetai.gui_app.QtWidgets.QMessageBox.question", return_value=QtWidgets.QMessageBox.StandardButton.Yes)
+    @patch("ou_dedetai.gui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes)
     def test_main_thread_calls_dialog_directly(self, askquestion):
         self.assertTrue(GuiApp.approve(self.app, "Q?", "ctx"))
         self.app._bridge.invoke.emit.assert_not_called()
         self.assertEqual(askquestion.call_args.args[:3], (self.app.root, "Q?", "Q?\n\nctx"))
 
-    @patch("ou_dedetai.gui_app.QtWidgets.QMessageBox.question",
-           side_effect=[QtWidgets.QMessageBox.StandardButton.Yes, QtWidgets.QMessageBox.StandardButton.No])
+    @patch("ou_dedetai.gui.app.QMessageBox.question",
+           side_effect=[QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No])
     def test_worker_thread_marshals_answer(self, askquestion):
         self.assertTrue(_approve_on_worker(self.app, "Q?"))
         self.assertFalse(_approve_on_worker(self.app, "Q?"))
@@ -62,13 +62,13 @@ class TestGuiAppAsk(unittest.TestCase):
         self.app = Mock()
         self.app._dispatch.side_effect = lambda fn: fn()
 
-    @patch("ou_dedetai.gui_app.ChoicePopUp")
+    @patch("ou_dedetai.gui.app.ChoicePopUp")
     def test_returns_chosen_option(self, popup_cls):
         popup_cls.return_value.get_answer.return_value = "A"
         self.assertEqual(GuiApp._ask(self.app, "Q?", ["A", "B"]), "A")
         self.app._dispatch.assert_called_once()
 
-    @patch("ou_dedetai.gui_app.ChoicePopUp")
+    @patch("ou_dedetai.gui.app.ChoicePopUp")
     def test_closed_window_returns_none(self, popup_cls):
         popup_cls.return_value.get_answer.return_value = None
         self.assertIsNone(GuiApp._ask(self.app, "Q?", ["A", "B"]))

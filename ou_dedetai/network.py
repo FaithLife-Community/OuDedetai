@@ -27,7 +27,7 @@ from . import utils
 
 
 def _offline_by_environment() -> bool:
-    return os.getenv("OUDEDETAI_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on")
+    return os.getenv("OUDEDETAI_OFFLINE") == "1"
 
 
 _offline = _offline_by_environment()
@@ -258,7 +258,7 @@ class CachedRequests:
         - Or the existing one
         """
         if _offline and not force:
-            logging.debug("Offline mode: keeping the last-known cache")
+            logging.debug("Offline mode: keeping the last-known cache.")
         elif force or not self._is_fresh():
             logging.debug("Cleaning out cache…")
             self = CachedRequests(last_updated=time.time())
@@ -529,7 +529,7 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
     logging.debug(f"Download source: {url}")
     logging.debug(f"Download destination: {target}")
     if _offline:
-        logging.info(f"Offline mode: not downloading {url}")
+        logging.info(f"Offline mode: not downloading {url}.")
         if app:
             app.status("Offline mode is on, so nothing was downloaded.")
         return None

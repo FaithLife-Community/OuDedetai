@@ -58,7 +58,7 @@ shows the window. Between prereleases, every commit can also be built with the
 
 ## What's new for users
 
-- **Simple window** (`ou_dedetai/gui_main.py`): Install, or Run ▾ / Update ▾ / Stop. The Run menu opens
+- **Simple window** (`ou_dedetai/gui/mixins/simple.py`): Install, or Run ▾ / Update ▾ / Stop. The Run menu opens
   your preferred Bible, today's reading or a saved layout, or a layout named "Blank".
 - **Install guide**: the install shows its ten steps in plain language as they happen, using the
   window's normal progress bar.
@@ -244,14 +244,16 @@ On a fresh install (Troubleshooting → Remove everything, or a spare machine):
 
 | What | File |
 |---|---|
-| New window, install guide, tray | `ou_dedetai/gui_main.py` |
-| Look (palette, stylesheet) | `ou_dedetai/gui_style.py` |
-| Window base, the "Choose options" installer dialog, prompts, licence dialog | `ou_dedetai/gui_app.py`, `ou_dedetai/gui.py` |
+| New window: views, pages, refresh | `ou_dedetai/gui/window.py` |
+| The window's features, one mixin each | `ou_dedetai/gui/mixins/` |
+| Install guide, tray, close dialog, building blocks | `ou_dedetai/gui/install_guide.py`, `tray.py`, `close_dialog.py`, `blocks.py` |
+| Look (palette, stylesheet) | `ou_dedetai/gui/style.py` |
+| Window base, the "Choose options" installer dialog, prompts, licence dialog | `ou_dedetai/gui/app.py`, `ou_dedetai/gui/widgets.py` |
 | Wine settings list and read-back | `ou_dedetai/wine_settings.py` |
 | Offline gate | `ou_dedetai/network.py` (`set_offline`, `_ensure_online`) |
-| Purge, leftover Wine processes | `ou_dedetai/control.py` |
+| Purge | `ou_dedetai/control.py` |
 | Packages on demand, image-based detection, Akousousin | `ou_dedetai/system.py` |
-| Quiet prefix set-up, FFmpeg/self-update settings, licence text | `ou_dedetai/wine.py` |
+| Quiet prefix set-up, leftover Wine processes, FFmpeg/self-update settings, licence text | `ou_dedetai/wine.py`, `ou_dedetai/assets/msi-licence.vbs` |
 | Link hand-off | `ou_dedetai/logos.py` (`hand_off_link`), `ou_dedetai/installer.py` (link handler) |
 | Desktop integrations bridge | `ou_dedetai/desktop_integrations.py` |
 | Translations | `ou_dedetai/i18n/`, `scripts/update-translations.py` |

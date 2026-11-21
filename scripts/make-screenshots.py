@@ -14,7 +14,12 @@ from unittest import mock
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from ou_dedetai import config, constants, desktop_integrations, gui_main, installer, logos, system, wine_settings
+from ou_dedetai import config, constants, desktop_integrations, installer, logos, network, system, wine, wine_settings
+from ou_dedetai.gui import window as gui_window
+from ou_dedetai.gui.app import Root
+from ou_dedetai.gui.blocks import HOME, INSTALLING, SETTINGS, SIMPLE, TROUBLE
+from ou_dedetai.gui.close_dialog import CloseLogosDialog
+from ou_dedetai.gui.tray import TrayController
 from ou_dedetai.cli_parser import get_parser, od_parse_args
 from ou_dedetai.logos import State
 
@@ -65,9 +70,9 @@ class Shots:
             patch.start()
         # --offline keeps this script off the network; the window is told it's online.
         ephemeral, _ = od_parse_args(get_parser().parse_args(["--offline", "-f"]), get_parser())
-        self.qt = gui_main._qt_app()
+        self.qt = gui_window._qt_app()
         self.qt.setFont(QtGui.QFont("Inter", 10))
-        self.w = gui_main.MainWindow(gui_main.Root(), ephemeral)
+        self.w = gui_window.MainWindow(Root(), ephemeral)
         self.w.run_health_checks = lambda: None  # the screenshot shows HEALTH instead
         self.w.conf._raw.faithlife_product = "Logos"
         self.w.conf._overrides.offline = False
@@ -75,7 +80,7 @@ class Shots:
         self.w._render_reading()
 
     def _stand_ins(self):
-        window, conf = gui_main.MainWindow, config.Config
+        window, conf = gui_window.MainWindow, config.Config
         prop = mock.PropertyMock
         return [
             mock.patch.object(window, "is_installed", lambda _self: self.installed),
@@ -89,7 +94,7 @@ class Shots:
             mock.patch.object(conf, "faithlife_product_logging", new_callable=prop, return_value=True),
             mock.patch.object(wine_settings, "report_for_app", applied_reports),
             mock.patch.object(wine_settings, "renderer_summary", lambda _app: "dxvk"),
-            mock.patch.object(gui_main.wine, "get_win_version", lambda _app, _exe: ""),
+            mock.patch.object(wine, "get_win_version", lambda _app, _exe: ""),
             mock.patch.object(desktop_integrations, "is_installed", lambda env=None: True),
             mock.patch.object(desktop_integrations, "desktop", lambda env=None: "plasma"),
             mock.patch.object(desktop_integrations, "reading_plans", lambda: PLANS),
@@ -101,7 +106,7 @@ class Shots:
             mock.patch.object(installer, "offer_to_replace_installed", lambda _app: False),
             mock.patch.object(installer, "copy_icons", lambda *_args: None),
             mock.patch.object(logos.LogosManager, "monitor", lambda _self: None),
-            mock.patch.object(gui_main.network, "is_offline", lambda: False),
+            mock.patch.object(network, "is_offline", lambda: False),
         ]
 
     def settle(self, rounds: int = 15) -> None:
@@ -130,7 +135,7 @@ class Shots:
         w.logos.logos_state = State.STOPPED
 
         self.installed = False
-        w.show_view(gui_main.SIMPLE)
+        w.show_view(SIMPLE)
         w.root.show()
         w.refresh()
         w.clear_status()
@@ -146,7 +151,7 @@ class Shots:
 
         w._installing = True
         w.guide.set_product("Logos", constants.APP_IMAGE_DIR / "Logos-128-icon.png")
-        w.show_view(gui_main.INSTALLING)
+        w.show_view(INSTALLING)
         w.root.resize(720, 640)
         for message in INSTALL_STEPS_DONE:
             w.guide.update_status(message)
@@ -156,30 +161,30 @@ class Shots:
 
         w.refresh()
         self.show_updates(True)
-        self.full_page(gui_main.HOME, "home.png")
-        self.full_page(gui_main.SETTINGS, "settings.png", (1100, 900))
+        self.full_page(HOME, "home.png")
+        self.full_page(SETTINGS, "settings.png", (1100, 900))
         w.dev_toggle.setChecked(True)
         self.save(w.dev, "developer-options.png")
         w.dev_toggle.setChecked(False)
-        w.open_full(gui_main.TROUBLE)
+        w.open_full(TROUBLE)
         w._show_health(HEALTH)
-        self.full_page(gui_main.TROUBLE, "troubleshooting.png", (1100, 980))
+        self.full_page(TROUBLE, "troubleshooting.png", (1100, 980))
 
         w.logos.logos_state = State.RUNNING
         w.refresh()
         self.show_updates(True)
-        self.full_page(gui_main.HOME, "home-running.png")
-        dialog = gui_main.CloseLogosDialog(w)
+        self.full_page(HOME, "home-running.png")
+        dialog = CloseLogosDialog(w)
         dialog.show()
         dialog._show_progress(True, 0)
         self.save(dialog, "stop-busy.png")
         dialog._show_progress(False, 20)
         self.save(dialog, "stop-asking.png")
         dialog.hide()
-        tray = gui_main.TrayController.__new__(gui_main.TrayController)
+        tray = TrayController.__new__(TrayController)
         tray.window = w
         menu = QtWidgets.QMenu()
-        gui_main.TrayController._fill(tray, menu)
+        TrayController._fill(tray, menu)
         menu.popup(QtCore.QPoint(0, 0))
         self.save(menu, "tray-menu.png")
 
