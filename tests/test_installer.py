@@ -55,19 +55,30 @@ class TestUpdateWineConfig(unittest.TestCase):
         with mock.patch.object(installer.wine, "disable_winemenubuilder") as menu, \
                 mock.patch.object(installer.wine, "set_fontsmoothing_to_rgb") as smoothing, \
                 mock.patch.object(installer.wine, "configure_printing") as printing, \
-                mock.patch.object(installer.wine, "set_font_replacements"), \
+                mock.patch.object(installer.wine, "set_font_replacements") as replacements, \
                 mock.patch.object(installer.wine, "set_renderer") as renderer:
             installer.apply_wine_config(self.app)
+        replacements.assert_called_once_with(self.app, "/fake/wine64")
         printing.assert_called_once_with(app=self.app, wine64_binary="/fake/wine64")
         menu.assert_called_once_with(app=self.app, wine64_binary="/fake/wine64")
         smoothing.assert_called_once_with(app=self.app, wine64_binary="/fake/wine64")
         renderer.assert_not_called()
 
     def test_update_applies_config_when_logos_is_closed(self):
-        with mock.patch.object(installer, "apply_wine_config") as apply:
+        with mock.patch.object(installer, "apply_wine_config") as apply, \
+                mock.patch.object(installer.system, "akousousin_installed", return_value=True), \
+                mock.patch.object(installer.system, "ensure_akousousin") as akousousin:
             installer.update_wine_config(self.app)
         self.app.logos.monitor.assert_called_once()
         apply.assert_called_once_with(self.app)
+        akousousin.assert_not_called()  # installed: left to "Update Akousousin"
+
+    def test_update_installs_akousousin_when_missing(self):
+        with mock.patch.object(installer, "apply_wine_config"), \
+                mock.patch.object(installer.system, "akousousin_installed", return_value=False), \
+                mock.patch.object(installer.system, "ensure_akousousin") as akousousin:
+            installer.update_wine_config(self.app)
+        akousousin.assert_called_once_with(app=self.app)
 
     def test_update_refuses_while_logos_runs(self):
         for state in (State.STARTING, State.RUNNING):
@@ -87,3 +98,89 @@ class TestUpdateWineConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSystemPackagesOff(unittest.TestCase):
+    def test_install_doesnt_install_system_packages_by_default(self):
+        from unittest import mock
+        from ou_dedetai import constants, installer
+        app = mock.Mock()
+        app.installer_step_count = app.installer_step = 0
+        app.conf.skip_install_system_dependencies = False
+        with mock.patch.object(constants, "INSTALL_SYSTEM_PACKAGES", False), \
+                mock.patch.object(installer, "ensure_install_dirs"), \
+                mock.patch.object(installer.utils, "install_dependencies") as deps:
+            installer.ensure_sys_deps(app)
+        deps.assert_not_called()
+        with mock.patch.object(constants, "INSTALL_SYSTEM_PACKAGES", True), \
+                mock.patch.object(installer, "ensure_install_dirs"), \
+                mock.patch.object(installer.utils, "install_dependencies") as deps:
+            installer.ensure_sys_deps(app)
+        deps.assert_called_once_with(app)
+
+
+class TestKnownBug435(unittest.TestCase):
+    def test_snap_browser_keeps_the_recommended_wine(self):
+        from ou_dedetai import constants
+        app = mock.Mock()
+        app.conf.wine_binary = constants.WINE_RECOMMENDED_SIGIL
+        result = subprocess.CompletedProcess([], 0, "firefox_firefox.desktop\n", "")
+        with mock.patch.object(installer.system, "run_command", return_value=result):
+            installer.check_for_known_bugs(app)
+        self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_SIGIL)
+
+
+class TestRecommendedWineIsResolved(unittest.TestCase):
+    def test_recommended_sigil_means_the_bundled_tarball(self):
+        import json
+        from ou_dedetai import constants
+        from ou_dedetai.config import Config, EphemeralConfiguration
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "c.json"
+            path.write_text(json.dumps({"install_dir": tmp, "wine_binary": "Recommended"}))
+            with mock.patch.object(Config, "_write"):
+                conf = Config(EphemeralConfiguration.load_from_path(str(path)), mock.Mock())
+                conf.wine_binary = constants.WINE_RECOMMENDED_SIGIL
+            self.assertEqual(conf._raw.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
+            conf._raw.wine_binary = "Recommended"
+            with mock.patch.object(Config, "_write"):
+                self.assertEqual(conf.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
+
+
+class TestUseWineRelease(unittest.TestCase):
+    def test_switches_channel_and_installs_the_bundle(self):
+        from ou_dedetai import constants, installer
+        app = mock.Mock()
+        app.conf.wine_appimage_path = "/x/wine.AppImage"
+        with mock.patch.object(installer, "setup_wine") as setup, mock.patch.object(installer, "_finish_wine_switch"):
+            installer.use_wine_release(app, "stable")
+        self.assertEqual(app.conf.wine_release_channel, "stable")
+        self.assertIsNone(app.conf.wine_appimage_path)
+        self.assertEqual(app.conf.wine_binary, constants.WINE_RECOMMENDED_TARBALL_SIGIL)
+        setup.assert_called_once_with(app)
+
+
+class TestBetaProductLogging(unittest.TestCase):
+    def _app(self, chosen):
+        app = Mock()
+        app.conf._raw.faithlife_product_logging = chosen
+        return app
+
+    def test_beta_build_enables_logging_when_unset(self):
+        app = self._app(None)
+        with patch.object(installer.constants, "LLI_CURRENT_VERSION", "4.0.0-beta.17.dev4"):
+            installer.ensure_beta_product_logging(app)
+        app.logos.switch_logging.assert_called_once_with(action='enable')
+
+    def test_user_choice_is_kept(self):
+        for chosen in (True, False):
+            app = self._app(chosen)
+            with patch.object(installer.constants, "LLI_CURRENT_VERSION", "4.0.0-beta.17.dev4"):
+                installer.ensure_beta_product_logging(app)
+            app.logos.switch_logging.assert_not_called()
+
+    def test_release_build_leaves_logging_off(self):
+        app = self._app(None)
+        with patch.object(installer.constants, "LLI_CURRENT_VERSION", "4.0.0"):
+            installer.ensure_beta_product_logging(app)
+        app.logos.switch_logging.assert_not_called()
