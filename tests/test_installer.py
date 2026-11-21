@@ -180,7 +180,15 @@ class TestBetaProductLogging(unittest.TestCase):
             app.logos.switch_logging.assert_not_called()
 
     def test_release_build_leaves_logging_off(self):
-        app = self._app(None)
-        with patch.object(installer.constants, "LLI_CURRENT_VERSION", "4.0.0"):
-            installer.ensure_beta_product_logging(app)
-        app.logos.switch_logging.assert_not_called()
+        for version in ("4.0.0", "4.0.1", "4.1.0"):
+            app = self._app(None)
+            with patch.object(installer.constants, "LLI_CURRENT_VERSION", version):
+                installer.ensure_beta_product_logging(app)
+            app.logos.switch_logging.assert_not_called()
+
+    def test_every_kind_of_prerelease_enables_logging(self):
+        for version in ("4.1.0-beta.1", "4.1.0-rc.1", "4.1.0.dev2"):
+            app = self._app(None)
+            with patch.object(installer.constants, "LLI_CURRENT_VERSION", version):
+                installer.ensure_beta_product_logging(app)
+            app.logos.switch_logging.assert_called_once_with(action='enable')
