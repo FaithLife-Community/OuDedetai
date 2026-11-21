@@ -104,6 +104,9 @@ class TrayController(QObject):
     def _tick(self) -> None:
         state = self.window.logos.logos_state
         if state == State.RUNNING:
+            if not self.seen_running and self.tray is not None:
+                # Logos is up: step into the tray. Without a tray icon, the window stays.
+                self.window.root.hide()
             self.seen_running = True
         elif state == State.STOPPED and self.seen_running:
             # Logos has closed: leave the tray, and quit unless the window is open.
