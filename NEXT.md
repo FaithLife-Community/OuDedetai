@@ -202,7 +202,7 @@ Both use the same back end, so everything above applies to them, apart from the 
    release", or `gh api -X PATCH repos/FaithLife-Community/wine-appimages/releases/<id> -f make_latest=false`.
 4. **When oinos is released**: publish it as Latest, keep `10.8-staging` published as the way back,
    merge the five stacked PRs in order: code (#568, `next`), translations (#585, `next-translations`),
-   docs (#587, `next-docs`), tests (#588, `next-tests`) and the release defaults (`next-release`). Then
+   docs (#587, `next-docs`), tests (#588, `next-tests`) and the release defaults (#591, `next-release`). Then
    release them as 4.0.0.
    A fix goes in the lowest layer it belongs to, then each layer above merges the one below.
    Older Ou Dedetai then offers oinos through Update Wine; the extras (DXVK, FFmpeg, self-update)
