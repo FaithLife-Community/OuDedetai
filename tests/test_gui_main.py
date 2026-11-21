@@ -11,7 +11,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6 import QtCore, QtWidgets  # noqa: E402
 
-from ou_dedetai import gui_main, network  # noqa: E402
+from ou_dedetai import desktop_integrations, installer, network, utils  # noqa: E402
+from ou_dedetai.gui import install_guide, window as gui_window  # noqa: E402
+from ou_dedetai.gui.tray import TrayController  # noqa: E402
+from ou_dedetai.gui.blocks import INSTALLING, SETTINGS, SIMPLE  # noqa: E402
+from ou_dedetai.gui.mixins import logos as logos_mixin  # noqa: E402
+from ou_dedetai.gui.style import tr  # noqa: E402
+from ou_dedetai.logos import State  # noqa: E402
 
 from .test_wine_settings import USER_REG  # noqa: E402
 
@@ -40,12 +46,12 @@ class GuiTestCase(unittest.TestCase):
                       "install_dir": str(install), "wine_user": "user"}
         Path(os.environ["CONFIG_FILE"]).write_text(json.dumps(config))
         from ou_dedetai.config import EphemeralConfiguration
-        from ou_dedetai.gui_app import Root
-        self.qt = gui_main._qt_app()
+        from ou_dedetai.gui.app import Root
+        self.qt = gui_window._qt_app()
         # No background threads in tests: they'd outlive the temporary home.
-        with mock.patch.object(gui_main.MainWindow, "start_thread"), \
-                mock.patch.object(gui_main.MainWindow, "_poll_logos"):
-            self.window = gui_main.MainWindow(Root(), EphemeralConfiguration.load_from_path(
+        with mock.patch.object(gui_window.MainWindow, "start_thread"), \
+                mock.patch.object(gui_window.MainWindow, "_poll_logos"):
+            self.window = gui_window.MainWindow(Root(), EphemeralConfiguration.load_from_path(
                 os.environ["CONFIG_FILE"]), show=False)
         self.window.monitor_timer.stop()
 
@@ -62,7 +68,7 @@ class GuiTestCase(unittest.TestCase):
 
 class TestNotInstalled(GuiTestCase):
     def test_simple_view_offers_install(self):
-        self.assertEqual(self.window.stack.currentIndex(), gui_main.SIMPLE)
+        self.assertEqual(self.window.stack.currentIndex(), SIMPLE)
         self.assertFalse(self.window.s_install_box.isHidden())
         self.assertTrue(self.window.s_run_box.isHidden())
 
@@ -96,13 +102,13 @@ class TestInstalled(GuiTestCase):
         self.assertTrue(self.window.conf.gui_full_view)
 
     def test_settings_page_lists_wine_settings(self):
-        self.window.open_full(gui_main.SETTINGS)
-        titles = [w.text() for w in self.window.pages.widget(gui_main.SETTINGS).findChildren(QtWidgets.QLabel)]
+        self.window.open_full(SETTINGS)
+        titles = [w.text() for w in self.window.pages.widget(SETTINGS).findChildren(QtWidgets.QLabel)]
         self.assertIn("Printing through GDI", titles)
         self.assertIn("Different", titles)  # font smoothing differs in the sample user.reg
 
     def test_developer_options_hidden_by_default(self):
-        self.window.open_full(gui_main.SETTINGS)
+        self.window.open_full(SETTINGS)
         self.assertTrue(self.window.dev.isHidden())
         self.window.dev_toggle.setChecked(True)
         self.assertFalse(self.window.dev.isHidden())
@@ -133,7 +139,7 @@ class TestBackgroundWork(GuiTestCase):
         self.assertFalse(self.window.reading_card.isHidden())
 
     def test_starting_logos_from_the_window_shows_the_tray(self):
-        with mock.patch.object(gui_main, "TrayController") as tray, \
+        with mock.patch.object(logos_mixin, "TrayController") as tray, \
                 mock.patch.object(self.window, "start_thread"):
             self.window.run_logos()
             tray.return_value.timer.isActive.return_value = True
@@ -160,8 +166,8 @@ class TestBackgroundWork(GuiTestCase):
         clear.assert_not_called()
 
     def test_desktop_integrations_update_shown(self):
-        with mock.patch.object(gui_main.desktop_integrations, "is_installed", return_value=True), \
-                mock.patch.object(gui_main.network, "is_offline", return_value=False):
+        with mock.patch.object(desktop_integrations, "is_installed", return_value=True), \
+                mock.patch.object(network, "is_offline", return_value=False):
             self.window._updates_checked({"desktop": (True, "Update the desktop integrations to 0.5.2")})
             self.assertEqual(self.window.p_desktop.text(), "Update")
             self.assertTrue(self.window.p_desktop.isEnabled())
@@ -169,7 +175,7 @@ class TestBackgroundWork(GuiTestCase):
             self.assertFalse(self.window.p_desktop.isEnabled())
 
     def test_update_button_highlights_available_updates(self):
-        with mock.patch.object(gui_main.network, "is_offline", return_value=False):
+        with mock.patch.object(network, "is_offline", return_value=False):
             self.window._updates_checked({"aks": (True, "Update Akousousin to 0.9.0"),
                                           "wine": (False, "Wine is up to date")})
             self.assertEqual(self.window.s_update.property("kind"), "available")
@@ -181,13 +187,13 @@ class TestBackgroundWork(GuiTestCase):
 
     def test_tray_quit_warns_while_logos_runs(self):
         qt = mock.Mock()
-        tray = gui_main.TrayController(self.window, qt)
-        self.window.logos.logos_state = gui_main.State.RUNNING
+        tray = TrayController(self.window, qt)
+        self.window.logos.logos_state = State.RUNNING
         with mock.patch.object(QtWidgets.QMessageBox, "exec"), \
                 mock.patch.object(QtWidgets.QMessageBox, "clickedButton", return_value=None):
             tray.quit()  # Cancel
         qt.quit.assert_not_called()
-        self.window.logos.logos_state = gui_main.State.STOPPED
+        self.window.logos.logos_state = State.STOPPED
         tray.quit()
         qt.quit.assert_called_once()
 
@@ -225,7 +231,7 @@ class TestBackgroundWork(GuiTestCase):
         texts = [a.text() for a in menu.actions() if a.text()]
         self.assertEqual(texts, ["Newest prerelease", "Newest release",
                                  "A file on this computer (AppImage or tarball)…"])
-        with mock.patch.object(gui_main.utils, "installed_wine_build_name",
+        with mock.patch.object(utils, "installed_wine_build_name",
                                return_value="wine-custom_11.22_oinos-pre-b1e3dff-x86_64"):
             self.window._show_wine_builds({
                 "dev": ("11.22-oinos-pre-b1e3dff", "wine-custom_11.22_oinos-pre-b1e3dff-x86_64"),
@@ -235,14 +241,14 @@ class TestBackgroundWork(GuiTestCase):
         self.assertEqual(self.window.wine_build_actions["stable"].text(), "Newest release: 11.21-logoswt20261103")
 
     def test_switching_to_a_bundle_needs_logos_closed_and_a_yes(self):
-        self.window.logos.logos_state = gui_main.State.RUNNING
+        self.window.logos.logos_state = State.RUNNING
         with mock.patch.object(self.window, "approve") as approve:
             self.window.use_wine_release("stable")
         approve.assert_not_called()
-        self.window.logos.logos_state = gui_main.State.STOPPED
+        self.window.logos.logos_state = State.STOPPED
         with mock.patch.object(self.window, "approve", return_value=True), \
                 mock.patch.object(self.window, "start_thread", side_effect=lambda f: f()), \
-                mock.patch.object(gui_main.installer, "use_wine_release") as use, \
+                mock.patch.object(installer, "use_wine_release") as use, \
                 mock.patch.object(self.window, "_check_updates"):
             self.window.use_wine_release("stable")
         use.assert_called_once_with(self.window, "stable")
@@ -262,22 +268,22 @@ class TestBackgroundWork(GuiTestCase):
 
     def test_integrations_installed_by_the_offer_load_straight_away(self):
         installed = iter([False, True])
-        with mock.patch.object(gui_main.desktop_integrations, "is_installed", side_effect=lambda: next(installed)), \
-                mock.patch.object(gui_main.desktop_integrations, "offer"), \
+        with mock.patch.object(desktop_integrations, "is_installed", side_effect=lambda: next(installed)), \
+                mock.patch.object(desktop_integrations, "offer"), \
                 mock.patch.object(self.window, "_load_integrations") as load:
             self.window._offer_integrations()
         load.assert_called_once()
 
     def test_integrations_reload_when_logos_closes(self):
-        self.window._last_state = gui_main.State.RUNNING
+        self.window._last_state = State.RUNNING
         with mock.patch.object(self.window, "start_thread") as start, mock.patch.object(self.window, "refresh"):
-            self.window._logos_state_changed(gui_main.State.STOPPED)
+            self.window._logos_state_changed(State.STOPPED)
         start.assert_called_once_with(self.window._load_integrations)
 
     def test_logos_state_change_redraws(self):
         with mock.patch.object(self.window, "refresh") as refresh:
-            self.window._logos_state_changed(gui_main.State.RUNNING)
-            self.window._logos_state_changed(gui_main.State.RUNNING)
+            self.window._logos_state_changed(State.RUNNING)
+            self.window._logos_state_changed(State.RUNNING)
         refresh.assert_called_once()
 
 
@@ -306,21 +312,21 @@ class TestInstalledMenus(GuiTestCase):
 class TestGuideView(GuiTestCase):
     def test_guide_closes_when_install_completes(self):
         self.window._installing = True
-        self.window.show_view(gui_main.INSTALLING)
+        self.window.show_view(INSTALLING)
         self.window._show_status("Install Complete!", 100)
-        self.assertEqual(self.window.stack.currentIndex(), gui_main.SIMPLE)
+        self.assertEqual(self.window.stack.currentIndex(), SIMPLE)
         self.assertFalse(self.window._installing)
 
     def test_one_progress_bar_while_installing(self):
-        self.window.show_view(gui_main.INSTALLING)
+        self.window.show_view(INSTALLING)
         self.assertFalse(self.window.status_gui.isHidden())
         self.assertEqual(self.window.guide.findChildren(QtWidgets.QProgressBar), [])
 
 
 class TestInstallGuide(unittest.TestCase):
     def setUp(self):
-        gui_main._qt_app()
-        self.guide = gui_main.InstallGuide()
+        gui_window._qt_app()
+        self.guide = install_guide.InstallGuide()
 
     def test_steps_follow_installer_messages(self):
         self.guide.update_status("Ensuring wineprefix configuration…")
@@ -333,19 +339,19 @@ class TestInstallGuide(unittest.TestCase):
         self.assertEqual(self.guide.current, 7)
 
     def test_every_step_has_a_title(self):
-        self.assertTrue(all(title for _, title, _ in gui_main.INSTALL_STEPS))
+        self.assertTrue(all(title for _, title, _ in install_guide.INSTALL_STEPS))
 
 
 class TestSpanish(unittest.TestCase):
     def test_spanish_translation_loads(self):
-        app = gui_main._qt_app()
+        app = gui_window._qt_app()
         translator = QtCore.QTranslator()
-        folder = str(Path(gui_main.__file__).parent / "i18n")
+        folder = str(Path(gui_window.__file__).parent.parent / "i18n")
         self.assertTrue(translator.load(QtCore.QLocale("es_ES"), "oudedetai", "_", folder))
         app.installTranslator(translator)
         try:
-            self.assertEqual(gui_main.tr("Run {product}"), "Ejecutar {product}")
-            self.assertEqual(gui_main.tr("Printing through GDI"), "Impresión mediante GDI")
+            self.assertEqual(tr("Run {product}"), "Ejecutar {product}")
+            self.assertEqual(tr("Printing through GDI"), "Impresión mediante GDI")
         finally:
             app.removeTranslator(translator)
 

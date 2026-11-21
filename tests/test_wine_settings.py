@@ -45,7 +45,7 @@ class TestWineSettings(unittest.TestCase):
         return {r.setting.id: r for r in reports}
 
     def test_parse_reg_file_unescapes_keys(self):
-        parsed = wine_settings.parse_reg_file(self.prefix / "user.reg")
+        parsed = wine.parse_reg_file(self.prefix / "user.reg")
         self.assertEqual(parsed["software\\wine\\dlloverrides"]["icu"], '"native"')
 
     def test_applied_settings(self):

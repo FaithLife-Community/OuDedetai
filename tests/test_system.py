@@ -195,9 +195,10 @@ class TestAkousousinActions(unittest.TestCase):
         update.assert_called_once_with(config)
 
     def test_gui_and_tui_dispatch_update_in_worker(self):
-        from ou_dedetai import gui_main, tui_app
+        from ou_dedetai import tui_app
+        from ou_dedetai.gui.window import MainWindow
         gui = Mock()
-        gui_main.MainWindow.update_akousousin(gui)
+        MainWindow.update_akousousin(gui)
         gui.start_thread.assert_called_once()
         tui = Mock()
         tui_app.TUI.utilities_menu_select(tui, 'Update Akousousin')

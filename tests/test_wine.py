@@ -250,3 +250,9 @@ class TestReuseUnpackedWine(unittest.TestCase):
                     mock.patch("ou_dedetai.installer.create_wine_symlinks"):
                 wine.setup_wine(app)
             download.assert_called_once()
+
+
+class TestLicenceScript(unittest.TestCase):
+    def test_licence_script_is_shipped_as_an_asset(self):
+        script = constants.APP_ASSETS_DIR / "msi-licence.vbs"
+        self.assertIn("ScrollableText", script.read_text())
