@@ -13,6 +13,9 @@ etc
 See https://github.com/FaithLife-Community/wine-appimages/releases?q=rc6&expanded=true
 
 
+### New in dev9
+- **When you run Logos from the window, Ou Dedetai goes into the tray once Logos is running**, as it already did when Logos starts from its shortcut. Click the tray icon to open it again. On desktops with no tray icon, the window stays open.
+
 ### New in dev8
 - **Behind the scenes: the window's code is reorganised** after review (#568): one file per feature instead of one large file. Nothing should look or work differently, so please report anything that does.
 - The "Choose options" install window no longer has a Version choice (it only ever offered Logos 10). The Release choice is unchanged, so you can still pick an older Logos release.
