@@ -8,8 +8,22 @@
   `_ask()`/`_info()`/`_status()`.
 - UI implementations:
   - [ou_dedetai/cli.py](ou_dedetai/cli.py) — `CLI`
-  - [ou_dedetai/tui_app.py](ou_dedetai/tui_app.py) — `TUI` (curses/dialog)
-  - [ou_dedetai/gui_app.py](ou_dedetai/gui_app.py) + [ou_dedetai/gui.py](ou_dedetai/gui.py) — `GuiApp` (Tkinter)
+  - [ou_dedetai/tui_app.py](ou_dedetai/tui_app.py) — `TUI` (Textual)
+  - [ou_dedetai/gui/](ou_dedetai/gui/) — the Qt (PySide6) window:
+    - [window.py](ou_dedetai/gui/window.py) — `MainWindow`: its views (simple, install guide, full
+      view with Home/Settings/Troubleshooting), pages and refresh. Background work reports back
+      through the `Signals` object; see [NEXT.md](NEXT.md).
+    - [mixins/](ou_dedetai/gui/mixins/) — one mixin per feature, which `MainWindow` inherits: simple
+      view, Home, Settings, Troubleshooting, install, Logos, updates, Wine builds, integrations,
+      Akousousin. [mixins/base.py](ou_dedetai/gui/mixins/base.py) lists what they use from the
+      window and from each other (for mypy; an empty class at run time).
+    - [blocks.py](ou_dedetai/gui/blocks.py) (labels, buttons, cards, rows),
+      [install_guide.py](ou_dedetai/gui/install_guide.py), [tray.py](ou_dedetai/gui/tray.py),
+      [close_dialog.py](ou_dedetai/gui/close_dialog.py).
+    - [app.py](ou_dedetai/gui/app.py) + [widgets.py](ou_dedetai/gui/widgets.py) — `GuiApp` base
+      (prompts, licence dialog) and the "Choose options" installer dialog;
+      [style.py](ou_dedetai/gui/style.py) — palette and stylesheet.
+  - [ou_dedetai/i18n](ou_dedetai/i18n) — the window's translations
 - [ou_dedetai/main.py](ou_dedetai/main.py) — entry point / dispatcher.
 - Domain modules:
   - [ou_dedetai/installer.py](ou_dedetai/installer.py) — install orchestration (`ensure_*` functions)
@@ -19,7 +33,12 @@
   - [ou_dedetai/config.py](ou_dedetai/config.py) — Legacy/Persistent/Ephemeral config dataclasses
   - [ou_dedetai/constants.py](ou_dedetai/constants.py) — paths, RUNMODE, version
   - [ou_dedetai/database.py](ou_dedetai/database.py) — SQLite context managers
-  - Others: `network.py`, `backup.py`, `control.py`, `repair.py`, `utils.py`, `msg.py`
+  - [ou_dedetai/wine_settings.py](ou_dedetai/wine_settings.py) — the Wine settings Ou Dedetai applies,
+    with reasons, and a read-back from the prefix's registry files
+  - [ou_dedetai/desktop_integrations.py](ou_dedetai/desktop_integrations.py) — offers/installs the
+    Logos desktop integrations and calls their backend (a separate program)
+  - Others: `network.py` (incl. the offline gate), `backup.py`, `control.py` (incl. purge),
+    `repair.py`, `utils.py`, `msg.py`
 - **Version source of truth:** `ou_dedetai.constants.LLI_CURRENT_VERSION` —
   [pyproject.toml](pyproject.toml) reads the package version from this attribute.
 
@@ -64,5 +83,22 @@ main() → setup_config() → run(ephemeral_config, action)
 | UI | Interaction model | Notable detail |
 |----|-------------------|----------------|
 | `CLI` | Stdout + blocking stdin in a background thread | Queues hand prompts/responses across threads |
-| `TUI` | Curses screens (`MenuScreen`, `ConsoleScreen`, `HeaderScreen`) | Menu choices call operations directly |
-| `GuiApp` | Tkinter `InstallerWindow` + `ControlWindow` | Callbacks dispatch operations via `start_thread()` |
+| `TUI` | Textual screens (menus, console, prompts) | Menu choices call operations directly |
+| `MainWindow` (`GuiApp`) | Qt window: simple view, install guide, full view; tray while Logos runs | Operations run via `start_thread()`; results come back to the window through `Signals` |
+
+## Use these instead of writing your own
+
+Most operations need one of these; adding a second way to do the same thing is the
+most common review comment.
+
+| Need | Use |
+|------|-----|
+| Download a file or fetch a URL (progress, retries, offline mode) | `network.logos_reuse_download` (cached, size-checked), or `network._net_get` |
+| Latest release of a GitHub project | `app.conf._network._repo_version` (cached 12 h) or `network._get_release_data` (fresh) |
+| Run Wine or a Windows program in the prefix | `wine.run_wine_process` / `run_wine_during_install` (waits, logs, raises on failure) |
+| Run any other program | `system.run_program` (system libraries, not the binary's bundled ones) or `system.run_command` |
+| Read the prefix's registry (no Wine process) | `wine.read_registry`, `wine.reg_string`; write one value with `wine.reg_add` |
+| Offer a system package a feature needs | `system.offer_packages` (never on image-based systems) |
+| Compare release versions | `utils.is_newer_version` |
+| Is Wine our oinos build? | `wine.wine_supports_logos_updates(wine.get_wine_release(binary)[0])` (cached per binary) |
+| Is anything still running in the prefix? | `wine.leftover_wine`; end it with `wine.wineserver_kill` |
