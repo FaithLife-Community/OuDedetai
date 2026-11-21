@@ -381,6 +381,8 @@ def get_lli_release_version(lli_binary):
     # Get version number.
     cmd = [lli_binary, '--version']
     vstr = subprocess.check_output(cmd, text=True)
+    # A version such as 4.0.0, 4.0.0-beta.16 or 4.0.0-beta.17.dev7: three numbers, then an
+    # optional "-word.number" pre-release and an optional ".devN".
     m = re.search(r'\d+\.\d+\.\d+(?:-[a-z]+\.\d+)?(?:\.dev\d+)?', vstr)
     if m:
         lli_version = m[0]

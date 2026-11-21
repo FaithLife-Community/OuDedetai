@@ -105,7 +105,7 @@ class TestAppExit(unittest.TestCase):
 
 class TestGuiScheduleExit(unittest.TestCase):
     def test_gui_uses_qt_dispatch(self):
-        from ou_dedetai.gui_app import GuiApp
+        from ou_dedetai.gui.app import GuiApp
 
         gui = GuiApp.__new__(GuiApp)
         gui._dispatch = Mock()

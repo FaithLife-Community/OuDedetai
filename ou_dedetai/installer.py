@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-
 from ou_dedetai.app import App, UserExitedFromAsk
 
 from . import constants
@@ -160,7 +159,6 @@ def check_for_known_bugs(app: App):
             logging.warning("Detected snap or flatpak browser")
         if app.conf.wine_binary in (constants.WINE_RECOMMENDED_SIGIL, constants.WINE_RECOMMENDED_TARBALL_SIGIL,
                                     constants.WINE_BETA_SIGIL):
-            # The recommended Wine (the bundled build) has the fix.
             logging.info("Recommended Wine already includes the fix for issue #435")
         else:
             logging.warning("Sign In button may not launch the browser due to issue #435")
@@ -666,7 +664,7 @@ def create_desktop_file(
         terminal: Optional[bool] = None,
         actions: list[tuple[str, str, str]] | None = None,
 ):
-    """``actions`` are right-click entries: (id, name, command)."""
+    """`actions` are right-click entries: (id, name, command)."""
     contents = f"""[Desktop Entry]
 Name={app_name}
 Type=Application
