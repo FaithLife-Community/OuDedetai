@@ -17,7 +17,7 @@ import sys
 import tarfile
 import time
 from ou_dedetai.app import App
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -287,6 +287,21 @@ def compare_logos_linux_installer_version(app: App) -> Optional[VersionCompariso
 WINE_BUILD_SUFFIXES = (".appimage", ".tar.xz", ".tar.gz", ".tgz")
 
 
+def is_newer_version(candidate: str, current: Optional[str], strict: bool = False) -> bool:
+    """Whether release `candidate` is newer than `current` (a leading "v" is ignored).
+
+    No current version counts as older. Versions packaging can't compare (not PEP 440)
+    count as newer whenever they differ, or never with `strict` (for changes that
+    mustn't go backwards)."""
+    candidate, current = candidate.lstrip("v"), (current or "").lstrip("v")
+    if not current:
+        return True
+    try:
+        return Version(candidate) > Version(current)
+    except InvalidVersion:
+        return not strict and candidate != current
+
+
 def wine_build_name(file_name: str) -> str:
     """The build's name without the AppImage/tarball extension, so both forms compare equal."""
     for suffix in WINE_BUILD_SUFFIXES:
@@ -308,7 +323,7 @@ def installed_wine_build_name(app: App) -> Optional[str]:
 def recommended_wine_build_name(app: App) -> Optional[str]:
     """Name of the build "Update to Latest" would install for this kind of install."""
     try:
-        if app.conf.is_wine_binary_in_distribution:
+        if app.conf.is_wine_binary_in_distribution or app.conf.wine_release_channel == "dev":
             url = app.conf._wine_tarball_release.download_url
         else:
             url = app.conf.wine_download_url
@@ -366,7 +381,9 @@ def get_lli_release_version(lli_binary):
     # Get version number.
     cmd = [lli_binary, '--version']
     vstr = subprocess.check_output(cmd, text=True)
-    m = re.search(r'\d+\.\d+\.\d+(-[a-z]+\.\d+)?', vstr)
+    # A version such as 4.0.0, 4.0.0-beta.16 or 4.0.0-beta.17.dev7: three numbers, then an
+    # optional "-word.number" pre-release and an optional ".devN".
+    m = re.search(r'\d+\.\d+\.\d+(?:-[a-z]+\.\d+)?(?:\.dev\d+)?', vstr)
     if m:
         lli_version = m[0]
     return lli_version
@@ -544,6 +561,7 @@ def set_appimage_symlink(app: App):
             logging.info(f"Copying {destination_file_path} to {app.conf.installer_binary_dir}.")
             shutil.copy(appimage_file_path, destination_file_path)
 
+    destination_file_path.chmod(0o755)
     delete_symlink(appimage_symlink_path)
     os.symlink(destination_file_path, appimage_symlink_path)
     app.conf.wine_appimage_path = destination_file_path
@@ -553,6 +571,7 @@ def set_appimage_symlink(app: App):
         link = appdir_bindir / name
         link.unlink(missing_ok=True)
         link.symlink_to(f"./{appimage_symlink_path.name}")
+    wine.update_prefix_for_new_wine(app)
 
 
 def update_to_latest_lli_release(app: App):
@@ -635,7 +654,7 @@ def untar_file(file_path, output_dir):
 
     try:
         with tarfile.open(file_path, 'r:gz') as tar:
-            tar.extractall(path=output_dir)
+            tar.extractall(path=output_dir, filter="data")
             logging.debug(f"Successfully extracted '{file_path}' to '{output_dir}'")
     except tarfile.TarError as e:
         logging.error(f"Error extracting '{file_path}': {e}")
@@ -712,3 +731,60 @@ def get_logos_paths(ephemeral_config):
 
 def get_logos_databases(ephemeral_config) -> list[Path]:
     return get_logos_paths(ephemeral_config).databases
+
+
+# Destinations whose contents aren't text (font/colour tables, pictures, metadata…).
+_RTF_SKIP = {"fonttbl", "colortbl", "stylesheet", "info", "pict", "header", "footer", "footnote",
+             "listtable", "listoverridetable", "rsidtbl", "generator", "themedata", "colorschememapping",
+             "latentstyles", "datastore", "xmlnstbl", "mmathPr", "pgdsctbl", "object", "field-inst"}
+_RTF_TOKEN = re.compile(r"\\([a-zA-Z]+)(-?\d+)? ?|\\'([0-9a-fA-F]{2})|\\([^a-zA-Z])|([{}])|[\r\n]+|(.)", re.S)
+
+
+def rtf_to_text(rtf: str) -> str:
+    """Plain text from RTF, enough for a licence agreement: paragraphs, tabs, escaped and
+    Unicode characters; formatting and non-text groups dropped. No dependencies."""
+    out: list[str] = []
+    stack: list[tuple[bool, int]] = []
+    skip, uc, pending_skip = False, 1, 0
+    for word, arg, hexcode, symbol, brace, char in _RTF_TOKEN.findall(rtf):
+        if brace == "{":
+            stack.append((skip, uc))
+        elif brace == "}":
+            skip, uc = stack.pop() if stack else (False, 1)
+        elif symbol:
+            if symbol == "*":
+                skip = True
+            elif symbol in "\\{}" and not skip:
+                out.append(symbol)
+            elif symbol == "~" and not skip:
+                out.append("\u00a0")
+        elif word:
+            if word in _RTF_SKIP:
+                skip = True
+            elif skip:
+                continue
+            elif word in ("par", "line", "sect", "page"):
+                out.append("\n")
+            elif word == "tab":
+                out.append("\t")
+            elif word == "uc":
+                uc = int(arg or 1)
+            elif word == "u":
+                value = int(arg or 0)
+                out.append(chr(value + 65536 if value < 0 else value))
+                pending_skip = uc
+            elif word in ("emdash", "endash", "bullet", "lquote", "rquote", "ldblquote", "rdblquote"):
+                out.append({"emdash": "—", "endash": "–", "bullet": "•", "lquote": "‘", "rquote": "’",
+                            "ldblquote": "“", "rdblquote": "”"}[word])
+        elif hexcode:
+            if pending_skip:
+                pending_skip -= 1
+            elif not skip:
+                out.append(bytes([int(hexcode, 16)]).decode("cp1252", errors="replace"))
+        elif char:
+            if pending_skip:
+                pending_skip -= 1
+            elif not skip:
+                out.append(char)
+    text = "".join(out)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(line.rstrip() for line in text.splitlines()))

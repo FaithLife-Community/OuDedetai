@@ -23,6 +23,7 @@ class TestSetupWineWithTarballs(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.app = mock.Mock()
         self.app.conf.wine_distribution_dir = str(self.tmp / "data/bin/wine-distribution")
+        self.app.conf.wine_prefix = str(self.tmp / "data/wine64_bottle")  # no prefix yet
 
     def run_setup_wine(self, downloaded=None):
         with mock.patch("ou_dedetai.installer.download_wine", return_value=downloaded), \

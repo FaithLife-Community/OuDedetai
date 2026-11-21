@@ -15,6 +15,8 @@ from ou_dedetai.logos import State as LogosRunningState
 
 from . import backup
 from . import control
+from . import desktop_integrations
+from . import system
 from . import installer
 from . import wine
 from . import utils
@@ -36,6 +38,9 @@ class CLI(App):
     def create_shortcuts(self):
         installer.create_launcher_shortcuts(self)
 
+    def install_desktop_integrations(self):
+        desktop_integrations.install(self)
+
     def edit_config(self):
         control.edit_file(self.conf.config_file_path)
 
@@ -53,6 +58,19 @@ class CLI(App):
     def update_wine_config(self):
         installer.update_wine_config(self)
 
+    def open_todays_reading(self):
+        entry = desktop_integrations.todays_reading()
+        if entry is None:
+            self.exit("No reading for today was found. This needs the desktop integrations and a reading plan.")
+            return
+        desktop_integrations.open_url(entry["url"])
+
+    def show_wine_config(self):
+        from . import wine_settings
+        print(wine_settings.format_report(
+            wine_settings.report_for_app(self), wine_settings.renderer_summary(self)
+        ), end="")
+
     def install_icu(self):
         wine.enforce_icu_data_files(self)
 
@@ -61,6 +79,27 @@ class CLI(App):
 
     def uninstall(self):
         control.uninstall(self)
+
+    def purge(self):
+        control.purge(self)
+
+    def set_update_channel(self):
+        prereleases = self.conf._overrides.cli_choice == "prereleases"
+        self.conf.update_channel = "dev" if prereleases else "stable"
+        print("Updates: prereleases (test builds of the next version)." if prereleases else
+              "Updates: releases. Ou Dedetai never goes back: you stay on this version until a release "
+              "catches up.")
+
+    def set_wine_channel(self):
+        self.conf.wine_release_channel = self.conf._overrides.cli_choice or "stable"
+        print(f"Wine builds: {self.conf.wine_release_channel} ('Recommended' and Update Wine use this).")
+
+    def set_offline(self):
+        self.conf.offline_mode = self.conf._overrides.cli_choice == "on"
+        print("Offline: no update checks or downloads." if self.conf.offline_mode else "Online again.")
+
+    def set_renderer(self):
+        print(wine.select_renderer(self, self.conf._overrides.cli_choice or "dxvk"))
 
     def remove_library_catalog(self):
         control.remove_library_catalog(self)
@@ -72,6 +111,8 @@ class CLI(App):
         self.logos.index()
 
     def run_installed_app(self):
+        if self.logos.hand_off_link():
+            return
         self.logos.start()
         # Keep the process running so that our background threads can keep running
         while self.logos.logos_state != LogosRunningState.STOPPED:
@@ -83,9 +124,10 @@ class CLI(App):
             self.logos.monitor()
 
     def stop_installed_app(self):
-        self.logos.stop()
+        self.logos.close_or_force()
 
     def winetricks(self):
+        system.offer_winetricks_tools(self)
         process = wine.run_wine_process(
             self,
             self.conf.winetricks_binary,
@@ -117,8 +159,9 @@ class CLI(App):
     def toggle_app_logging(self):
         self.logos.switch_logging()
 
-    def toggle_media_support(self):
-        wine.toggle_media_support(self)
+
+    def update_akousousin(self):
+        system.update_akousousin(self)
 
     def update_latest_appimage(self):
         installer.update_to_latest_wine(self)

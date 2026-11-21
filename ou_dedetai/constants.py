@@ -22,7 +22,6 @@ def get_runmode() -> str:
         return 'script'
 
 
-
 # Are we running from binary or src?
 RUNMODE = get_runmode()
 _snap = os.environ.get('SNAP')
@@ -65,6 +64,7 @@ else:
     CACHE_DIR = str(Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache' / 'FaithLife-Community'))) 
 
 XDG_DATA_HOME = str(Path(os.getenv('XDG_DATA_HOME', str(Path.home() / '.local/share'))))
+XDG_CONFIG_HOME = os.getenv("XDG_CONFIG_HOME") or str(Path.home() / ".config")
 DATA_HOME = str(Path(XDG_DATA_HOME)/ 'FaithLife-Community') 
 CONFIG_DIR = os.getenv("XDG_CONFIG_HOME", "~/.config") + "/FaithLife-Community"
 STATE_DIR = os.getenv("XDG_STATE_HOME", "~/.local/state") + "/FaithLife-Community"
@@ -87,7 +87,9 @@ LEGACY_CONFIG_FILES = [
     os.path.expanduser("~/.config/Logos_on_Linux/Logos_on_Linux.conf")
 ]
 LLI_AUTHOR = "Ferion11, John Goodman, T. H. Wright, N. Marti, N. Shaaban"
-LLI_CURRENT_VERSION = "4.0.0-beta.16"
+# The next branch: its builds are development versions of the release after beta 16. Published
+# test builds (prereleases) are 4.0.0-beta.17.devN: newer than beta 16, older than beta 17.
+LLI_CURRENT_VERSION = "4.0.0-beta.17.dev9"
 # This SHOULD match the version of winetricks we ship in the latest appimage
 WINETRICKS_VERSION = '20250102'
 DEFAULT_LOG_LEVEL = logging.WARNING
@@ -97,6 +99,12 @@ LOGOS_WHITE = '#FCFCFC'
 PID_FILE = f'/tmp/{BINARY_NAME}.pid'
 
 WINE_BETA_SIGIL = "Experimental (AKA Beta)"
+# System packages during install: off while we test whether the bundled Wine tarball
+# needs any (it ran fine on Bazzite without them). OUDEDETAI_INSTALL_DEPS=1 brings the
+# old behaviour back; "Install dependencies" in Troubleshooting / --install-dependencies
+# still installs them on request.
+INSTALL_SYSTEM_PACKAGES = os.getenv("OUDEDETAI_INSTALL_DEPS") == "1"
+
 WINE_RECOMMENDED_SIGIL = "Recommended"
 WINE_RECOMMENDED_APPIMAGE_SIGIL= "Recommended Appimage"
 WINE_RECOMMENDED_TARBALL_SIGIL= "Recommended Bundled"
@@ -124,3 +132,19 @@ PROMPT_OPTION_SIGILS = [PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE, PROMPT_OPTI
 # String for when a binary is meant to be downloaded later
 DOWNLOAD = "Download"
 WINDOWS_VERSIONS = ["vista", "win7", "win8", "win10", "win11", "Return to Main Menu"]
+
+# Registry keys Ou Dedetai reads and sets in the prefix, under HKEY_CURRENT_USER.
+REG_LOGOS_LOGGING = "Software\\Logos4\\Logging"
+REG_WINE_MSI = "Software\\Wine\\MSI"
+REG_WINE_MEDIA_FOUNDATION = "Software\\Wine\\MediaFoundation"
+REG_WINE_APP_DEFAULTS = "Software\\Wine\\AppDefaults"
+REG_WINE_DIRECT3D = "Software\\Wine\\Direct3D"
+REG_WINE_DLL_OVERRIDES = "Software\\Wine\\DllOverrides"
+REG_WINE_FONT_REPLACEMENTS = "Software\\Wine\\Fonts\\Replacements"
+
+# Desktop entries and URL handlers create_launcher_shortcuts writes.
+URL_SCHEMES = ("x-scheme-handler/logos4", "x-scheme-handler/libronixdls")
+
+AKOUSOUSIN_TARBALL = "Akousousin-Linux-x86_64.tar.gz"
+# The wl-paste Akousousin bundles (the integrations use it when the system has none).
+AKOUSOUSIN_WL_PASTE = Path.home() / ".local/lib/akousousin/resources/helpers/wl-paste/bin/wl-paste"

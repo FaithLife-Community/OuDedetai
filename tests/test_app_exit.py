@@ -104,15 +104,17 @@ class TestAppExit(unittest.TestCase):
 
 
 class TestGuiScheduleExit(unittest.TestCase):
-    def test_gui_uses_root_after(self):
-        from ou_dedetai.gui_app import GuiApp
+    def test_gui_uses_qt_dispatch(self):
+        from ou_dedetai.gui.app import GuiApp
 
-        gui = GuiApp.__new__(GuiApp)  # skip __init__ (needs a real Tk root)
-        gui.root = Mock()
+        gui = GuiApp.__new__(GuiApp)
+        gui._dispatch = Mock()
+        gui.exit = Mock()
         gui._schedule_exit_on_main_thread("reason", False)
-        # Scheduled onto the mainloop with delay 0.
-        self.assertEqual(gui.root.after.call_count, 1)
-        self.assertEqual(gui.root.after.call_args[0][0], 0)
+        gui._dispatch.assert_called_once()
+        self.assertFalse(gui._dispatch.call_args.kwargs['wait'])
+        gui._dispatch.call_args.args[0]()
+        gui.exit.assert_called_once_with("reason", False)
 
 
 if __name__ == "__main__":

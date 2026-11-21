@@ -1,11 +1,15 @@
 import copy
+import dataclasses
 import os
+import re
 import subprocess
 from typing import Any, Optional
 from dataclasses import dataclass
 import json
 import logging
 from pathlib import Path
+
+from packaging.version import InvalidVersion, Version
 
 from . import network, utils, constants, wine, system
 from .constants import PROMPT_OPTION_DIRECTORY
@@ -240,6 +244,13 @@ class EphemeralConfiguration:
 
     # Start of values just set via cli arg
     app_run_as_root_permitted: bool = False
+    offline: bool = False
+    """Work offline for this run (--offline or OUDEDETAI_OFFLINE=1), whatever the saved setting."""
+    cli_choice: Optional[str] = None
+    """The value given to --set-wine-channel, --set-offline or --set-renderer."""
+    logos_link: Optional[str] = None
+    """A logos4:/libronixdls: link to open (--run-installed-app LINK, used by the link handler)."""
+
     agreed_to_faithlife_terms: bool = False
     """The user expressed clear agreement with faithlife's terms.
     Normally the MSI would prompt for this as well.
@@ -327,7 +338,8 @@ class PersistentConfiguration:
     faithlife_product_logging: Optional[bool] = None
     install_dir: Optional[str] = None
     wine_binary: Optional[str] = None
-    wine_release_channel: str = "stable"
+    # "dev" = the newest published oinos prerelease on wine-appimages; "stable" = the newest full release
+    wine_release_channel: str = "dev"
     backup_dir: Optional[str] = None
 
     # Color to use in curses. Either "System", "Logos", "Light", or "Dark"
@@ -336,6 +348,15 @@ class PersistentConfiguration:
     faithlife_product_release_channel: str = "stable"
     # The Installer's release channel. Either "stable" or "dev"
     app_release_channel: str = "stable"
+    # Whether the user has chosen Releases or Prereleases themselves (Settings → Updates).
+    # Until they have, a development build follows Prereleases.
+    update_channel_chosen: bool = False
+    # Whether we've offered to install the desktop integrations (asked once)
+    desktop_integrations_offered: bool = False
+    # Never connect to the internet (no update checks, no downloads) until switched off
+    offline_mode: bool = False
+    # Open the full view (reading plan, layouts, status) instead of the simple window
+    gui_full_view: bool = False
 
     _legacy: Optional[LegacyConfiguration] = None
     """A Copy of the legacy configuration.
@@ -374,8 +395,11 @@ class PersistentConfiguration:
         # Now override with values from ENV
         legacy_env = LegacyConfiguration.load_from_env()
         config_env = PersistentConfiguration.from_legacy(legacy_env)
-        config_env.faithlife_product_release_channel = config_dict["faithlife_product_release_channel"]
-        config_env.app_release_channel = config_dict["app_release_channel"]
+        # Fields the environment can't set keep their dataclass default in config_env (e.g.
+        # gui_full_view=False), which would overwrite the saved value; keep the saved ones.
+        for field in dataclasses.fields(PersistentConfiguration):
+            if field.default is not None and field.name in config_dict:
+                setattr(config_env, field.name, config_dict[field.name])
         config_env._legacy = None
         for k, v in config_env.__dict__.items():
             if v is not None:
@@ -563,7 +587,10 @@ class Config:
         self._raw = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
         self._overrides = ephemeral_config
 
+        # Before any network object exists: offline mode keeps the last-known cache.
+        network.set_offline(self.offline_mode)
         self._network = self._create_network_requests_with_hook()
+        self._default_to_prereleases()
         logging.debug("Current persistent config:")
         for k, v in self._raw.__dict__.items():
             logging.debug(f"{k}: {v}")
@@ -574,6 +601,32 @@ class Config:
         for k, v in self._network._cache.__dict__.items():
             logging.debug(f"{k}: {v}")
         logging.debug("End config dump")
+
+    def _default_to_prereleases(self) -> None:
+        """A development build (someone downloaded a test build) follows Prereleases, so it
+        keeps getting new test builds, until the user picks Releases or Prereleases themselves."""
+        try:
+            development = Version(constants.LLI_CURRENT_VERSION).is_devrelease
+        except InvalidVersion:
+            development = False
+        if development and not self._raw.update_channel_chosen:
+            self._raw.app_release_channel = "dev"
+            self._raw.wine_release_channel = "dev"
+
+    @property
+    def update_channel(self) -> str:
+        """"stable" (Releases) or "dev" (Prereleases): which releases Ou Dedetai updates itself from.
+        Wine follows the same choice, unless set apart under the developer options."""
+        return self._raw.app_release_channel
+
+    @update_channel.setter
+    def update_channel(self, value: str) -> None:
+        if value not in ("stable", "dev"):
+            raise ValueError(f"Invalid update channel: {value}")
+        self._raw.app_release_channel = value
+        self._raw.wine_release_channel = value
+        self._raw.update_channel_chosen = True
+        self._write()
 
     def _create_network_requests_with_hook(self) -> network.NetworkRequests:
         def _network_cache_hook():
@@ -756,8 +809,42 @@ class Config:
         return str(constants.APP_IMAGE_DIR / f"{self.faithlife_product}-128-icon.png")
 
     @property
+    def desktop_integrations_offered(self) -> bool:
+        """Whether the user has been offered the desktop integrations (we only ask once)."""
+        return self._raw.desktop_integrations_offered
+
+    @desktop_integrations_offered.setter
+    def desktop_integrations_offered(self, value: bool) -> None:
+        if self._raw.desktop_integrations_offered != value:
+            self._raw.desktop_integrations_offered = value
+            self._write()
+
+    @property
+    def offline_mode(self) -> bool:
+        """Whether Ou Dedetai must not connect to the internet at all."""
+        return bool(self._overrides.offline or self._raw.offline_mode)
+
+    @offline_mode.setter
+    def offline_mode(self, value: bool) -> None:
+        if self._raw.offline_mode != value:
+            self._raw.offline_mode = value
+            self._write()
+        network.set_offline(self.offline_mode)
+
+    @property
+    def gui_full_view(self) -> bool:
+        """Whether the GUI opens the full view rather than the simple window."""
+        return self._raw.gui_full_view
+
+    @gui_full_view.setter
+    def gui_full_view(self, value: bool) -> None:
+        if self._raw.gui_full_view != value:
+            self._raw.gui_full_view = value
+            self._write()
+
+    @property
     def faithlife_product_logging(self) -> bool:
-        """Whether or not the installed faithlife product is configured to log"""
+        """Whether or not the installed faithlife product is configured to log."""
         if self._raw.faithlife_product_logging is not None:
             return self._raw.faithlife_product_logging
         return False
@@ -793,9 +880,10 @@ class Config:
     def app_release_channel(self, value: str):
         if value not in ("stable", "dev"):
             raise ValueError(f"Invalid app release channel: {value}")
+        self._raw.update_channel_chosen = True
         if self._raw.app_release_channel != value:
             self._raw.app_release_channel = value
-            self._write()
+        self._write()
 
     @property
     def winetricks_binary(self) -> str:
@@ -913,9 +1001,10 @@ class Config:
     def wine_release_channel(self, value: str) -> None:
         if value not in ("stable", "dev"):
             raise ValueError("Wine release channel must be 'stable' or 'dev'")
+        self._raw.update_channel_chosen = True
         if self._raw.wine_release_channel != value:
             self._raw.wine_release_channel = value
-            self._write()
+        self._write()
 
     def toggle_wine_release_channel(self) -> None:
         self.wine_release_channel = (
@@ -945,6 +1034,7 @@ class Config:
 
     @property
     def wine_path_in_distribution(self) -> str:
+        """The configured build: older builds may still be unpacked next to it."""
         if self.is_wine_binary_in_distribution and Path(self.wine_binary).is_file():
             return str(Path(self.wine_binary).absolute())
         return str(next(Path(self.wine_distribution_dir).glob("*/bin/wine")).absolute())
@@ -960,6 +1050,9 @@ class Config:
     def wine_binary(self) -> str:
         """Returns absolute path to the wine binary"""
         output = self._raw.wine_binary
+        if output == constants.WINE_RECOMMENDED_SIGIL:
+            # Saved by older builds before the setter resolved it.
+            output = constants.WINE_RECOMMENDED_TARBALL_SIGIL
         if output is None:
             question = (
                 f"Which Wine AppImage or binary should the script use to install {self.faithlife_product} "
@@ -993,14 +1086,9 @@ class Config:
 
     @wine_binary.setter
     def wine_binary(self, value: str):
-        """Takes in a path to the wine binary and stores it as relative for storage"""
-        # Make the path absolute for comparison
-        relative = self._relative_from_install_dir(value)
-        # FIXME: consider this, it doesn't work at present as the wine_binary may be an
-        # appimage that hasn't been downloaded yet
-        # aboslute = self._absolute_from_install_dir(value)
-        # if not Path(aboslute).is_file():
-        #     raise ValueError("Wine Binary path must be a valid file")
+        """Takes in a path to the wine binary and stores it as relative for storage.
+
+        Not checked to exist: it may be an AppImage that hasn't been downloaded yet."""
 
         if value == constants.WINE_RECOMMENDED_SIGIL:
             value = constants.WINE_RECOMMENDED_TARBALL_SIGIL
@@ -1010,6 +1098,9 @@ class Config:
             else:
                 logging.info("Failed to find any beta-specific appimage, falling back to latest release.")
                 value = self.wine_appimage_recommended_file_name
+        # Store the resolved choice: a sigil such as "Recommended" saved as it is would
+        # later be run as the Wine program.
+        relative = self._relative_from_install_dir(value)
 
         if self._raw.wine_binary != relative:
             self._raw.wine_binary = relative
@@ -1176,8 +1267,20 @@ class Config:
 
     @property
     def wine_recommended_version(self) -> str:
-        if self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL:
-            return self._wine_tarball_release.version
+        """The recommended Wine's version number ("11.22"), for comparing with the installed one."""
+        if (self.wine_binary == constants.WINE_RECOMMENDED_TARBALL_SIGIL
+                or self.is_wine_binary_in_distribution
+                or self.wine_release_channel == "dev"):
+            # Prereleases recommend the oinos tarball even to an AppImage install (e.g. one
+            # upgraded from beta 15), so "Update Wine" moves it onto oinos.
+            # An unpacked tarball is updated from the release channel's tarball, not the AppImage.
+            # Its tag ("11.22-oinos-pre-b1e3dff") carries the version first.
+            version = self._wine_tarball_release.version
+            # The leading version number: digits, then one or more ".digits" ("11.22").
+            found = re.match(r"\d+(?:\.\d+)+", version)
+            if found:
+                return found.group(0)
+            return version
         filename = self.wine_download_file_name
         # AppImage format: wine-[branch]_[version]-[arch]
         return filename.split("-")[1].split("_")[1]

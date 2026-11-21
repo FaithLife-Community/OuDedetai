@@ -10,7 +10,7 @@ from typing import Callable, Tuple
 from . import cli, database_faithlife_notes, database_faithlife_catalog
 from . import database
 from . import constants
-from . import gui_app
+from .gui.app import start_gui_app
 from . import markdown
 from . import msg
 from . import system
@@ -27,7 +27,7 @@ def run_control_panel(ephemeral_config: EphemeralConfiguration):
     dialog = ephemeral_config.dialog or system.get_dialog()
     logging.info(f"Using DIALOG: {dialog}")
     if dialog == 'tk':
-        gui_app.start_gui_app(ephemeral_config)
+        start_gui_app(ephemeral_config)
     else:
         try:
             tui_app.control_panel_app(ephemeral_config)
@@ -45,7 +45,7 @@ def install_app(ephemeral_config: EphemeralConfiguration):
     dialog = ephemeral_config.dialog or system.get_dialog()
     logging.info(f"Using DIALOG: {dialog}")
     if dialog == 'tk':
-        gui_app.start_gui_app(ephemeral_config, install_only=True)
+        start_gui_app(ephemeral_config, install_only=True)
     else:
         cli.CLI(ephemeral_config).install_app()
 
@@ -250,6 +250,16 @@ def setup_config() -> Tuple[EphemeralConfiguration, Callable[[EphemeralConfigura
     return od_parse_args(args, parser)
 
 
+def _offline_mode(ephemeral_config: EphemeralConfiguration) -> bool:
+    """Offline for this run, or saved as a setting."""
+    if ephemeral_config.offline:
+        return True
+    try:
+        return PersistentConfiguration.load_from_path(ephemeral_config.config_path).offline_mode
+    except Exception:
+        return False
+
+
 def is_app_installed(ephemeral_config: EphemeralConfiguration):
     persistent_config = PersistentConfiguration.load_from_path(ephemeral_config.config_path)
     if persistent_config.faithlife_product is None or persistent_config.install_dir is None:
@@ -282,6 +292,7 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
     install_required = [
         'backup',
         'create_shortcuts',
+        'install_desktop_integrations',
         'install_icu',
         'remove_index_files',
         'remove_library_catalog',
@@ -290,11 +301,33 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
         'run_installed_app',
         'update_installed_app',
         'update_wine_config',
+        'show_wine_config',
+        'set_renderer',
+        'open_todays_reading',
+        'update_akousousin',
         'stop_installed_app',
         'set_appimage',
         'toggle_app_logging',
-        'toggle_media_support',
     ]
+    needs_internet = [
+        'install_app',
+        'install_dependencies',
+        'install_desktop_integrations',
+        'install_icu',
+        'update_akousousin',
+        'update_installed_app',
+        'update_latest_appimage',
+        'update_self',
+    ]
+    if action.__name__ in needs_internet and _offline_mode(ephemeral_config):
+        print(
+            f"Offline mode is on, so {constants.APP_NAME} won't connect to the internet. "
+            "Turn it off (Settings in the window, the TUI's Utilities, or --set-offline off), "
+            "or remove --offline / OUDEDETAI_OFFLINE, to do this.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     if action.__name__ not in install_required:
         logging.info(f"Running function: {action.__name__}")
         action(ephemeral_config)
@@ -309,6 +342,12 @@ def run(ephemeral_config: EphemeralConfiguration, action: Callable[[EphemeralCon
 
 
 def main():
+    # Every program we start (uname, xdg-open, systemctl, sh…) should get the system's
+    # libraries, not the ones bundled in this binary: Kubuntu 26.04's uutils failed
+    # with ours. Our own process already loaded its libraries, so this doesn't affect it.
+    environment = system.fix_ld_library_path(None)  # read before clearing
+    os.environ.clear()
+    os.environ.update(environment)
     msg.initialize_logging()
     ephemeral_config, action = setup_config()
     system.check_architecture()

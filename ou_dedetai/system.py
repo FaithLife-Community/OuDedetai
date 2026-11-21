@@ -1,6 +1,8 @@
 import re
 
 import distro
+import functools
+import json
 import logging
 import os
 import psutil
@@ -10,16 +12,28 @@ import struct
 import subprocess
 import sys
 import time
+import tempfile
 import zipfile
 
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 from packaging.version import Version
+
+import requests
 from pathlib import Path
 from typing import Optional, Tuple
 
 from ou_dedetai import constants, network
 from ou_dedetai.app import App
+
+
+# os-release is all we need. distro's default also runs `uname -rs` and lets a failure
+# escape (seen on Kubuntu 26.04, whose coreutils are uutils), stopping the install.
+_distro = distro.LinuxDistribution(include_uname=False, include_lsb=False)
+
+# What a Wine AppImage needs to mount itself, per package manager. Older AppImage
+# runtimes need libfuse 2; ours (uruntime) need only fusermount, which comes with it.
+FUSE_PACKAGES = {"dnf": "fuse-libs", "zypper": "libfuse2", "pacman": "fuse2", "pamac": "fuse2", "apk": "fuse"}
 
 
 def fix_ld_library_path(env: Optional[MutableMapping[str, str]]) -> dict[str, str]:
@@ -142,6 +156,21 @@ def run_command(command, retries=1, delay=0, **kwargs) -> Optional[subprocess.Co
 
     logging.error(f"Failed to execute after {retries} attempts: '{command}'")
     return None
+
+
+def run_program(command: list[str], timeout: int, env: Optional[MutableMapping[str, str]] = None,
+                cwd: Optional[str | Path] = None) -> Optional[subprocess.CompletedProcess[str]]:
+    """Run another program (not Wine) and capture its output; None if it couldn't run.
+
+    It gets the system's libraries rather than the ones bundled in our binary
+    (fix_ld_library_path), and PYINSTALLER_RESET_ENVIRONMENT lets another PyInstaller
+    app (Akousousin) set up its own environment instead of inheriting ours."""
+    env = fix_ld_library_path(dict(os.environ if env is None else env, PYINSTALLER_RESET_ENVIRONMENT="1"))
+    try:
+        return subprocess.run(command, capture_output=True, text=True, timeout=timeout, env=env, cwd=cwd)
+    except (OSError, subprocess.SubprocessError) as error:
+        logging.warning(f"Couldn't run {command[0]}: {error}")
+        return None
 
 
 # FIXME: #300 refactor this to either return Popen or raise. No None.
@@ -351,17 +380,11 @@ def check_architecture():
 
 
 def get_os() -> Tuple[str, str]:
-    """Gets OS information
-    
-    Returns:
-        OS name
-        OS release
-    """
     # FIXME: Not working? Returns "Linux" on some systems? On Ubuntu 24.04 it
     # correctly returns "ubuntu".
-    os_name = distro.id()
+    os_name = _distro.id()
     logging.info(f"OS name: {os_name}")
-    os_release = distro.version()
+    os_release = _distro.version()
     logging.info(f"OS release: {os_release}")
     return os_name, os_release
 
@@ -430,10 +453,10 @@ class PackageManager:
 
 
 def get_package_manager() -> PackageManager | None:
-    major_ver_str = distro.major_version()
+    major_ver_str = _distro.major_version()
     # None on rolling/testing releases (e.g. Debian sid)
     major_ver: int | None = int(major_ver_str) if major_ver_str.isdigit() else None
-    os_name = distro.id()
+    os_name = _distro.id()
     logging.debug(f"{os_name=}; {major_ver=}")
     # Check for package manager and associated packages.
 
@@ -460,6 +483,7 @@ def get_package_manager() -> PackageManager | None:
             "cabextract " # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
             "mesa-utils "  # verify opengl version
+            "mesa-va-drivers intel-media-va-driver "  # hardware video decoding (FFmpeg/VA-API)
         )
 
         # p7zip-full was replaced by 7zip
@@ -517,7 +541,10 @@ def get_package_manager() -> PackageManager | None:
             "mod_auth_ntlm_winbind samba-winbind samba-winbind-clients "  # wine
             "cabextract " # winetricks
             "xdg-utils " # For xdg-mime needed for custom url scheme registration
-            "glx-utils"  # verify opengl version
+            "glx-utils "  # verify opengl version
+            # hardware video decoding (FFmpeg/VA-API); Fedora's build leaves out H.264,
+            # RPM Fusion's mesa-va-drivers-freeworld has it
+            "mesa-va-drivers"
         )
         incompatible_packages = ""  # appimagelauncher handled separately
     elif shutil.which('zypper') is not None:  # OpenSUSE
@@ -596,8 +623,8 @@ def get_package_manager() -> PackageManager | None:
                 "7zip cabextract " # winetricks (7zip used to be called pzip then p7zip)
                 "openjpeg2 libxcomposite libxinerama "  # display
                 "ocl-icd vulkan-icd-loader "  # hardware
-                "alsa-plugins gst-plugins-base-libs libpulse openal "  # audio
-                "libva mpg123 v4l-utils "  # video
+                "alsa-plugins libpulse openal "  # audio
+                "libva intel-media-driver mpg123 v4l-utils "  # video (VA-API decoding; mesa has AMD's)
                 "libxslt sqlite "  # misc
                 "xdg-utils " # For xdg-mime needed for custom url scheme registration
                 "mesa-utils "  # verify opengl version
@@ -849,8 +876,168 @@ def postinstall_dependencies(superuser_command: str):
     return command
 
 
+def is_image_based_os() -> bool:
+    """SteamOS, Bazzite, Fedora Silverblue/Kinoite and other image-based systems.
+
+    Their system files are read-only and replaced on update, so packages installed
+    there are lost (or the install fails). Ou Dedetai keeps everything in your home
+    folder on these systems instead."""
+    if Path("/run/ostree-booted").exists():
+        return True
+    try:
+        return _distro.id() == "steamos"
+    except Exception:
+        return False
+
+
+# Programs winetricks uses to unpack most of what it downloads, and their package
+# names per package manager (the first word of its install command).
+WINETRICKS_TOOLS = {
+    "cabextract": {"apt": "cabextract", "dnf": "cabextract", "zypper": "cabextract",
+                   "pacman": "cabextract", "pamac": "cabextract", "apk": "cabextract"},
+    "7z": {"apt": "7zip", "dnf": "p7zip-plugins", "zypper": "7zip", "pacman": "7zip",
+           "pamac": "7zip", "apk": "7zip"},
+    "unzip": {"apt": "unzip", "dnf": "unzip", "zypper": "unzip", "pacman": "unzip",
+              "pamac": "unzip", "apk": "unzip"},
+}
+
+
+def _fuse_package(manager: str) -> str:
+    if manager != "apt":
+        return FUSE_PACKAGES.get(manager, "fuse")
+    # Ubuntu 24.04+ and Debian 13+ renamed it.
+    result = run_program(["apt-cache", "show", "libfuse2t64"], timeout=30)
+    return "libfuse2t64" if result is not None and result.returncode == 0 else "libfuse2"
+
+
+@functools.lru_cache(maxsize=8)
+def appimage_runs(path: str, extract: bool = False) -> bool:
+    """Whether this Wine AppImage starts here (`--version`), mounted with FUSE or,
+    with extract, unpacking itself (APPIMAGE_EXTRACT_AND_RUN). Cached per run."""
+    env = dict(os.environ, APPIMAGE_EXTRACT_AND_RUN="1") if extract else None
+    result = run_program([path, "--version"], timeout=180, env=env)
+    if result is None:
+        return False
+    if result.returncode != 0:
+        logging.info(f"{Path(path).name} --version (extract={extract}) exited {result.returncode}: "
+                     f"{(result.stderr or result.stdout).strip()[-300:]}")
+    return result.returncode == 0
+
+
+def appimage_needs_extract(path: str) -> bool:
+    """Run this AppImage by unpacking it: it can't mount itself, but can unpack."""
+    return Path(path).is_file() and not appimage_runs(path) and appimage_runs(path, extract=True)
+
+
+def _package_manager_name() -> Optional[str]:
+    """"apt", "dnf", "pacman"… (the install command's program), or None if unknown."""
+    package_manager = get_package_manager()
+    return Path(package_manager.install[0]).name if package_manager else None
+
+
+def offer_packages(app: App, packages: list[str], question: str, why: str,
+                   without: str = "") -> bool:
+    """Offer to install just these system packages; True if they were installed.
+
+    Ou Dedetai doesn't install system packages up front: each feature that needs one
+    asks for it here. Never on image-based systems (their system files are replaced on
+    update), and never fatal: a failed install is reported (with `without`, what that
+    means for the feature) and the caller carries on."""
+    package_manager = None if is_image_based_os() else get_package_manager()
+    if package_manager is None:
+        return False
+    # Just these packages: pacman's usual install command also upgrades the whole system.
+    install = (["pacman", "-S", "--needed", "--noconfirm"] if _package_manager_name() == "pacman"
+               else package_manager.install)
+    if not app.approve(question, f"{why}\n\nThis runs: {' '.join(install + packages)}"):
+        return False
+    try:
+        run_command([app.superuser_command, *install, *packages])
+    except (OSError, subprocess.CalledProcessError) as error:
+        logging.warning(f"Installing {packages} failed: {error}")
+        app.status(f"Couldn't install {', '.join(packages)} (the log has the details). {without}".strip(), 0)
+        return False
+    return True
+
+
+def ensure_appimage_runtime(app: App, path: str) -> None:
+    """Called when a Wine AppImage becomes the runner: one that can't mount itself gets its
+    FUSE package offered, or, where that isn't possible or is declined, runs by unpacking
+    itself each time instead."""
+    if not Path(path).is_file() or appimage_runs(path):
+        return
+    package = _fuse_package(_package_manager_name() or "")
+    if offer_packages(app, [package], f"Install {package} so this Wine AppImage can run?",
+                      "AppImages mount themselves with FUSE, which isn't installed. Without it the "
+                      "AppImage unpacks itself every time Wine starts, which is slower."):
+        appimage_runs.cache_clear()
+        if appimage_runs(path):
+            app.status(f"Installed {package}.")
+            return
+    if appimage_runs(path, extract=True):
+        app.status("This Wine AppImage will unpack itself each time it starts (no FUSE here).")
+    else:
+        app.info(f"This Wine AppImage doesn't start on this system: {path}\n\n"
+                 "Choose the bundled Wine (the recommended one) instead.")
+
+
+def missing_winetricks_tools() -> list[str]:
+    return [tool for tool in WINETRICKS_TOOLS
+            if not (shutil.which(tool) or (tool == "7z" and shutil.which("7zz")))]
+
+
+def offer_winetricks_tools(app: App) -> None:
+    """Before running winetricks: offer what it needs to unpack its downloads. Logos
+    doesn't need these, so they aren't installed with it. Never fatal: winetricks still runs."""
+    missing = missing_winetricks_tools()
+    if not missing:
+        return
+    context = (f"winetricks uses {', '.join(missing)} to unpack many of the things it downloads; "
+               "without them some of its options will fail.")
+    if is_image_based_os():
+        app.info(context + "\n\nThis system is image-based, so Ou Dedetai can't install them "
+                 "system-wide. You can install them in a container (e.g. distrobox) or with your "
+                 "system's own tools.")
+        return
+    if get_package_manager() is None:
+        app.info(context)
+        return
+    manager = _package_manager_name() or ""
+    packages = [WINETRICKS_TOOLS[tool].get(manager, tool) for tool in missing]
+    if offer_packages(app, packages, "Install them now?", context,
+                      without="winetricks may not manage everything."):
+        app.status(f"Installed {', '.join(packages)}.", 100)
+
+
+def wl_paste_available() -> bool:
+    """wl-paste on the system, or the copy Akousousin bundles (the integrations use either)."""
+    return shutil.which("wl-paste") is not None or constants.AKOUSOUSIN_WL_PASTE.is_file()
+
+
+def offer_wl_clipboard(app: App) -> None:
+    """After installing the desktop integrations on Wayland: their look-up shortcut reads
+    highlighted text with wl-paste. If neither the system nor Akousousin has it, offer
+    just that package (it still works with copied text without it)."""
+    if not os.environ.get("WAYLAND_DISPLAY") or wl_paste_available():
+        return
+    offer_packages(app, ["wl-clipboard"], "Install wl-clipboard too?",
+                   "The Logos look-up shortcut uses it to read text you've highlighted. Without it, "
+                   "the shortcut only reads text you've copied.",
+                   without="The look-up shortcut will only read text you've copied.")
+
+
 def install_dependencies(app: App, target_version=10):
     if app.conf.skip_install_system_dependencies:
+        return
+    if is_image_based_os():
+        app.status(
+            "This system is image-based (e.g. SteamOS, Bazzite, Silverblue), so Ou Dedetai "
+            "doesn't install system packages; everything goes in your home folder."
+        )
+        logging.info("Image-based OS: skipping system package installation")
+        return
+    if network.is_offline():
+        app.status("Offline mode is on, so system packages weren't checked or installed.")
         return
 
     install_deps_failed = False
@@ -1045,6 +1232,113 @@ def ensure_winetricks(
                 break
     os.chmod(winetricks_path, 0o755)
     logging.debug("Winetricks installed.")
+
+
+def akousousin_launcher() -> Path:
+    return Path.home() / ".local/bin/akousousin"
+
+
+def akousousin_installed() -> bool:
+    return akousousin_launcher().is_file()
+
+
+def ensure_akousousin(app: App, update: bool = False) -> bool:
+    """Install shared speech and register SAPI; Akousousin owns its lifecycle.
+
+    Returns True when Akousousin is installed and registered with this prefix. Any
+    failure (no stable release, no network, installer or registration error) is
+    reported and logged but never stops OuDedetai: Logos works without it, and
+    "Update Akousousin" can be tried again later."""
+    from . import utils
+
+    app.status("Ensuring Akousousin speech support is installed…")
+
+    launcher = akousousin_launcher()
+    # Akousousin is a separate frozen application, not a child OD worker.
+    env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
+
+    def failed(reason: str) -> bool:
+        logging.warning(f"Akousousin: {reason}")
+        app.status(f"Akousousin speech support wasn't set up: {reason} "
+                   "Logos works without it; try \"Update Akousousin\" later.")
+        return False
+
+    try:
+        if update or not launcher.is_file():
+            filename = constants.AKOUSOUSIN_TARBALL
+            # Always the current release (the shared cache can be 12 hours old).
+            lookup = network._get_release_data
+            try:
+                release = lookup("jg00dman/akousousin", tag="latest", asset_name=re.escape(filename))
+            except Exception as error:
+                return failed(f"couldn't find a stable Akousousin release with {filename} ({error}).")
+            cached = f"{release.version.replace('/', '_')}-{filename}"
+            network.logos_reuse_download(release.download_url, cached, app.conf.download_dir, app=app)
+            downloaded = Path(app.conf.download_dir) / cached
+            with tempfile.TemporaryDirectory() as directory:
+                utils.untar_file(downloaded, directory)
+                if run_command(["sh", str(Path(directory) / "Akousousin/install.sh"), "--quiet"],
+                               env=env, timeout=180) is None:
+                    return failed("the bundle's installer failed. See the installation log.")
+            if not launcher.is_file():
+                return failed(f"its installer did not create {launcher}.")
+        if run_command([str(launcher), "--wine-prefix", str(Path(app.conf.wine_prefix).resolve()),
+                        "--wine", str(Path(app.conf.wine_binary).resolve()), "--install-only"],
+                       env=env, timeout=180) is None:
+            return failed("SAPI registration failed. See the installation log.")
+    except subprocess.CalledProcessError as error:
+        return failed(f"{error.stderr or error.stdout or error}")
+    except Exception as error:
+        logging.exception("Akousousin setup failed")
+        return failed(f"{error}")
+    return True
+
+
+def akousousin_version() -> Optional[str]:
+    """The installed Akousousin's version, from its bundle's build.json."""
+    build = akousousin_launcher().resolve().parent / "resources/build.json"
+    if not build.is_file():
+        build = Path.home() / ".local/lib/akousousin/resources/build.json"
+    try:
+        version = json.loads(build.read_text()).get("version")
+        return str(version) if version else None
+    except (OSError, ValueError):
+        return None
+
+
+def akousousin_update(app: App) -> Optional[str]:
+    """The latest release's version if it's newer than the installed one, else None.
+
+    Uses the shared release cache (renewed every 12 hours), so it doesn't ask GitHub each
+    time the window opens. Troubleshooting → Check for updates now renews it at once."""
+    if not akousousin_installed() or network.is_offline():
+        return None
+    try:
+        release = app.conf._network._repo_version("jg00dman/akousousin", tag="latest",
+                                                  asset_name=re.escape(constants.AKOUSOUSIN_TARBALL))
+    except (requests.RequestException, OSError, ValueError, LookupError) as error:
+        logging.debug(f"Akousousin update check failed: {error}")
+        return None
+    from . import utils
+    latest = str(release.version).lstrip("v")
+    return latest if utils.is_newer_version(latest, akousousin_version()) else None
+
+
+def update_akousousin(app: App):
+    """Install the latest stable tar and register it with the current Wine runner.
+
+    Logos can stay open; Akousousin itself is asked to quit first (its installer
+    needs that) and starts again when next needed."""
+    if not app.is_installed():
+        app.status("Install Logos/Verbum before updating Akousousin.", 0)
+        return
+    if akousousin_installed() and akousousin_update(app) is None:
+        app.status(f"Akousousin {akousousin_version() or ''} is up to date.", 0)
+        return
+    if akousousin_installed():
+        run_program([str(akousousin_launcher()), "--quit"], timeout=60)
+    if ensure_akousousin(app, update=True):
+        app.status("Akousousin updated and Wine speech registration refreshed.", 100)
 
 
 def check_incompatibilities(app: App):
