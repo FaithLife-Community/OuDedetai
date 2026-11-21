@@ -29,6 +29,17 @@ class TestDefault(unittest.TestCase):
             config.Config._default_to_prereleases(conf)
         self.assertEqual(conf._raw.app_release_channel, "stable")
 
+    def test_a_fresh_config_follows_releases(self):
+        raw = config.PersistentConfiguration()
+        self.assertEqual((raw.app_release_channel, raw.wine_release_channel), ("stable", "stable"))
+
+    def test_a_release_build_leaves_a_fresh_config_on_releases(self):
+        conf = mock.Mock()
+        conf._raw = config.PersistentConfiguration()
+        with mock.patch.object(constants, "LLI_CURRENT_VERSION", "4.0.0"):
+            config.Config._default_to_prereleases(conf)
+        self.assertEqual((conf._raw.app_release_channel, conf._raw.wine_release_channel), ("stable", "stable"))
+
     def test_a_release_build_keeps_its_channel(self):
         conf = fake_conf()
         with mock.patch.object(constants, "LLI_CURRENT_VERSION", "4.0.0-beta.17"):

@@ -185,7 +185,8 @@ Both use the same back end, so everything above applies to them, apart from the 
 - DXVK by default, Logos self-updates, FFmpeg media and the Mono/Gecko-free prefix all apply only with
   an oinos build (`wine --version` says `(oinos)`). With other Wine, Ou Dedetai behaves as before:
   `gdi` renderer, Logos updates managed by Ou Dedetai.
-- The prerelease default channel and the one-click "Recommended" assume oinos is what you get.
+- The one-click "Recommended" assumes oinos is what you get: on Releases once oinos is the Latest
+  release on wine-appimages, on Prereleases (test builds) before then.
 
 ## Release plan
 
@@ -200,12 +201,16 @@ Both use the same back end, so everything above applies to them, apart from the 
    user's recommended Wine. If oinos is published as a full release early, untick "Set as the latest
    release", or `gh api -X PATCH repos/FaithLife-Community/wine-appimages/releases/<id> -f make_latest=false`.
 4. **When oinos is released**: publish it as Latest, keep `10.8-staging` published as the way back,
-   merge the four stacked PRs in order: code (#568, `next`), translations (#585, `next-translations`),
-   docs (#587, `next-docs`) and tests (#588, `next-tests`). Then release them as beta 17 or 4.0.0.
+   merge the five stacked PRs in order: code (#568, `next`), translations (#585, `next-translations`),
+   docs (#587, `next-docs`), tests (#588, `next-tests`) and the release defaults (#591, `next-release`). Then
+   release them as 4.0.0.
    A fix goes in the lowest layer it belongs to, then each layer above merges the one below.
    Older Ou Dedetai then offers oinos through Update Wine; the extras (DXVK, FFmpeg, self-update)
    need the newer Ou Dedetai, which sets them up on its next start.
-5. `main`'s dev channel still follows test-builds. `next` points Prereleases at OuDedetai prereleases;
+5. **Release defaults** (`next-release`, the last layer): Wine follows Releases again, as in beta 16;
+   Logos's own logging is turned on only by prerelease builds (betas, test builds), so 4.0.0 leaves it
+   off; the version is 4.0.0. Test builds keep coming from `next-tests` until then.
+6. `main`'s dev channel still follows test-builds. `next` points Prereleases at OuDedetai prereleases;
    whether `main` does the same is the team's call when `next` is merged.
 
 ## How to test

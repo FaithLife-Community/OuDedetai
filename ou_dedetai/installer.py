@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from packaging.version import InvalidVersion, Version
+
 from ou_dedetai.app import App, UserExitedFromAsk
 
 from . import constants
@@ -480,15 +482,20 @@ def ensure_product_installed(app: App):
 
 
 def ensure_beta_product_logging(app: App):
-    """Beta/dev builds: turn on Logos's own logging unless the user has chosen.
+    """Prerelease builds (betas, test builds): turn on Logos's own logging unless the user
+    has chosen. Release builds leave it off.
 
     A crash dump only shows that a .NET exception went unhandled; Logos.log says
-    which one. Release builds keep logging off. FIXME: drop once 4.0.0 is out."""
-    if "beta" not in constants.LLI_CURRENT_VERSION and "dev" not in constants.LLI_CURRENT_VERSION:
+    which one, and the people running prereleases are the ones testing."""
+    try:
+        prerelease = Version(constants.LLI_CURRENT_VERSION).is_prerelease
+    except InvalidVersion:
+        prerelease = False
+    if not prerelease:
         return
     if app.conf._raw.faithlife_product_logging is not None:
         return  # the user turned it on or off themselves
-    logging.info("Beta build: enabling Logos logging so crashes can be diagnosed.")
+    logging.info("Prerelease build: enabling Logos logging so crashes can be diagnosed.")
     try:
         app.logos.switch_logging(action='enable')
     except Exception:

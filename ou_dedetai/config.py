@@ -338,8 +338,9 @@ class PersistentConfiguration:
     faithlife_product_logging: Optional[bool] = None
     install_dir: Optional[str] = None
     wine_binary: Optional[str] = None
-    # "dev" = the newest published oinos prerelease on wine-appimages; "stable" = the newest full release
-    wine_release_channel: str = "dev"
+    # "stable" = the newest full release on wine-appimages; "dev" = the newest oinos prerelease.
+    # Test builds follow "dev" until the user chooses (see _default_to_prereleases).
+    wine_release_channel: str = "stable"
     backup_dir: Optional[str] = None
 
     # Color to use in curses. Either "System", "Logos", "Light", or "Dark"
