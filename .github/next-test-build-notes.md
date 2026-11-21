@@ -13,6 +13,11 @@ etc
 See https://github.com/FaithLife-Community/wine-appimages/releases?q=rc6&expanded=true
 
 
+### New in dev8
+- **Behind the scenes: the window's code is reorganised** after review (#568): one file per feature instead of one large file. Nothing should look or work differently, so please report anything that does.
+- The "Choose options" install window no longer has a Version choice (it only ever offered Logos 10). The Release choice is unchanged, so you can still pick an older Logos release.
+- `OUDEDETAI_OFFLINE` and `OUDEDETAI_NO_TRAY` are on only when set to `1`, as documented.
+
 ### New in dev7
 - **The window in all the languages Logos offers**: Spanish, French, German, Portuguese, Korean, and Simplified and Traditional Chinese, following your desktop's language. These were translated with AI help: corrections from native speakers are very welcome.
 - **A user guide with pictures of every screen**: [docs/user-guide.md](https://github.com/FaithLife-Community/OuDedetai/blob/next/docs/user-guide.md).
