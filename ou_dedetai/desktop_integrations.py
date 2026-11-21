@@ -197,15 +197,13 @@ def restart_plasma(app: App) -> None:
     app.status("Logos desktop integrations installed; Plasma reloaded.")
 
 
-# ── Using the installed integrations from Ou Dedetai's own windows ───────────
-#
-# Ou Dedetai never reads Logos's databases for these features itself: it asks the
-# integrations' backend, which owns that code (and its `logos_databases` switch).
-# Each call returns an empty result when the integrations aren't installed, are an
-# older version without the command, or have reading Logos's data switched off, so
-# the window simply leaves the feature out.
-
 def _run_backend(*args: str, timeout: int = 60) -> Optional[str]:
+    """Ask the installed integrations' backend, for Ou Dedetai's own windows.
+
+    Ou Dedetai never reads Logos's databases for these features itself: the backend owns
+    that code (and its `logos_databases` switch). Each call returns an empty result when
+    the integrations aren't installed, are an older version without the command, or have
+    reading Logos's data switched off, so the window simply leaves the feature out."""
     backend = _backend()
     if backend is None:
         return None

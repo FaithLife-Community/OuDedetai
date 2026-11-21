@@ -27,6 +27,15 @@ from ou_dedetai import constants, network
 from ou_dedetai.app import App
 
 
+# os-release is all we need. distro's default also runs `uname -rs` and lets a failure
+# escape (seen on Kubuntu 26.04, whose coreutils are uutils), stopping the install.
+_distro = distro.LinuxDistribution(include_uname=False, include_lsb=False)
+
+# What a Wine AppImage needs to mount itself, per package manager. Older AppImage
+# runtimes need libfuse 2; ours (uruntime) need only fusermount, which comes with it.
+FUSE_PACKAGES = {"dnf": "fuse-libs", "zypper": "libfuse2", "pacman": "fuse2", "pamac": "fuse2", "apk": "fuse"}
+
+
 def fix_ld_library_path(env: Optional[MutableMapping[str, str]]) -> dict[str, str]:
     """Removes pyinstaller bundled dynamic linked libraries when executing commands
 
@@ -370,18 +379,7 @@ def check_architecture():
         logging.critical("System archictecture unknown.")
 
 
-# os-release is all we need. distro's default also runs `uname -rs` and lets a failure
-# escape (seen on Kubuntu 26.04, whose coreutils are uutils), stopping the install.
-_distro = distro.LinuxDistribution(include_uname=False, include_lsb=False)
-
-
 def get_os() -> Tuple[str, str]:
-    """Gets OS information
-    
-    Returns:
-        OS name
-        OS release
-    """
     # FIXME: Not working? Returns "Linux" on some systems? On Ubuntu 24.04 it
     # correctly returns "ubuntu".
     os_name = _distro.id()
@@ -904,11 +902,6 @@ WINETRICKS_TOOLS = {
 }
 
 
-# What a Wine AppImage needs to mount itself, per package manager. Older AppImage
-# runtimes need libfuse 2; ours (uruntime) need only fusermount, which comes with it.
-FUSE_PACKAGES = {"dnf": "fuse-libs", "zypper": "libfuse2", "pacman": "fuse2", "pamac": "fuse2", "apk": "fuse"}
-
-
 def _fuse_package(manager: str) -> str:
     if manager != "apt":
         return FUSE_PACKAGES.get(manager, "fuse")
@@ -1018,8 +1011,7 @@ def offer_winetricks_tools(app: App) -> None:
 
 def wl_paste_available() -> bool:
     """wl-paste on the system, or the copy Akousousin bundles (the integrations use either)."""
-    bundled = Path.home() / ".local/lib/akousousin/resources/helpers/wl-paste/bin/wl-paste"
-    return shutil.which("wl-paste") is not None or bundled.is_file()
+    return shutil.which("wl-paste") is not None or constants.AKOUSOUSIN_WL_PASTE.is_file()
 
 
 def offer_wl_clipboard(app: App) -> None:
@@ -1273,7 +1265,7 @@ def ensure_akousousin(app: App, update: bool = False) -> bool:
 
     try:
         if update or not launcher.is_file():
-            filename = AKOUSOUSIN_TARBALL
+            filename = constants.AKOUSOUSIN_TARBALL
             # Always the current release (the shared cache can be 12 hours old).
             lookup = network._get_release_data
             try:
@@ -1302,9 +1294,6 @@ def ensure_akousousin(app: App, update: bool = False) -> bool:
     return True
 
 
-AKOUSOUSIN_TARBALL = "Akousousin-Linux-x86_64.tar.gz"
-
-
 def akousousin_version() -> Optional[str]:
     """The installed Akousousin's version, from its bundle's build.json."""
     build = akousousin_launcher().resolve().parent / "resources/build.json"
@@ -1326,7 +1315,7 @@ def akousousin_update(app: App) -> Optional[str]:
         return None
     try:
         release = app.conf._network._repo_version("jg00dman/akousousin", tag="latest",
-                                                  asset_name=re.escape(AKOUSOUSIN_TARBALL))
+                                                  asset_name=re.escape(constants.AKOUSOUSIN_TARBALL))
     except (requests.RequestException, OSError, ValueError, LookupError) as error:
         logging.debug(f"Akousousin update check failed: {error}")
         return None

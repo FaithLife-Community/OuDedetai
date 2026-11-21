@@ -16,7 +16,7 @@ from ou_dedetai.config import EphemeralConfiguration, PersistentConfiguration
 import ou_dedetai.config
 import ou_dedetai.constants
 import ou_dedetai.database
-import ou_dedetai.gui_app
+import ou_dedetai.gui.app
 import ou_dedetai.installer
 import ou_dedetai.msg
 import ou_dedetai.system
@@ -86,7 +86,7 @@ def detect_broken_install(
 def run_under_app(ephemeral_config: EphemeralConfiguration, func: Callable[[App], None]): 
     dialog = ephemeral_config.dialog or ou_dedetai.system.get_dialog()
     if dialog == 'tk':
-        return ou_dedetai.gui_app.start_gui_app(ephemeral_config, func)
+        return ou_dedetai.gui.app.start_gui_app(ephemeral_config, func)
     else:
         app = ou_dedetai.cli.CLI(ephemeral_config)
         func(app)

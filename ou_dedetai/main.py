@@ -10,7 +10,7 @@ from typing import Callable, Tuple
 from . import cli, database_faithlife_notes, database_faithlife_catalog
 from . import database
 from . import constants
-from . import gui_app
+from .gui.app import start_gui_app
 from . import markdown
 from . import msg
 from . import system
@@ -27,7 +27,7 @@ def run_control_panel(ephemeral_config: EphemeralConfiguration):
     dialog = ephemeral_config.dialog or system.get_dialog()
     logging.info(f"Using DIALOG: {dialog}")
     if dialog == 'tk':
-        gui_app.start_gui_app(ephemeral_config)
+        start_gui_app(ephemeral_config)
     else:
         try:
             tui_app.control_panel_app(ephemeral_config)
@@ -45,7 +45,7 @@ def install_app(ephemeral_config: EphemeralConfiguration):
     dialog = ephemeral_config.dialog or system.get_dialog()
     logging.info(f"Using DIALOG: {dialog}")
     if dialog == 'tk':
-        gui_app.start_gui_app(ephemeral_config, install_only=True)
+        start_gui_app(ephemeral_config, install_only=True)
     else:
         cli.CLI(ephemeral_config).install_app()
 

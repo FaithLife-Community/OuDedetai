@@ -3,9 +3,11 @@
 Colours follow Faithlife's own MIT-licensed UI library (Faithlife/styled-ui,
 theme/core.js), darkened where needed so text passes WCAG contrast (4.5:1).
 """
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QCoreApplication, Qt
+from PySide6.QtGui import QColor, QFont, QIcon, QPalette, QPixmap
 
-from . import constants
+from .. import constants
 
 # Translation context of every window string (Qt Linguist files in ou_dedetai/i18n).
 CONTEXT = "OuDedetai"
@@ -13,7 +15,7 @@ CONTEXT = "OuDedetai"
 
 def tr(text: str) -> str:
     """Translate a window string into the desktop's language, if we have it."""
-    return QtCore.QCoreApplication.translate(CONTEXT, text)
+    return QCoreApplication.translate(CONTEXT, text)
 
 BLUE = "#0174b9"          # buttons, links (styled-ui blue5; 5:1 with white)
 BLUE_DARK = "#015d95"     # hover/pressed
@@ -42,6 +44,10 @@ QLabel[role="muted"] {{ color: {TEXT_MUTED}; }}
 QLabel[role="title"] {{ font-size: 20pt; font-weight: 600; }}
 QLabel[role="h2"] {{ font-size: 13pt; font-weight: 600; }}
 QLabel[role="group"] {{ color: {TEXT_MUTED}; font-size: 9pt; font-weight: 700; }}
+QLabel[role="heading"] {{ font-size: 16pt; }}
+QLabel[role="strong"] {{ font-weight: 600; }}
+QLabel[role="brand"] {{ font-size: 13pt; font-weight: 700; }}
+QLabel[role="value"] {{ font-size: 13pt; font-weight: 600; }}
 QFrame#card {{ background: white; border: 1px solid {BORDER}; border-radius: 6px; }}
 QFrame#card[accent="true"] {{ border-top: 3px solid {BLUE_ACCENT}; }}
 QFrame#card[accent="warn"] {{ border-top: 3px solid #e97732; }}
@@ -103,33 +109,33 @@ QToolTip {{ background: white; color: {TEXT}; border: 1px solid {BORDER_STRONG};
 """
 
 
-def apply(app: QtWidgets.QApplication) -> None:
+def apply(app: QApplication) -> None:
     app.setStyle("Fusion")
-    font = QtGui.QFont()
+    font = QFont()
     font.setFamilies(FONT_FAMILIES)
     font.setPointSize(10)
     app.setFont(font)
     palette = app.palette()
-    palette.setColor(QtGui.QPalette.ColorRole.Window, QtGui.QColor(PAGE))
-    palette.setColor(QtGui.QPalette.ColorRole.WindowText, QtGui.QColor(TEXT))
-    palette.setColor(QtGui.QPalette.ColorRole.Base, QtGui.QColor("white"))
-    palette.setColor(QtGui.QPalette.ColorRole.Text, QtGui.QColor(TEXT))
-    palette.setColor(QtGui.QPalette.ColorRole.Button, QtGui.QColor(PANEL))
-    palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor(TEXT))
-    palette.setColor(QtGui.QPalette.ColorRole.Highlight, QtGui.QColor(BLUE))
-    palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor("white"))
-    palette.setColor(QtGui.QPalette.ColorRole.Link, QtGui.QColor(BLUE))
+    palette.setColor(QPalette.ColorRole.Window, QColor(PAGE))
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(TEXT))
+    palette.setColor(QPalette.ColorRole.Base, QColor("white"))
+    palette.setColor(QPalette.ColorRole.Text, QColor(TEXT))
+    palette.setColor(QPalette.ColorRole.Button, QColor(PANEL))
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor(TEXT))
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(BLUE))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("white"))
+    palette.setColor(QPalette.ColorRole.Link, QColor(BLUE))
     app.setPalette(palette)
     app.setStyleSheet(STYLESHEET)
 
 
-def app_icon() -> QtGui.QIcon:
-    return QtGui.QIcon(str(constants.APP_IMAGE_DIR / "icon.png"))
+def app_icon() -> QIcon:
+    return QIcon(str(constants.APP_IMAGE_DIR / "icon.png"))
 
 
-def pixmap(path, size: int) -> QtGui.QPixmap:
-    pm = QtGui.QPixmap(str(path))
+def pixmap(path, size: int) -> QPixmap:
+    pm = QPixmap(str(path))
     if pm.isNull():
         return pm
-    return pm.scaled(size, size, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                     QtCore.Qt.TransformationMode.SmoothTransformation)
+    return pm.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                     Qt.TransformationMode.SmoothTransformation)
