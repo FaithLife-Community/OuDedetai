@@ -185,6 +185,32 @@ class TestBackgroundWork(GuiTestCase):
         self.assertIsNone(self.window.s_update.property("kind"))
         self.assertEqual(self.window.s_update.text(), "Update")
 
+    def test_window_goes_into_the_tray_once_logos_runs(self):
+        qt = mock.Mock()
+        self.window.root.show()
+        tray = TrayController(self.window, qt)
+        tray.tray = mock.Mock()  # a desktop with a tray icon
+        self.window.logos.logos_state = State.STARTING
+        tray._tick()
+        self.assertTrue(self.window.root.isVisible())
+        self.window.logos.logos_state = State.RUNNING
+        tray._tick()
+        self.assertFalse(self.window.root.isVisible())
+        self.window.root.show()  # opened again from the tray: it stays
+        tray._tick()
+        self.assertTrue(self.window.root.isVisible())
+        tray.timer.stop()
+
+    def test_window_stays_without_a_tray_icon(self):
+        qt = mock.Mock()
+        self.window.root.show()
+        tray = TrayController(self.window, qt)
+        tray.tray = None
+        self.window.logos.logos_state = State.RUNNING
+        tray._tick()
+        self.assertTrue(self.window.root.isVisible())
+        tray.timer.stop()
+
     def test_tray_quit_warns_while_logos_runs(self):
         qt = mock.Mock()
         tray = TrayController(self.window, qt)
