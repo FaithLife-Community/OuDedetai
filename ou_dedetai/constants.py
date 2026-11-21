@@ -22,7 +22,6 @@ def get_runmode() -> str:
         return 'script'
 
 
-
 # Are we running from binary or src?
 RUNMODE = get_runmode()
 _snap = os.environ.get('SNAP')
@@ -133,3 +132,19 @@ PROMPT_OPTION_SIGILS = [PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE, PROMPT_OPTI
 # String for when a binary is meant to be downloaded later
 DOWNLOAD = "Download"
 WINDOWS_VERSIONS = ["vista", "win7", "win8", "win10", "win11", "Return to Main Menu"]
+
+# Registry keys Ou Dedetai reads and sets in the prefix, under HKEY_CURRENT_USER.
+REG_LOGOS_LOGGING = "Software\\Logos4\\Logging"
+REG_WINE_MSI = "Software\\Wine\\MSI"
+REG_WINE_MEDIA_FOUNDATION = "Software\\Wine\\MediaFoundation"
+REG_WINE_APP_DEFAULTS = "Software\\Wine\\AppDefaults"
+REG_WINE_DIRECT3D = "Software\\Wine\\Direct3D"
+REG_WINE_DLL_OVERRIDES = "Software\\Wine\\DllOverrides"
+REG_WINE_FONT_REPLACEMENTS = "Software\\Wine\\Fonts\\Replacements"
+
+# Desktop entries and URL handlers create_launcher_shortcuts writes.
+URL_SCHEMES = ("x-scheme-handler/logos4", "x-scheme-handler/libronixdls")
+
+AKOUSOUSIN_TARBALL = "Akousousin-Linux-x86_64.tar.gz"
+# The wl-paste Akousousin bundles (the integrations use it when the system has none).
+AKOUSOUSIN_WL_PASTE = Path.home() / ".local/lib/akousousin/resources/helpers/wl-paste/bin/wl-paste"

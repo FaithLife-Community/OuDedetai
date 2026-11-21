@@ -5,28 +5,27 @@ from pathlib import Path
 from threading import Event
 from typing import Callable, Optional
 
-from PySide6 import QtCore, QtWidgets
+from PySide6.QtWidgets import (
+    QDialog, QDialogButtonBox, QFileDialog, QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QVBoxLayout,
+)
+from PySide6.QtCore import QEvent, QObject, Qt, QThread, Signal, Slot
 
 from ou_dedetai.app import App
 from ou_dedetai.config import EphemeralConfiguration
-from ou_dedetai.constants import (
-    PROMPT_OPTION_DIRECTORY,
-    PROMPT_OPTION_FILE,
-    PROMPT_OPTION_NEW_FILE,
-)
+from ou_dedetai.constants import PROMPT_OPTION_DIRECTORY, PROMPT_OPTION_FILE, PROMPT_OPTION_NEW_FILE
 
 from . import constants, gui, gui_style, installer, system, utils
 from .gui_style import tr
 
 
-class GuiBridge(QtCore.QObject):
-    invoke = QtCore.Signal(object)
+class GuiBridge(QObject):
+    invoke = Signal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.invoke.connect(self._run, QtCore.Qt.ConnectionType.QueuedConnection)
+        self.invoke.connect(self._run, Qt.ConnectionType.QueuedConnection)
 
-    @QtCore.Slot(object)
+    @Slot(object)
     def _run(self, request):
         callback, event, result = request
         try:
@@ -37,7 +36,7 @@ class GuiBridge(QtCore.QObject):
             event.set()
 
 
-class Root(QtWidgets.QMainWindow):
+class Root(QMainWindow):
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.classname = kwargs.get("className", constants.BINARY_NAME)
@@ -48,7 +47,7 @@ class Root(QtWidgets.QMainWindow):
         self.setCentralWidget(widget)
 
 
-class Toplevel(QtWidgets.QDialog):
+class Toplevel(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setModal(True)
@@ -60,13 +59,7 @@ class GuiApp(App):
 
     _exit_option: Optional[str] = None
 
-    def __init__(
-        self,
-        root: Root,
-        status_gui: gui.StatusGui,
-        ephemeral_config: EphemeralConfiguration,
-        **kwargs,
-    ):
+    def __init__(self, root: Root, status_gui: gui.StatusGui, ephemeral_config: EphemeralConfiguration, **kwargs):
         super().__init__(ephemeral_config)
         self.root = root
         self._status_gui = status_gui
@@ -74,7 +67,7 @@ class GuiApp(App):
         self.start_thread(self.populate_defaults)
 
     def _is_gui_thread(self):
-        return QtCore.QThread.currentThread() == self.root.thread()
+        return QThread.currentThread() == self.root.thread()
 
     def _dispatch(self, callback, wait=True):
         """Execute a callback on the GUI thread."""
@@ -116,19 +109,19 @@ class GuiApp(App):
         return answer
 
     def _select_directory(self, question):
-        result = QtWidgets.QFileDialog.getExistingDirectory(
+        result = QFileDialog.getExistingDirectory(
             self.root, question, str(Path.home())
         )
         return result or None
 
     def _select_file(self, question):
-        result, _ = QtWidgets.QFileDialog.getOpenFileName(
+        result, _ = QFileDialog.getOpenFileName(
             self.root, question, str(Path.home())
         )
         return result or None
 
     def _save_file(self, question):
-        result, _ = QtWidgets.QFileDialog.getSaveFileName(
+        result, _ = QFileDialog.getSaveFileName(
             self.root, question, str(Path.home())
         )
         return result or None
@@ -138,7 +131,7 @@ class GuiApp(App):
 
     def _pop_up(self, title, message):
         self._dispatch(
-            lambda: QtWidgets.QMessageBox.information(
+            lambda: QMessageBox.information(
                 self.root, title, message
             )
         )
@@ -154,39 +147,39 @@ class GuiApp(App):
             return super().agree_to_licence(product, text)
 
         def ask() -> bool:
-            dialog = QtWidgets.QDialog(self.root)
+            dialog = QDialog(self.root)
             dialog.setWindowTitle(tr("{product} licence agreement").format(product=product))
             dialog.resize(640, 560)
-            layout = QtWidgets.QVBoxLayout(dialog)
-            intro = QtWidgets.QLabel(tr("Please read {product}'s licence agreement. Installing needs you to "
+            layout = QVBoxLayout(dialog)
+            intro = QLabel(tr("Please read {product}'s licence agreement. Installing needs you to "
                                         "accept it.").format(product=product))
             intro.setWordWrap(True)
             layout.addWidget(intro)
-            body = QtWidgets.QPlainTextEdit(text)
+            body = QPlainTextEdit(text)
             body.setReadOnly(True)
             body.setAccessibleName(tr("Licence agreement"))
             layout.addWidget(body, 1)
-            buttons = QtWidgets.QDialogButtonBox()
-            agree = buttons.addButton(tr("I agree"), QtWidgets.QDialogButtonBox.ButtonRole.AcceptRole)
-            buttons.addButton(QtWidgets.QDialogButtonBox.StandardButton.Cancel)
+            buttons = QDialogButtonBox()
+            agree = buttons.addButton(tr("I agree"), QDialogButtonBox.ButtonRole.AcceptRole)
+            buttons.addButton(QDialogButtonBox.StandardButton.Cancel)
             agree.setProperty("kind", "primary")
             buttons.accepted.connect(dialog.accept)
             buttons.rejected.connect(dialog.reject)
             layout.addWidget(buttons)
-            return dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted
+            return dialog.exec() == QDialog.DialogCode.Accepted
         return bool(self._dispatch(ask))
 
     def approve(self, question: str, context: str | None = None) -> bool:
         message = f"{question}\n\n{context or ''}".strip()
         return bool(self._dispatch(
-            lambda: QtWidgets.QMessageBox.question(
+            lambda: QMessageBox.question(
                 self.root,
                 question,
                 message,
-                QtWidgets.QMessageBox.StandardButton.Yes
-                | QtWidgets.QMessageBox.StandardButton.No,
-                QtWidgets.QMessageBox.StandardButton.No,
-            ) == QtWidgets.QMessageBox.StandardButton.Yes
+                QMessageBox.StandardButton.Yes
+                | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            ) == QMessageBox.StandardButton.Yes
         ))
 
     def _schedule_exit_on_main_thread(self, reason: str, intended: bool):
@@ -195,7 +188,7 @@ class GuiApp(App):
     def _exit(self, reason: str, intended: bool = False):
         if not intended:
             self._dispatch(
-                lambda: QtWidgets.QMessageBox.critical(
+                lambda: QMessageBox.critical(
                     self.root,
                     tr("Error"),
                     f"{reason}\n\n{constants.SUPPORT_MESSAGE}",
@@ -254,7 +247,7 @@ class ChoicePopUp(Toplevel):
         self.answer = None
 
         self.gui = gui.ChoiceGui(self, question, options)
-        layout = QtWidgets.QVBoxLayout(self)
+        layout = QVBoxLayout(self)
         layout.addWidget(self.gui)
 
         self.gui.cancel_button.clicked.connect(self.reject)
@@ -276,12 +269,12 @@ class ChoicePopUp(Toplevel):
         return self.answer
 
     def keyPressEvent(self, event):
-        if event.key() == QtCore.Qt.Key.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self.reject()
             return
         if event.key() in (
-            QtCore.Qt.Key.Key_Return,
-            QtCore.Qt.Key.Key_Enter,
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
         ):
             self.confirm()
             return
@@ -294,7 +287,7 @@ class InfoPopUp(Toplevel):
         self.setWindowTitle(tr("Information"))
 
         self.gui = gui.InfoGui(self, message)
-        layout = QtWidgets.QVBoxLayout(self)
+        layout = QVBoxLayout(self)
         layout.addWidget(self.gui)
 
         self.gui.okay_button.clicked.connect(self.accept)
@@ -302,16 +295,16 @@ class InfoPopUp(Toplevel):
 
     def keyPressEvent(self, event):
         if event.key() in (
-            QtCore.Qt.Key.Key_Return,
-            QtCore.Qt.Key.Key_Enter,
-            QtCore.Qt.Key.Key_Escape,
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
+            Qt.Key.Key_Escape,
         ):
             self.accept()
             return
         super().keyPressEvent(event)
 
 
-class InstallerWindow(QtCore.QObject):
+class InstallerWindow(QObject):
     def __init__(self, new_win, root: Root, app: GuiApp, **kwargs):
         super().__init__(new_win)
         self.win = new_win
@@ -327,14 +320,13 @@ class InstallerWindow(QtCore.QObject):
         self.win.setModal(True)
         self.win.setWindowFlags(
             self.win.windowFlags()
-            & ~QtCore.Qt.WindowType.WindowMaximizeButtonHint
+            & ~Qt.WindowType.WindowMaximizeButtonHint
         )
 
-        layout = QtWidgets.QVBoxLayout(self.win)
+        layout = QVBoxLayout(self.win)
         layout.addWidget(self.gui)
 
         self.gui.product_dropdown.currentTextChanged.connect(self.set_product)
-        self.gui.version_dropdown.currentTextChanged.connect(self.set_version)
         self.gui.release_dropdown.currentTextChanged.connect(self.set_release)
         self.gui.wine_dropdown.currentTextChanged.connect(self.set_wine)
         self.gui.skipdeps_checkbox.toggled.connect(self.set_skip_dependencies)
@@ -348,14 +340,14 @@ class InstallerWindow(QtCore.QObject):
         self.win.resize(self.win.sizeHint())
 
     def eventFilter(self, watched, event):
-        if watched is self.win and event.type() == QtCore.QEvent.Type.KeyPress:
+        if watched is self.win and event.type() == QEvent.Type.KeyPress:
             if event.key() in (
-                QtCore.Qt.Key.Key_Return,
-                QtCore.Qt.Key.Key_Enter,
+                Qt.Key.Key_Return,
+                Qt.Key.Key_Enter,
             ):
                 self.on_okay_released()
                 return True
-            if event.key() == QtCore.Qt.Key.Key_Escape:
+            if event.key() == Qt.Key.Key_Escape:
                 self.on_cancel_released()
                 return True
         return super().eventFilter(watched, event)
@@ -365,16 +357,12 @@ class InstallerWindow(QtCore.QObject):
 
     def _update_config_gui(self):
         self.gui.product_dropdown.blockSignals(True)
-        self.gui.version_dropdown.blockSignals(True)
         self.gui.release_dropdown.blockSignals(True)
         self.gui.wine_dropdown.blockSignals(True)
         self.gui.skipdeps_checkbox.blockSignals(True)
 
         self.gui.product_dropdown.setCurrentText(
             self.conf.faithlife_product or ""
-        )
-        self.gui.version_dropdown.setCurrentText(
-            self.conf.faithlife_product_version or ""
         )
 
         self.gui.release_dropdown.clear()
@@ -397,13 +385,10 @@ class InstallerWindow(QtCore.QObject):
         )
 
         self.gui.product_dropdown.blockSignals(False)
-        self.gui.version_dropdown.blockSignals(False)
         self.gui.release_dropdown.blockSignals(False)
         self.gui.wine_dropdown.blockSignals(False)
         self.gui.skipdeps_checkbox.blockSignals(False)
 
-        # The window keeps Ou Dedetai's icon; Faithlife's product icon appears only
-        # beside the product name.
         self.set_input_widgets_state("enabled", [self.gui.okay_button])
 
     def _post_dropdown_change(self):
@@ -415,7 +400,6 @@ class InstallerWindow(QtCore.QObject):
         enabled = state == "enabled"
         all_widgets = [
             self.gui.product_dropdown,
-            self.gui.version_dropdown,
             self.gui.release_dropdown,
             self.gui.wine_dropdown,
             self.gui.okay_button,
@@ -428,11 +412,6 @@ class InstallerWindow(QtCore.QObject):
     def set_product(self, value):
         if value:
             self.conf.faithlife_product = value
-            self._post_dropdown_change()
-
-    def set_version(self, value):
-        if value:
-            self.conf.faithlife_product_version = value
             self._post_dropdown_change()
 
     def set_release(self, value):
@@ -479,8 +458,8 @@ def start_gui_app(
     recovery: Optional[Callable[[App], None]] = None,
     install_only: bool = False,
 ):
-    """Open the GUI (gui_main.MainWindow). With ``recovery``, repair first; with
-    ``install_only``, start installing straight away."""
+    """Open the GUI (gui_main.MainWindow). With `recovery`, repair first; with
+    `install_only`, start installing straight away."""
     from . import gui_main
 
     if recovery is None:

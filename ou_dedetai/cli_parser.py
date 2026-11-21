@@ -343,7 +343,7 @@ def _tray_wanted(config: EphemeralConfiguration) -> bool:
 
     Over SSH, with --dialog cli/tty or OUDEDETAI_NO_TRAY=1, the shortcut keeps today's
     command-line behaviour."""
-    if os.getenv("OUDEDETAI_NO_TRAY", "").strip().lower() in ("1", "true", "yes", "on"):
+    if os.getenv("OUDEDETAI_NO_TRAY") == "1":
         return False
     if config.dialog and config.dialog != "tk":
         return False
@@ -421,14 +421,14 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
     if args.i_agree_to_faithlife_terms:
         ephemeral_config.agreed_to_faithlife_terms = True
 
-    if args.offline or os.getenv("OUDEDETAI_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on"):
+    if args.offline or os.getenv("OUDEDETAI_OFFLINE") == "1":
         ephemeral_config.offline = True
 
 
     def cli_operation(action: str) -> EphemeralConfiguration:
-        """Wrapper for a function pointer to a given function under CLI
+        """Wrapper for a function pointer to a given function under CLI.
 
-        Lazily instantiates CLI at call-time"""
+        Lazily instantiates CLI at call-time."""
         def _run(config: EphemeralConfiguration):
             if action == 'run_installed_app' and _tray_wanted(config):
                 # The Logos shortcut: start Logos and sit in the tray while it runs.
@@ -437,7 +437,7 @@ def od_parse_args(args, parser) -> Tuple[EphemeralConfiguration, Callable[[Ephem
                     gui_main.run_with_tray(config)
                     return
                 except (ImportError, RuntimeError, OSError):
-                    logging.exception("Couldn't start the tray; running Logos from the command line instead")
+                    logging.exception("Couldn't start the tray; running Logos from the command line instead.")
             getattr(cli.CLI(config), action)()
         output = _run
         output.__name__ = action

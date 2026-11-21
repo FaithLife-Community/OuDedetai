@@ -19,6 +19,32 @@ from . import system
 from . import utils
 
 
+# Registry writes are safe to repeat. A rare Wine start-up crash (a new process jumping
+# to a bad entry address before it has run anything; seen once on Bazzite with
+# reg.exe, exit code 5) shouldn't stop an install, so these get one retry.
+_IDEMPOTENT_TOOLS = ("reg", "regedit.exe")
+
+
+def leftover_wine(prefix: str | None) -> list[int]:
+    """PIDs of Wine processes still running in this prefix."""
+    import psutil  # type: ignore[import-untyped]
+    if not prefix:
+        return []
+    want = str(Path(prefix).resolve())
+    pids = []
+    for process in psutil.process_iter(["pid", "name"]):
+        try:
+            name = (process.info["name"] or "").lower()
+            if not (name.startswith("wine") or name.endswith(".exe")):
+                continue
+            env_prefix = process.environ().get("WINEPREFIX")
+            if env_prefix and str(Path(env_prefix).resolve()) == want:
+                pids.append(process.info["pid"])
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
+            pass
+    return pids
+
+
 def wineserver_kill(app: App):
     """Stops the prefix's wineserver and every Wine process in it, if one is running."""
     try:
@@ -151,7 +177,7 @@ def reg_add(app: App, wine_binary: str | Path, key: str, name: str, kind: str, d
 
 def allow_logos_updates(app: App, wine_binary: str):
     """Lets Logos's own updates finish under an oinos Wine build."""
-    reg_add(app, wine_binary, 'HKCU\\Software\\Wine\\MSI', 'IgnoreFailedActions', 'REG_MULTI_SZ',
+    reg_add(app, wine_binary, f"HKCU\\{constants.REG_WINE_MSI}", 'IgnoreFailedActions', 'REG_MULTI_SZ',
             LOGOS_IGNORED_MSI_ACTIONS)
     use_ffmpeg_media(app, wine_binary)
 
@@ -160,9 +186,9 @@ def use_ffmpeg_media(app: App, wine_binary: str):
     """Video and audio through our builds' FFmpeg media source (oinos only).
 
     Otherwise Wine uses GStreamer, which needs the system's H.264/AAC plugins
-    (gstreamer1.0-libav etc.), and Ou Dedetai doesn't install system packages: on
-    e.g. Kubuntu Logos's videos wouldn't play."""
-    reg_add(app, wine_binary, 'HKCU\\Software\\Wine\\MediaFoundation', 'DisableGstByteStreamHandler',
+    (gstreamer1.0-libav etc.), and Ou Dedetai doesn't install system packages, so on
+    Kubuntu, for example, Logos's videos wouldn't play."""
+    reg_add(app, wine_binary, f"HKCU\\{constants.REG_WINE_MEDIA_FOUNDATION}", 'DisableGstByteStreamHandler',
             'REG_DWORD', '1')
 
 
@@ -303,7 +329,6 @@ def prepare_prefix(app: App, wine64_binary: Optional[str] = None, init: bool = F
 
     Run with no display, so wineboot's "The Wine configuration is being updated" window
     can't appear; if that fails (some Wine builds need a display), run normally."""
-    from ou_dedetai.control import leftover_wine
     binary = wine64_binary or app.conf.wine64_binary
     command = [binary, "wineboot", "--init" if init else "--update"]
     # If Wine is already running here (Logos open), don't wait for it to exit.
@@ -347,7 +372,11 @@ def initializeWineBottle(wine64_binary: str, app: App):
     prepare_prefix(app, wine64_binary, init=True)
 
 
+# A .reg file section: "[key]" at the start of a line (key = everything up to "]"), then its
+# body: every line up to the next "[" at the start of a line, or the end of the file.
 _SECTION_RE = re.compile(r"^\[(?P<key>[^\]]+)\][^\n]*\n(?P<body>.*?)(?=^\[|\Z)", re.MULTILINE | re.DOTALL)
+# One value line in a section body: "name"=value. The name may contain escaped characters
+# (\" or \\); the value is the rest of the line, as Wine wrote it (e.g. dword:00000001).
 _VALUE_RE = re.compile(r'^"(?P<name>(?:[^"\\]|\\.)*)"=(?P<value>.*)$', re.MULTILINE)
 
 
@@ -392,7 +421,7 @@ class RelevantWineRegistrySettings:
 def read_wine_config(app: App) -> RelevantWineRegistrySettings:
     sections = read_registry(app)
     windows_version = reg_string(sections.get(r"software\wine", {}).get("version"))
-    indexer_key = rf"software\wine\appdefaults\{app.conf.faithlife_product}indexer.exe".lower()
+    indexer_key = f"{constants.REG_WINE_APP_DEFAULTS}\\{app.conf.faithlife_product}Indexer.exe".lower()
     indexer_version = reg_string(sections.get(indexer_key, {}).get("version"))
     return RelevantWineRegistrySettings(
         renderer=get_renderer(app),
@@ -421,7 +450,7 @@ def set_win_version(app: App, exe: str, windows_version: str):
         )
 
     elif exe == "indexer":
-        key = f"HKCU\\Software\\Wine\\AppDefaults\\{app.conf.faithlife_product}Indexer.exe"
+        key = f"HKCU\\{constants.REG_WINE_APP_DEFAULTS}\\{app.conf.faithlife_product}Indexer.exe"
         if not reg_add(app, app.conf.wine_binary, key, "Version", "REG_SZ", windows_version):
             app.exit("Failed to spawn command to set windows version for indexer")
 
@@ -509,7 +538,7 @@ def disable_winemenubuilder(app: App, wine64_binary: str):
 
 def get_renderer(app: App) -> Optional[str]:
     """Get the configured Wine Direct3D renderer."""
-    renderer = reg_string(read_registry(app).get(r"software\wine\direct3d", {}).get("renderer"))
+    renderer = reg_string(read_registry(app).get(constants.REG_WINE_DIRECT3D.lower(), {}).get("renderer"))
     return renderer.lower() if renderer else None
 
 
@@ -565,7 +594,7 @@ def run_dxvk_tool(app: App, tool: str) -> Optional[int]:
 
 def dxvk_enabled(app: App) -> bool:
     """Whether the prefix has DXVK's DLLs set to native (as dxvk-install does)."""
-    overrides = read_registry(app).get(r"software\wine\dlloverrides", {})
+    overrides = read_registry(app).get(constants.REG_WINE_DLL_OVERRIDES.lower(), {})
     value = reg_string(overrides.get("d3d9") or overrides.get("*d3d9"))
     return (value or "").lower() == "native"
 
@@ -660,7 +689,7 @@ FONT_REPLACEMENTS: dict[str, list[str]] = {
 }
 
 def set_font_replacements(app: App, wine64_binary: str):
-    key = "HKCU\\Software\\Wine\\Fonts\\Replacements"
+    key = f"HKCU\\{constants.REG_WINE_FONT_REPLACEMENTS}"
     for family, replacements in FONT_REPLACEMENTS.items():
         if not reg_add(app, wine64_binary, key, family, 'REG_MULTI_SZ', replacements):
             app.exit(f"Failed to spawn command to set font replacement for {family}")
@@ -684,28 +713,14 @@ def configure_printing(app: App, wine64_binary: str):
     wine_reg_install(app, name, reg_text, wine64_binary)
 
 
-# Reads the licence agreement from the installer with Windows Installer's own scripting
-# (msi.dll automation, run by cscript in the prefix): the text Faithlife's installer
-# shows on its licence page. Nothing extra to install.
-_LICENCE_VBS = r'''Set installer = CreateObject("WindowsInstaller.Installer")
-Set db = installer.OpenDatabase(WScript.Arguments(0), 0)
-Set view = db.OpenView("SELECT `Text` FROM `Control` WHERE `Type`='ScrollableText'")
-view.Execute
-Set rec = view.Fetch
-If Not rec Is Nothing Then
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    Set f = fso.CreateTextFile(WScript.Arguments(1), True, True)
-    f.Write rec.StringData(1)
-    f.Close
-End If
-'''
-
-
 def msi_licence_text(app: App, msi_path: str) -> Optional[str]:
-    """The installer's licence agreement as plain text, or None if it can't be read."""
+    """The installer's licence agreement as plain text, or None if it can't be read.
+
+    Read with Windows Installer's own scripting (assets/msi-licence.vbs, run by cscript
+    in the prefix): the text Faithlife's installer shows on its licence page."""
+    script = constants.APP_ASSETS_DIR / "msi-licence.vbs"
     with tempfile.TemporaryDirectory(prefix="oudedetai-licence-") as tmp:
-        script, out = Path(tmp) / "licence.vbs", Path(tmp) / "licence.txt"
-        script.write_text(_LICENCE_VBS)
+        out = Path(tmp) / "licence.txt"
 
         def win(path: Path | str) -> str:
             return "Z:" + str(Path(path).absolute()).replace("/", "\\")
@@ -732,7 +747,7 @@ def install_msi(app: App):
     # where the installer wouldn't launch interactively.
     # Since the launcher only prompts for EULA, and askes where to install 
     # (which is pointless as it's in it's own wine prefix), we can just skip the interaction
-    # entirely once we confirm the user has agreed to EULA (for Faithlife's sake)
+    # entirely once we confirm the user has agreed to EULA (for Faithlife's sake).
     if not app.conf._overrides.agreed_to_faithlife_terms:
         product = app.conf.faithlife_product
         if not app.agree_to_licence(product, msi_licence_text(app, exe_args[1])):
@@ -939,12 +954,6 @@ def run_wine_application(
             exe_args=exe_args,
             additional_wine_dll_overrides=additional_wine_dll_overrides
         )
-
-
-# Registry writes are safe to repeat. A rare Wine start-up crash (a new process jumping
-# to a bad entry address before it has run anything; seen once on Bazzite with
-# reg.exe, exit code 5) shouldn't stop an install, so these get one retry.
-_IDEMPOTENT_TOOLS = ("reg", "regedit.exe")
 
 
 def run_wine_during_install(

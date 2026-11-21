@@ -1,25 +1,28 @@
-from PySide6 import QtWidgets
+from PySide6.QtWidgets import (
+    QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar, QPushButton,
+    QVBoxLayout, QWidget,
+)
 from ou_dedetai.app import App
 
 from .gui_style import tr
 
 
-class ChoiceGui(QtWidgets.QWidget):
+class ChoiceGui(QWidget):
     _default_prompt = "Choose…"
 
     def __init__(self, root, question: str, options: list[str], **kwargs):
         super().__init__(root)
         self.setContentsMargins(5, 5, 5, 5)
-        layout = QtWidgets.QGridLayout(self)
+        layout = QGridLayout(self)
 
-        self.question_label = QtWidgets.QLabel(question)
-        self.answer_dropdown = QtWidgets.QComboBox()
+        self.question_label = QLabel(question)
+        self.answer_dropdown = QComboBox()
         self.answer_dropdown.addItems(options)
         if options:
             self.answer_dropdown.setCurrentIndex(0)
 
-        self.cancel_button = QtWidgets.QPushButton(tr("Cancel"))
-        self.okay_button = QtWidgets.QPushButton(tr("Confirm"))
+        self.cancel_button = QPushButton(tr("Cancel"))
+        self.okay_button = QPushButton(tr("Confirm"))
 
         layout.addWidget(self.question_label, 0, 0)
         layout.addWidget(self.answer_dropdown, 0, 1, 1, 2)
@@ -27,20 +30,20 @@ class ChoiceGui(QtWidgets.QWidget):
         layout.addWidget(self.okay_button, 1, 2)
 
 
-class InfoGui(QtWidgets.QWidget):
+class InfoGui(QWidget):
     _default_prompt = "Info"
 
     def __init__(self, root, message: str, **kwargs):
         super().__init__(root)
         self.setContentsMargins(5, 5, 5, 5)
-        layout = QtWidgets.QVBoxLayout(self)
+        layout = QVBoxLayout(self)
 
-        self.info_text = QtWidgets.QPlainTextEdit(message)
+        self.info_text = QPlainTextEdit(message)
         self.info_text.setReadOnly(True)
         self.info_text.setMinimumWidth(350)
 
-        self.okay_button = QtWidgets.QPushButton(tr("OK"))
-        button_layout = QtWidgets.QHBoxLayout()
+        self.okay_button = QPushButton(tr("OK"))
+        button_layout = QHBoxLayout()
         button_layout.addStretch()
         button_layout.addWidget(self.okay_button)
 
@@ -48,15 +51,15 @@ class InfoGui(QtWidgets.QWidget):
         layout.addLayout(button_layout)
 
 
-class InstallerGui(QtWidgets.QWidget):
+class InstallerGui(QWidget):
     def __init__(self, root, app: App, **kwargs):
         super().__init__(root)
         self.app = app
         self.setContentsMargins(5, 5, 5, 5)
-        layout = QtWidgets.QGridLayout(self)
+        layout = QGridLayout(self)
 
-        self.product_label = QtWidgets.QLabel(tr("Product:"))
-        self.product_dropdown = QtWidgets.QComboBox()
+        self.product_label = QLabel(tr("Product:"))
+        self.product_dropdown = QComboBox()
         self.product_dropdown.setEditable(False)
         self.product_dropdown.addItems(["Logos", "Verbum"])
         if app.conf._raw.faithlife_product:
@@ -64,44 +67,32 @@ class InstallerGui(QtWidgets.QWidget):
                 app.conf._raw.faithlife_product
             )
 
-        self.version_label = QtWidgets.QLabel(tr("Version:"))
-        self.version_dropdown = QtWidgets.QComboBox()
-        self.version_dropdown.setEditable(False)
-        self.version_dropdown.setFixedWidth(65)
-        # TODO: Remove this dropdown.
-        self.version_dropdown.addItems(["10"])
-        if app.conf._raw.faithlife_product_version:
-            self.version_dropdown.setCurrentText(
-                app.conf._raw.faithlife_product_version
-            )
-
-        self.release_label = QtWidgets.QLabel(tr("Release:"))
-        self.release_dropdown = QtWidgets.QComboBox()
+        self.release_label = QLabel(tr("Release:"))
+        self.release_dropdown = QComboBox()
         self.release_dropdown.setEditable(False)
         if app.conf._raw.faithlife_product_release:
             self.release_dropdown.addItem(
                 app.conf._raw.faithlife_product_release
             )
 
-        self.wine_label = QtWidgets.QLabel(tr("Wine:"))
-        self.wine_dropdown = QtWidgets.QComboBox()
+        self.wine_label = QLabel(tr("Wine:"))
+        self.wine_dropdown = QComboBox()
         self.wine_dropdown.setEditable(False)
         if app.conf._raw.wine_binary:
             self.wine_dropdown.addItem(app.conf.wine_binary)
 
-        self.skipdeps_label = QtWidgets.QLabel(tr("Install system packages:"))
-        self.skipdeps_checkbox = QtWidgets.QCheckBox()
+        self.skipdeps_label = QLabel(tr("Install system packages:"))
+        self.skipdeps_checkbox = QCheckBox()
         self.skipdeps_checkbox.setChecked(
             not app.conf.skip_install_system_dependencies
         )
 
-        self.cancel_button = QtWidgets.QPushButton(tr("Cancel"))
-        self.okay_button = QtWidgets.QPushButton(tr("Install"))
+        self.cancel_button = QPushButton(tr("Cancel"))
+        self.okay_button = QPushButton(tr("Install"))
         self.okay_button.setEnabled(False)
 
         widgets = [
             (self.product_label, self.product_dropdown),
-            (self.version_label, self.version_dropdown),
             (self.release_label, self.release_dropdown),
             (self.wine_label, self.wine_dropdown),
             (self.skipdeps_label, self.skipdeps_checkbox),
@@ -115,13 +106,13 @@ class InstallerGui(QtWidgets.QWidget):
         layout.addWidget(self.okay_button, 5, 3)
 
 
-class StatusGui(QtWidgets.QWidget):
+class StatusGui(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QtWidgets.QVBoxLayout(self)
-        self.message_label = QtWidgets.QLabel()
+        layout = QVBoxLayout(self)
+        self.message_label = QLabel()
         self.message_label.setWordWrap(True)
-        self.progress = QtWidgets.QProgressBar()
+        self.progress = QProgressBar()
         self.progress.setRange(0, 0)
         self.progress.setVisible(False)
         layout.addWidget(self.message_label)
@@ -142,13 +133,13 @@ class StatusWithLabelGui(StatusGui):
     def __init__(self, root, label: str, *args, **kwargs):
         super().__init__(root, **kwargs)
 
-        self.app_label = QtWidgets.QLabel(label)
-        self.app_label.setStyleSheet("font-size: 16pt;")
+        self.app_label = QLabel(label)
+        self.app_label.setProperty("role", "heading")
 
         self.layout().insertWidget(0, self.app_label)
         self.layout().insertWidget(
             1,
-            QtWidgets.QFrame(
-                frameShape=QtWidgets.QFrame.Shape.HLine
+            QFrame(
+                frameShape=QFrame.Shape.HLine
             ),
         )

@@ -26,7 +26,13 @@ from typing import Callable, Optional
 
 import requests
 import psutil  # type: ignore[import-untyped]
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtWidgets import (
+    QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
+    QLabel, QLayout, QMenu, QMessageBox, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSizePolicy,
+    QStackedWidget, QSystemTrayIcon, QToolButton, QVBoxLayout, QWidget,
+)
+from PySide6.QtCore import QObject, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QAction, QDesktopServices
 
 import ou_dedetai.logos
 from ou_dedetai.config import EphemeralConfiguration
@@ -47,38 +53,43 @@ PREFERRED_BIBLE = "logosref:Bible.Ge1.1"
 # built-in empty layout that can be opened by name).
 BLANK_LAYOUT = "Blank"
 
+SIMPLE, INSTALLING, FULL = 0, 1, 2
+HOME, SETTINGS, TROUBLE = 0, 1, 2
+
+# An update check that fails this way (no network, an odd version string) just leaves
+# that update out of the menu; anything else is a bug and is reported.
+UPDATE_CHECK_ERRORS = (requests.RequestException, OSError, ValueError, TypeError)
+
 
 def product_name(product: str) -> str:
     """Faithlife's full product name, as shown beside its icon."""
     return "Logos Bible Software" if product == "Logos" else product
 
 
-# ── Small building blocks ────────────────────────────────────────────────────
-
-def label(text: str = "", role: Optional[str] = None, wrap: bool = True) -> QtWidgets.QLabel:
-    w = QtWidgets.QLabel(text)
+def label(text: str = "", role: Optional[str] = None, wrap: bool = True) -> QLabel:
+    w = QLabel(text)
     w.setWordWrap(wrap)
-    w.setTextFormat(QtCore.Qt.TextFormat.PlainText)
+    w.setTextFormat(Qt.TextFormat.PlainText)
     if role:
         w.setProperty("role", role)
     return w
 
 
-def pill(text: str, kind: str) -> QtWidgets.QLabel:
-    w = QtWidgets.QLabel(text)
+def pill(text: str, kind: str) -> QLabel:
+    w = QLabel(text)
     w.setProperty("pill", kind)
-    w.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Fixed)
+    w.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
     return w
 
 
-def set_pill(w: QtWidgets.QLabel, text: str, kind: str) -> None:
+def set_pill(w: QLabel, text: str, kind: str) -> None:
     w.setText(text)
     w.setProperty("pill", kind)
     w.style().unpolish(w)
     w.style().polish(w)
 
 
-def set_kind(w: QtWidgets.QWidget, kind: Optional[str]) -> None:
+def set_kind(w: QWidget, kind: Optional[str]) -> None:
     """Restyle a button, e.g. "available" (light blue) when it has an update to offer."""
     if w.property("kind") != kind:
         w.setProperty("kind", kind)
@@ -86,65 +97,61 @@ def set_kind(w: QtWidgets.QWidget, kind: Optional[str]) -> None:
         w.style().polish(w)
 
 
-def button(text: str, kind: Optional[str] = None, slot: Optional[Callable] = None) -> QtWidgets.QPushButton:
-    b = QtWidgets.QPushButton(text)
+def button(text: str, kind: Optional[str] = None, slot: Optional[Callable] = None) -> QPushButton:
+    b = QPushButton(text)
     if kind:
         b.setProperty("kind", kind)
     if slot:
         b.clicked.connect(lambda _=False: slot())
-    b.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+    b.setCursor(Qt.CursorShape.PointingHandCursor)
     return b
 
 
-def card(accent: Optional[str] = None) -> tuple[QtWidgets.QFrame, QtWidgets.QVBoxLayout]:
-    frame = QtWidgets.QFrame()
+def card(accent: Optional[str] = None) -> tuple[QFrame, QVBoxLayout]:
+    frame = QFrame()
     frame.setObjectName("card")
     if accent:
         frame.setProperty("accent", accent)
-    layout = QtWidgets.QVBoxLayout(frame)
+    layout = QVBoxLayout(frame)
     layout.setContentsMargins(16, 12, 16, 12)
     layout.setSpacing(8)
     return frame, layout
 
 
-def row(title: str, subtitle: str = "", right: Optional[QtWidgets.QWidget] = None,
-        left: Optional[QtWidgets.QWidget] = None) -> QtWidgets.QWidget:
+def row(title: str, subtitle: str = "", right: Optional[QWidget] = None,
+        left: Optional[QWidget] = None) -> QWidget:
     """A card row: optional left widget, bold title + muted subtitle, optional right widget."""
-    w = QtWidgets.QFrame()
+    w = QFrame()
     w.setObjectName("rowline")
-    h = QtWidgets.QHBoxLayout(w)
+    h = QHBoxLayout(w)
     h.setContentsMargins(0, 8, 0, 4)
     h.setSpacing(12)
     if left is not None:
-        h.addWidget(left, 0, QtCore.Qt.AlignmentFlag.AlignTop)
-    text = QtWidgets.QVBoxLayout()
+        h.addWidget(left, 0, Qt.AlignmentFlag.AlignTop)
+    text = QVBoxLayout()
     text.setSpacing(1)
-    t = label(title)
-    t.setStyleSheet("font-weight: 600;")
+    t = label(title, "strong")
     text.addWidget(t)
     if subtitle:
         text.addWidget(label(subtitle, "muted"))
     h.addLayout(text, 1)
     if right is not None:
-        h.addWidget(right, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
+        h.addWidget(right, 0, Qt.AlignmentFlag.AlignVCenter)
     return w
 
 
-def scrolled(widget: QtWidgets.QWidget, page: bool = True) -> QtWidgets.QScrollArea:
+def scrolled(widget: QWidget, page: bool = True) -> QScrollArea:
     """A frameless scroll area around `widget`; a page gets the page background."""
-    area = QtWidgets.QScrollArea()
+    area = QScrollArea()
     area.setWidgetResizable(True)
-    area.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+    area.setFrameShape(QFrame.Shape.NoFrame)
     if page:
         widget.setObjectName("od-page")
     area.setWidget(widget)
     return area
 
 
-leftover_wine = control.leftover_wine
-
-
-def clear_layout(layout: QtWidgets.QLayout) -> None:
+def clear_layout(layout: QLayout) -> None:
     while layout.count():
         item = layout.takeAt(0)
         widget = item.widget() if item is not None else None
@@ -161,10 +168,8 @@ def renderer_name(value: str) -> str:
 
 
 def open_path(path: str | Path) -> None:
-    QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(path)))
+    QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
-
-# ── The install guide ────────────────────────────────────────────────────────
 
 # Status messages from installer.py, in order, matched by their start, with plain words.
 INSTALL_STEPS: list[tuple[tuple[str, ...], str, str]] = [
@@ -191,17 +196,17 @@ INSTALL_STEPS: list[tuple[tuple[str, ...], str, str]] = [
 ]
 
 
-class InstallGuide(QtWidgets.QWidget):
+class InstallGuide(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("od-page")
-        v = QtWidgets.QVBoxLayout(self)
+        v = QVBoxLayout(self)
         v.setContentsMargins(32, 22, 32, 22)
         v.setSpacing(12)
-        head = QtWidgets.QHBoxLayout()
-        self.icon = QtWidgets.QLabel()
+        head = QHBoxLayout()
+        self.icon = QLabel()
         head.addWidget(self.icon)
-        titles = QtWidgets.QVBoxLayout()
+        titles = QVBoxLayout()
         self.title = label(tr("Installing Logos"), "title")
         self.subtitle = label(tr("You can use your computer meanwhile."), "muted")
         titles.addWidget(self.title)
@@ -211,20 +216,19 @@ class InstallGuide(QtWidgets.QWidget):
 
         frame, steps = card()
         steps.addWidget(label(tr("What's happening"), "h2"))
-        self.rows: list[tuple[QtWidgets.QLabel, QtWidgets.QLabel, QtWidgets.QLabel]] = []
-        self.row_widgets: list[QtWidgets.QWidget] = []
+        self.rows: list[tuple[QLabel, QLabel, QLabel]] = []
+        self.row_widgets: list[QWidget] = []
         for i, (_, title, detail) in enumerate(INSTALL_STEPS):
             mark = pill(str(i + 1), "off")
             mark.setMinimumWidth(26)
-            mark.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-            w = QtWidgets.QWidget()
-            h = QtWidgets.QHBoxLayout(w)
+            mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            w = QWidget()
+            h = QHBoxLayout(w)
             h.setContentsMargins(0, 4, 0, 4)
-            h.addWidget(mark, 0, QtCore.Qt.AlignmentFlag.AlignTop)
-            col = QtWidgets.QVBoxLayout()
+            h.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
+            col = QVBoxLayout()
             col.setSpacing(1)
-            t = label(tr(title))
-            t.setStyleSheet("font-weight: 600;")
+            t = label(tr(title), "strong")
             d = label(tr(detail) if detail else "", "muted")
             d.setVisible(bool(detail))
             col.addWidget(t)
@@ -233,7 +237,6 @@ class InstallGuide(QtWidgets.QWidget):
             steps.addWidget(w)
             self.rows.append((mark, t, d))
             self.row_widgets.append(w)
-        # The settings step lists what it sets (the same list Settings shows).
         settings_detail = self.rows[6][2]
         settings_detail.setText(", ".join(
             tr(s.title) for s in wine_settings.SETTINGS if s.group == wine_settings.Group.NEEDED))
@@ -267,34 +270,23 @@ class InstallGuide(QtWidgets.QWidget):
             self.area.ensureWidgetVisible(self.row_widgets[self.current], 0, 40)
 
 
-# ── The window ───────────────────────────────────────────────────────────────
-
-SIMPLE, INSTALLING, FULL = 0, 1, 2
-
-
-# An update check that fails this way (no network, an odd version string) just leaves
-# that update out of the menu; anything else is a bug and is reported.
-UPDATE_CHECK_ERRORS = (requests.RequestException, OSError, ValueError, TypeError)
-
-
-class Signals(QtCore.QObject):
+class Signals(QObject):
     """What background work reports back. Emitted from worker threads; Qt queues each
     emission onto the GUI thread, where the connected MainWindow slot runs."""
-    status = QtCore.Signal(str, object)         # message, percent or None
-    refresh = QtCore.Signal()                   # config or state changed: redraw
-    settings_changed = QtCore.Signal()          # a Wine setting changed: redraw Settings too
-    logos_state = QtCore.Signal(object)         # ou_dedetai.logos.State
-    integrations = QtCore.Signal(list, list)    # reading plans, saved layouts
-    updates = QtCore.Signal(dict)               # what can be updated
-    health = QtCore.Signal(list)                # (ok, title, detail) results
-    recheck = QtCore.Signal()                   # run the health checks again
-    winver = QtCore.Signal(str, str)            # Windows version for Logos, indexer
-    install_finished = QtCore.Signal()
-    failed = QtCore.Signal(str)                 # an unexpected error in a background task
-    task_done = QtCore.Signal()                 # a background task returned
-    tray = QtCore.Signal()                      # Logos is being started: show the tray
-    wine_builds = QtCore.Signal(dict)           # channel → newest Wine bundle's name
-HOME, SETTINGS, TROUBLE = 0, 1, 2
+    status = Signal(str, object)         # message, percent or None
+    refresh = Signal()                   # config or state changed: redraw
+    settings_changed = Signal()          # a Wine setting changed: redraw Settings too
+    logos_state = Signal(object)         # ou_dedetai.logos.State
+    integrations = Signal(list, list)    # reading plans, saved layouts
+    updates = Signal(dict)               # what can be updated
+    health = Signal(list)                # (ok, title, detail) results
+    recheck = Signal()                   # run the health checks again
+    winver = Signal(str, str)            # Windows version for Logos, indexer
+    install_finished = Signal()
+    failed = Signal(str)                 # an unexpected error in a background task
+    task_done = Signal()                 # a background task returned
+    tray = Signal()                      # Logos is being started: show the tray
+    wine_builds = Signal(dict)           # channel → newest Wine bundle's name
 
 
 class MainWindow(GuiApp):
@@ -307,8 +299,7 @@ class MainWindow(GuiApp):
         self.root.setWindowIcon(gui_style.app_icon())
         self._plans: list[dict] = []
         self._layouts: list[str] = []
-        # Buttons that change Logos's files or its Wine prefix: greyed out while Logos runs.
-        self.while_closed: list[QtWidgets.QWidget] = []
+        self.while_closed: list[QWidget] = []
         self._updates: dict[str, tuple[bool, str]] = {}
         self._tray: Optional["TrayController"] = None
         self._close_dialog: Optional["CloseLogosDialog"] = None
@@ -319,12 +310,12 @@ class MainWindow(GuiApp):
         self._poller = ThreadPoolExecutor(max_workers=1, thread_name_prefix="logos-monitor")
         self.signals = Signals()
 
-        central = QtWidgets.QWidget()
+        central = QWidget()
         central.setObjectName("od-root")
-        outer = QtWidgets.QVBoxLayout(central)
+        outer = QVBoxLayout(central)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        self.stack = QtWidgets.QStackedWidget()
+        self.stack = QStackedWidget()
         outer.addWidget(self.stack, 1)
         self.status_gui.setObjectName("od-root")
         status_layout = self.status_gui.layout()
@@ -357,7 +348,7 @@ class MainWindow(GuiApp):
         self.config_updated_hooks.append(self._refresh_later)
         self.refresh()
         # Check on Logos every second (every 10 s until it's installed).
-        self.monitor_timer = QtCore.QTimer(self.root)
+        self.monitor_timer = QTimer(self.root)
         self.monitor_timer.timeout.connect(self._poll_logos)
         self.monitor_timer.start(1000)
         self._poll_logos()
@@ -374,7 +365,6 @@ class MainWindow(GuiApp):
         if show:
             self.root.show()
 
-    # ── App interface ──
     def _status(self, message, percent=None):
         self.signals.status.emit(message, percent)
 
@@ -396,14 +386,11 @@ class MainWindow(GuiApp):
         guarded.__name__ = name
         return super().start_thread(guarded, daemon_bool=daemon_bool)
 
-    # ── Slots for background results ──
     def _show_status(self, message: str, percent: Optional[int]) -> None:
         self.status_gui.set_status(message, percent)
         if self._installing:
             self.guide.update_status(message)
             if message.startswith("Install Complete"):
-                # Done, whichever way the install was started (one click or Choose options).
-                # Anything asked afterwards (the integrations offer) shows over the Run window.
                 self._install_finished()
 
     def _task_done(self) -> None:
@@ -416,16 +403,15 @@ class MainWindow(GuiApp):
 
     def _task_failed(self, error: str) -> None:
         self.status_gui.set_status(tr("Something went wrong: {error}").format(error=error), None)
-        QtWidgets.QMessageBox.warning(
+        QMessageBox.warning(
             self.root, tr("Something went wrong"),
             tr("{error}\n\nThe log has the details; Troubleshooting → Save a support report collects it.").format(
                 error=error))
 
-    # ── Views ──
     def show_view(self, view: int) -> None:
         # Only the visible page counts towards the window's minimum size; otherwise the
         # full view's size would stop the simple window shrinking back.
-        policy = QtWidgets.QSizePolicy.Policy
+        policy = QSizePolicy.Policy
         for i in range(self.stack.count()):
             page = self.stack.widget(i)
             if page is not None:
@@ -440,7 +426,7 @@ class MainWindow(GuiApp):
     def _fit_full(self) -> None:
         """At least big enough for the full view's content, within the screen."""
         page = self.stack.widget(FULL)
-        hint = page.sizeHint() if page is not None else QtCore.QSize(0, 0)
+        hint = page.sizeHint() if page is not None else QSize(0, 0)
         width = max(self.root.width(), 1040, hint.width())
         height = max(self.root.height(), 700, hint.height())
         screen = self.root.screen()
@@ -468,17 +454,17 @@ class MainWindow(GuiApp):
             height += self.status_gui.sizeHint().height()
         self.root.resize(width, max(height, 260))
 
-    def _build_simple(self) -> QtWidgets.QWidget:
-        page = QtWidgets.QWidget()
+    def _build_simple(self) -> QWidget:
+        page = QWidget()
         page.setObjectName("od-page")
-        v = QtWidgets.QVBoxLayout(page)
+        v = QVBoxLayout(page)
         v.setContentsMargins(40, 28, 40, 16)
         v.setSpacing(18)
 
-        head = QtWidgets.QHBoxLayout()
-        self.s_icon = QtWidgets.QLabel()
+        head = QHBoxLayout()
+        self.s_icon = QLabel()
         head.addWidget(self.s_icon)
-        titles = QtWidgets.QVBoxLayout()
+        titles = QVBoxLayout()
         self.s_title = label("", "title")
         self.s_state = label("", "muted")
         titles.addWidget(self.s_title)
@@ -486,17 +472,16 @@ class MainWindow(GuiApp):
         head.addLayout(titles, 1)
         v.addLayout(head)
 
-        # Not installed: one Install button.
-        self.s_install_box = QtWidgets.QWidget()
-        ib = QtWidgets.QVBoxLayout(self.s_install_box)
+        self.s_install_box = QWidget()
+        ib = QVBoxLayout(self.s_install_box)
         ib.setContentsMargins(0, 0, 0, 0)
         ib.setSpacing(12)
         ib.addWidget(label(tr("Ou Dedetai sets up Wine and installs Logos for you. "
                               "You'll sign in to your Faithlife account at the end."), "muted"))
-        products = QtWidgets.QHBoxLayout()
-        self.s_products = QtWidgets.QButtonGroup(page)
+        products = QHBoxLayout()
+        self.s_products = QButtonGroup(page)
         for name in constants.FAITHLIFE_PRODUCTS:
-            r = QtWidgets.QRadioButton(name)
+            r = QRadioButton(name)
             r.toggled.connect(lambda on, n=name: self._set_product(n) if on else None)
             self.s_products.addButton(r)
             products.addWidget(r)
@@ -505,7 +490,7 @@ class MainWindow(GuiApp):
         self.s_install = button(tr("Install"), "primary", self.run_install)
         self.s_install.setMinimumHeight(44)
         ib.addWidget(self.s_install)
-        opts = QtWidgets.QHBoxLayout()
+        opts = QHBoxLayout()
         self.s_needs = label("", "muted")
         opts.addWidget(self.s_needs, 1)
         self.s_options = button(tr("Choose options…"), "link", self.run_installer)
@@ -513,16 +498,15 @@ class MainWindow(GuiApp):
         ib.addLayout(opts)
         v.addWidget(self.s_install_box)
 
-        # Installed: Run ▾ / Update ▾ / Stop.
-        self.s_run_box = QtWidgets.QWidget()
-        rb = QtWidgets.QHBoxLayout(self.s_run_box)
+        self.s_run_box = QWidget()
+        rb = QHBoxLayout(self.s_run_box)
         rb.setContentsMargins(0, 0, 0, 0)
         rb.setSpacing(12)
         self.s_run = self._run_button()
         rb.addWidget(self.s_run)
-        self.s_update = QtWidgets.QToolButton()
+        self.s_update = QToolButton()
         self.s_update.setText(tr("Update"))
-        self.s_update.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.s_update.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.s_update.setMenu(self._update_menu())
         rb.addWidget(self.s_update)
         self.s_stop = button(tr("Stop"), None, self.stop_logos)
@@ -534,7 +518,7 @@ class MainWindow(GuiApp):
                                "saved layout. While Logos runs, Ou Dedetai sits in the system tray."), "muted")
         v.addWidget(self.s_hint)
         v.addSpacing(8)
-        foot = QtWidgets.QHBoxLayout()
+        foot = QHBoxLayout()
         foot.addWidget(button(tr("Full view and settings…"), "link", lambda: self.open_full(HOME)))
         foot.addStretch(1)
         foot.addWidget(label(tr("Ou Dedetai {version} · community supported").format(
@@ -542,46 +526,45 @@ class MainWindow(GuiApp):
         v.addLayout(foot)
         return page
 
-    def _run_button(self) -> QtWidgets.QToolButton:
-        b = QtWidgets.QToolButton()
+    def _run_button(self) -> QToolButton:
+        b = QToolButton()
         b.setProperty("kind", "primary")
-        b.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        b.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextOnly)
+        b.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         b.setMinimumHeight(40)
         b.clicked.connect(self.run_logos)
-        menu = QtWidgets.QMenu(b)
+        menu = QMenu(b)
         menu.aboutToShow.connect(lambda m=menu: self._fill_run_menu(m))
         b.setMenu(menu)
         b.setAccessibleName(tr("Run Logos"))
         b.setAccessibleDescription(tr("The arrow offers more ways to start Logos"))
         return b
 
-    def _build_full(self) -> QtWidgets.QWidget:
-        page = QtWidgets.QWidget()
+    def _build_full(self) -> QWidget:
+        page = QWidget()
         page.setObjectName("od-page")
-        h = QtWidgets.QHBoxLayout(page)
+        h = QHBoxLayout(page)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(0)
 
-        side = QtWidgets.QFrame()
+        side = QFrame()
         side.setObjectName("sidebar")
         side.setFixedWidth(260)
-        sv = QtWidgets.QVBoxLayout(side)
+        sv = QVBoxLayout(side)
         sv.setContentsMargins(12, 16, 12, 16)
         sv.setSpacing(2)
-        brand = QtWidgets.QHBoxLayout()
-        icon = QtWidgets.QLabel()
+        brand = QHBoxLayout()
+        icon = QLabel()
         icon.setPixmap(gui_style.pixmap(constants.APP_IMAGE_DIR / "icon.png", 36))
         brand.addWidget(icon)
-        names = QtWidgets.QVBoxLayout()
-        n = label(constants.APP_NAME)
-        n.setStyleSheet("font-weight: 700; font-size: 13pt;")
+        names = QVBoxLayout()
+        n = label(constants.APP_NAME, "brand")
         names.addWidget(n)
         names.addWidget(label(tr("Logos on Linux"), "muted"))
         brand.addLayout(names, 1)
         sv.addLayout(brand)
         sv.addSpacing(12)
-        self.nav = QtWidgets.QButtonGroup(side)
+        self.nav = QButtonGroup(side)
         for i, text in enumerate((tr("Home"), tr("Settings"), tr("Troubleshooting"))):
             b = button(text, "nav")
             b.setCheckable(True)
@@ -595,7 +578,7 @@ class MainWindow(GuiApp):
         sv.addWidget(self.reading_card)
         h.addWidget(side)
 
-        self.pages = QtWidgets.QStackedWidget()
+        self.pages = QStackedWidget()
         self.pages.addWidget(scrolled(self._build_home()))
         self.pages.addWidget(scrolled(self._build_settings()))
         self.pages.addWidget(scrolled(self._build_trouble()))
@@ -617,32 +600,31 @@ class MainWindow(GuiApp):
         self.show_view(FULL)
         self.show_page(page)
 
-    def _build_reading_card(self) -> QtWidgets.QWidget:
+    def _build_reading_card(self) -> QWidget:
         """Holder for the reading cards: a reading plan, then today's devotional."""
-        box = QtWidgets.QWidget()
-        self.reading_cards = QtWidgets.QVBoxLayout(box)
+        box = QWidget()
+        self.reading_cards = QVBoxLayout(box)
         self.reading_cards.setContentsMargins(0, 0, 0, 0)
         self.reading_cards.setSpacing(10)
         box.setVisible(False)
         return box
 
-    def _plan_card(self, heading: str, plan: dict, progress: bool) -> QtWidgets.QFrame:
-        frame = QtWidgets.QFrame()
+    def _plan_card(self, heading: str, plan: dict, progress: bool) -> QFrame:
+        frame = QFrame()
         frame.setObjectName("reading")
-        v = QtWidgets.QVBoxLayout(frame)
+        v = QVBoxLayout(frame)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
-        head = QtWidgets.QFrame()
+        head = QFrame()
         head.setObjectName("readinghead")
-        hv = QtWidgets.QVBoxLayout(head)
+        hv = QVBoxLayout(head)
         hv.setContentsMargins(12, 8, 12, 8)
-        t = label(heading)
-        t.setStyleSheet("font-weight: 600;")
+        t = label(heading, "strong")
         hv.addWidget(t)
         hv.addWidget(label(plan.get("title", ""), "muted"))
         v.addWidget(head)
-        body = QtWidgets.QWidget()
-        bv = QtWidgets.QVBoxLayout(body)
+        body = QWidget()
+        bv = QVBoxLayout(body)
         bv.setContentsMargins(12, 8, 12, 10)
         bv.setSpacing(4)
         for reading in plan.get("readings", [])[:5]:
@@ -651,7 +633,7 @@ class MainWindow(GuiApp):
         if progress:
             if plan.get("status"):
                 bv.addWidget(label(plan["status"], "muted"))
-            bar = QtWidgets.QProgressBar()
+            bar = QProgressBar()
             bar.setRange(0, 100)
             bar.setValue(int(round(100 * float(plan.get("progress") or 0))))
             bar.setTextVisible(False)
@@ -661,29 +643,27 @@ class MainWindow(GuiApp):
         v.addWidget(body)
         return frame
 
-    def _build_home(self) -> QtWidgets.QWidget:
-        page = QtWidgets.QWidget()
-        v = QtWidgets.QVBoxLayout(page)
+    def _build_home(self) -> QWidget:
+        page = QWidget()
+        v = QVBoxLayout(page)
         v.setContentsMargins(24, 20, 24, 20)
         v.setSpacing(14)
         hero, hl = card(accent="true")
-        top = QtWidgets.QHBoxLayout()
-        self.h_icon = QtWidgets.QLabel()
+        top = QHBoxLayout()
+        self.h_icon = QLabel()
         top.addWidget(self.h_icon)
-        col = QtWidgets.QVBoxLayout()
+        col = QVBoxLayout()
         self.h_title = label("", "title")
         self.h_state = label("", "muted")
         col.addWidget(self.h_title)
         col.addWidget(self.h_state)
         top.addLayout(col, 1)
-        # The simple view's Run / Update / Stop, reversed: the row is right-aligned, so Run
-        # (the main button) ends up at the far right.
         self.h_stop = button(tr("Stop"), None, self.stop_logos)
         self.h_stop.setMinimumHeight(40)
         top.addWidget(self.h_stop)
-        self.h_update = QtWidgets.QToolButton()
+        self.h_update = QToolButton()
         self.h_update.setText(tr("Update"))
-        self.h_update.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.h_update.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.h_update.setMenu(self._update_menu())
         self.h_update.setMinimumHeight(40)
         top.addWidget(self.h_update)
@@ -695,12 +675,12 @@ class MainWindow(GuiApp):
         hl.addLayout(top)
         v.addWidget(hero)
 
-        tiles = QtWidgets.QGridLayout()
+        tiles = QGridLayout()
         tiles.setSpacing(12)
         self.t_updates = self._tile(tiles, 0, tr("Logos updates"))
         self.t_wine = self._tile(tiles, 1, tr("Wine"))
         self.t_settings = self._tile(tiles, 2, tr("Wine settings for Logos"))
-        self.t_settings.setTextFormat(QtCore.Qt.TextFormat.RichText)  # "Not yet: …" on a smaller line
+        self.t_settings.setTextFormat(Qt.TextFormat.RichText)  # "Not yet: …" on a smaller line
         see = button(tr("See the list…"), "link", lambda: self.show_page(SETTINGS))
         tile = self.t_settings.parentWidget()
         tile_layout = tile.layout() if tile is not None else None
@@ -708,7 +688,7 @@ class MainWindow(GuiApp):
             tile_layout.addWidget(see)
         v.addLayout(tiles)
 
-        both = QtWidgets.QHBoxLayout()
+        both = QHBoxLayout()
         both.setSpacing(12)
         look, ll = card()
         ll.addWidget(label(tr("Looking after Logos"), "h2"))
@@ -740,22 +720,21 @@ class MainWindow(GuiApp):
         v.addStretch(1)
         return page
 
-    def _tile(self, grid: QtWidgets.QGridLayout, col: int, title: str) -> QtWidgets.QLabel:
+    def _tile(self, grid: QGridLayout, col: int, title: str) -> QLabel:
         frame, lay = card()
         lay.addWidget(label(title, "muted"))
-        value = label("")
-        value.setStyleSheet("font-size: 13pt; font-weight: 600;")
+        value = label("", "value")
         lay.addWidget(value)
         grid.addWidget(frame, 0, col)
         return value
 
-    def _build_settings(self) -> QtWidgets.QWidget:
-        page = QtWidgets.QWidget()
-        v = QtWidgets.QVBoxLayout(page)
+    def _build_settings(self) -> QWidget:
+        page = QWidget()
+        v = QVBoxLayout(page)
         v.setContentsMargins(24, 20, 24, 20)
         v.setSpacing(14)
-        head = QtWidgets.QHBoxLayout()
-        titles = QtWidgets.QVBoxLayout()
+        head = QHBoxLayout()
+        titles = QVBoxLayout()
         titles.addWidget(label(tr("Settings"), "title"))
         titles.addWidget(label(tr("What Ou Dedetai sets in Wine for Logos, and why."), "muted"))
         head.addLayout(titles, 1)
@@ -764,7 +743,7 @@ class MainWindow(GuiApp):
 
         net, nl = card()
         nl.addWidget(label(tr("Internet"), "h2"))
-        self.offline = QtWidgets.QCheckBox(tr("Work offline"))
+        self.offline = QCheckBox(tr("Work offline"))
         self.offline.setProperty("role", "strong")
         self.offline.toggled.connect(self.set_offline)
         nl.addWidget(self.offline)
@@ -776,8 +755,8 @@ class MainWindow(GuiApp):
 
         upd, ul = card()
         ul.addWidget(label(tr("Updates"), "h2"))
-        self.s_releases = QtWidgets.QRadioButton(tr("Releases"))
-        self.s_prereleases = QtWidgets.QRadioButton(tr("Prereleases: help test the next version of "
+        self.s_releases = QRadioButton(tr("Releases"))
+        self.s_prereleases = QRadioButton(tr("Prereleases: help test the next version of "
                                                         "Ou Dedetai and Wine"))
         for b in (self.s_releases, self.s_prereleases):
             ul.addWidget(b)
@@ -788,28 +767,28 @@ class MainWindow(GuiApp):
 
         ws, self.ws_layout = card()
         self.ws_layout.addWidget(label(tr("Wine settings for Logos"), "h2"))
-        self.ws_rows = QtWidgets.QVBoxLayout()
+        self.ws_rows = QVBoxLayout()
         self.ws_layout.addLayout(self.ws_rows)
         v.addWidget(ws)
 
         win, wl = card()
         wl.addWidget(label(tr("Ou Dedetai window"), "h2"))
-        self.s_full_default = QtWidgets.QCheckBox(
+        self.s_full_default = QCheckBox(
             tr("Open the full view when Ou Dedetai starts (reading plan, layouts, status)"))
         self.s_full_default.toggled.connect(lambda on: setattr(self.conf, "gui_full_view", on))
         wl.addWidget(self.s_full_default)
         v.addWidget(win)
 
-        self.dev_toggle = QtWidgets.QCheckBox(tr("Show developer and testing options"))
+        self.dev_toggle = QCheckBox(tr("Show developer and testing options"))
         v.addWidget(self.dev_toggle)
         self.dev, dl = card(accent="warn")
         dl.addWidget(label(tr("Developer and testing options"), "h2"))
         dl.addWidget(label(tr("For testing Wine builds and helping support. Most people never need these."),
                            "muted"))
-        grid = QtWidgets.QGridLayout()
+        grid = QGridLayout()
         grid.setHorizontalSpacing(12)
         grid.addWidget(label(tr("Graphics renderer")), 0, 0)
-        self.renderer = QtWidgets.QComboBox()
+        self.renderer = QComboBox()
         for value, text in (("dxvk", "DXVK"), ("gl", "OpenGL"), ("vulkan", tr("Vulkan (wined3d)")),
                             ("gdi", tr("GDI (no 3D)"))):
             self.renderer.addItem(text, value)
@@ -818,19 +797,19 @@ class MainWindow(GuiApp):
         self.renderer_now = label("", "muted")
         grid.addWidget(self.renderer_now, 0, 3)
         grid.addWidget(label(tr("Wine builds to use")), 3, 0)
-        self.channel = QtWidgets.QComboBox()
+        self.channel = QComboBox()
         self.channel.addItem(tr("Prerelease (newest oinos build)"), "dev")
         self.channel.addItem(tr("Stable (newest full release)"), "stable")
         grid.addWidget(self.channel, 3, 1)
         grid.addWidget(button(tr("Apply"), None, self.apply_channel), 3, 2)
         grid.addWidget(label(tr("Then use Update ▸ Wine, or install again."), "muted"), 3, 3)
         grid.addWidget(label(tr("Windows version for Logos")), 1, 0)
-        self.winver_logos = QtWidgets.QComboBox()
+        self.winver_logos = QComboBox()
         grid.addWidget(self.winver_logos, 1, 1)
         grid.addWidget(self.closed_only(button(tr("Apply"), None,
                                                lambda: self.apply_winver("logos", self.winver_logos))), 1, 2)
         grid.addWidget(label(tr("Windows version for the indexer")), 2, 0)
-        self.winver_indexer = QtWidgets.QComboBox()
+        self.winver_indexer = QComboBox()
         grid.addWidget(self.winver_indexer, 2, 1)
         grid.addWidget(self.closed_only(button(tr("Apply"), None,
                                                lambda: self.apply_winver("indexer", self.winver_indexer))), 2, 2)
@@ -842,7 +821,7 @@ class MainWindow(GuiApp):
                 combo.addItem(version, version)
         grid.setColumnStretch(3, 1)
         dl.addLayout(grid)
-        tools = QtWidgets.QGridLayout()
+        tools = QGridLayout()
         for i, (text, slot) in enumerate((
             ("winecfg", lambda: self.run_wine_tool("winecfg")),
             ("winetricks", self.run_winetricks),
@@ -865,19 +844,19 @@ class MainWindow(GuiApp):
         v.addStretch(1)
         return page
 
-    def _build_trouble(self) -> QtWidgets.QWidget:
-        page = QtWidgets.QWidget()
-        grid = QtWidgets.QGridLayout(page)
+    def _build_trouble(self) -> QWidget:
+        page = QWidget()
+        grid = QGridLayout(page)
         grid.setContentsMargins(24, 20, 24, 20)
         grid.setSpacing(14)
         grid.addWidget(label(tr("Troubleshooting"), "title"), 0, 0, 1, 2)
 
         checks, cl = card()
-        top = QtWidgets.QHBoxLayout()
+        top = QHBoxLayout()
         top.addWidget(label(tr("Health checks"), "h2"), 1)
         top.addWidget(button(tr("Check again"), None, self.run_health_checks))
         cl.addLayout(top)
-        self.checks_box = QtWidgets.QVBoxLayout()
+        self.checks_box = QVBoxLayout()
         cl.addLayout(self.checks_box)
         cl.addStretch(1)
         checks.setMinimumWidth(300)
@@ -886,7 +865,7 @@ class MainWindow(GuiApp):
         def section(title, items, row_, accent=None, columns=1):
             frame, lay = card(accent)
             lay.addWidget(label(title, "h2"))
-            g = QtWidgets.QGridLayout()
+            g = QGridLayout()
             for i, widget in enumerate(items):
                 g.addWidget(widget, i // columns, i % columns)
             lay.addLayout(g)
@@ -897,8 +876,7 @@ class MainWindow(GuiApp):
             button(tr("Save a support report…"), "primary", self.get_support),
             button(tr("Open the logs folder"), None, self.open_logs),
         ], 1, accent="true")
-        # Changing it waits for Wine to finish, which with Logos open means until Logos closes.
-        self.logging = self.closed_only(QtWidgets.QCheckBox(tr("Logos's own logging (for Faithlife support)")))
+        self.logging = self.closed_only(QCheckBox(tr("Logos's own logging (for Faithlife support)")))
         self.logging.clicked.connect(lambda _=False: self.switch_logging())
         help_.addWidget(self.logging)
         # An OS update (seen on Bazzite and SteamOS) can leave KRunner and the look-up
@@ -929,14 +907,13 @@ class MainWindow(GuiApp):
         grid.setRowStretch(5, 1)
         return page
 
-    # ── Menus ──
-    def _fill_run_menu(self, menu: QtWidgets.QMenu) -> None:
+    def _fill_run_menu(self, menu: QMenu) -> None:
         menu.clear()
         menu.addAction(tr("Start as usual")).triggered.connect(self.run_logos)
         menu.addSeparator()
         self.add_open_items(menu)
 
-    def add_open_items(self, menu: QtWidgets.QMenu) -> None:
+    def add_open_items(self, menu: QMenu) -> None:
         """Bible, today's readings and saved layouts: the Run menu's and the tray's entries.
         Each starts Logos first if it isn't running."""
         bible = menu.addAction(tr("Bible (your preferred Bible)"))
@@ -962,12 +939,12 @@ class MainWindow(GuiApp):
         if blank:
             b.triggered.connect(lambda _=False: self.open_layout(blank))
 
-    def _update_menu(self) -> QtWidgets.QMenu:
-        menu = QtWidgets.QMenu()
+    def _update_menu(self) -> QMenu:
+        menu = QMenu()
         menu.aboutToShow.connect(lambda m=menu: self._fill_update_menu(m))
         return menu
 
-    def _fill_update_menu(self, menu: QtWidgets.QMenu) -> None:
+    def _fill_update_menu(self, menu: QMenu) -> None:
         menu.clear()
         if network.is_offline():
             a = menu.addAction(tr("Offline mode is on"))
@@ -982,7 +959,6 @@ class MainWindow(GuiApp):
                           ("desktop", self.install_integrations)):
             enabled, text = self._updates.get(key, (False, ""))
             if text:
-                # Wine, Logos and Akousousin (registered in the prefix) are updated with Logos closed.
                 wait = enabled and key in ("wine", "logos", "aks") and self._logos_open()
                 a = menu.addAction(tr("{update} (close Logos first)").format(update=text) if wait else text)
                 a.setEnabled(enabled and not wait)
@@ -996,14 +972,13 @@ class MainWindow(GuiApp):
     def _logos_open(self) -> bool:
         return self.logos.logos_state in (State.RUNNING, State.STARTING)
 
-    # ── Refresh ──
     def _refresh_later(self, *_):
         self.signals.refresh.emit()
 
     def refresh(self) -> None:
         self._refresh()
         if self.stack.currentIndex() == SIMPLE:
-            QtCore.QTimer.singleShot(0, self._fit_simple)
+            QTimer.singleShot(0, self._fit_simple)
 
     def _refresh(self) -> None:
         product = self.conf._raw.faithlife_product or constants.FAITHLIFE_PRODUCTS[0]
@@ -1057,7 +1032,6 @@ class MainWindow(GuiApp):
         self.h_update.setEnabled(installed)
         self.h_update.setVisible(installed)
         self._show_update_button()
-        # Home tiles
         oinos = self._oinos()
         if not installed:
             self.t_updates.setText("–")
@@ -1175,7 +1149,7 @@ class MainWindow(GuiApp):
                             self.conf.logos_exe or tr("Not installed yet")))
             if installed:
                 self.logos.monitor()
-                leftover = self.logos.logos_state == State.STOPPED and bool(leftover_wine(self.conf.wine_prefix))
+                leftover = self.logos.logos_state == State.STOPPED and bool(wine.leftover_wine(self.conf.wine_prefix))
                 results.append((not leftover, tr("No Wine left running"),
                                 tr("A Wine server from an earlier session is still running") if leftover
                                 else tr("Nothing left over")))
@@ -1204,7 +1178,7 @@ class MainWindow(GuiApp):
         for ok, title, detail in results:
             left = pill(tr("OK") if ok else tr("Check"), "ok" if ok else "warn")
             left.setMinimumWidth(56)
-            left.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            left.setAlignment(Qt.AlignmentFlag.AlignCenter)
             right = None
             if not ok and title == tr("No Wine left running"):
                 right = button(tr("End them"), None, self.end_leftover_wine)
@@ -1223,7 +1197,6 @@ class MainWindow(GuiApp):
             self.reading_cards.addWidget(label(tr("Mark readings done in Logos."), "muted"))
         self.reading_card.setVisible(bool(plan or devotional))
 
-    # ── Background work ──
     def _poll_logos(self) -> None:
         """Timer tick. Looking for Logos's processes scans every process on the system, too
         slow for the GUI thread, so it runs on one worker; the state comes back as a signal."""
@@ -1382,7 +1355,6 @@ class MainWindow(GuiApp):
     def open_layout(self, name: str) -> None:
         self.open_in_logos(lambda: desktop_integrations.open_layout(name), wait_for_com=True)
 
-    # ── Actions (existing operations) ──
     def _set_product(self, product: str) -> None:
         if self.conf._raw.faithlife_product != product:
             self.conf.faithlife_product = product
@@ -1443,7 +1415,6 @@ class MainWindow(GuiApp):
         def run():
             self.status(tr("Checking for updates…"))
             self.conf._network.clear_cache()
-            # What this check found: self._updates is only set once the signal reaches the window.
             available = [text for can, text in self._check_updates().values() if can]
             self.status(tr("Updates available: {names}").format(names="; ".join(available)) if available
                         else tr("Everything is up to date."), 0)
@@ -1458,8 +1429,8 @@ class MainWindow(GuiApp):
         window then leaves it running there, as when Logos is started from its shortcut."""
         if self._tray is not None and self._tray.timer.isActive():
             return
-        app = QtWidgets.QApplication.instance()
-        if isinstance(app, QtWidgets.QApplication):
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
             app.setQuitOnLastWindowClosed(False)
             self._tray = TrayController(self, app)
 
@@ -1544,11 +1515,11 @@ class MainWindow(GuiApp):
             self._check_updates()  # so the Update button stops highlighting it
         self.start_thread(run)
 
-    def _wine_build_button(self) -> QtWidgets.QPushButton:
+    def _wine_build_button(self) -> QPushButton:
         """Choose a Wine build: our newest prerelease or release bundle, or a file."""
         b = button(tr("Choose a Wine build…"), None, lambda: None)
-        menu = QtWidgets.QMenu(b)
-        self.wine_build_actions: dict[str, QtGui.QAction] = {}
+        menu = QMenu(b)
+        self.wine_build_actions: dict[str, QAction] = {}
         for channel, text in (("dev", tr("Newest prerelease")), ("stable", tr("Newest release"))):
             action = menu.addAction(text)
             action.setData(text)
@@ -1605,7 +1576,7 @@ class MainWindow(GuiApp):
         self.start_thread(run)
 
     def set_appimage(self) -> None:
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+        filename, _ = QFileDialog.getOpenFileName(
             self.root, tr("Choose a Wine build"), str(Path.home()),
             tr("Wine runner (*.AppImage *.tar.xz *.tar.gz *.tgz);;All files (*)"))
         if not filename:
@@ -1646,7 +1617,7 @@ class MainWindow(GuiApp):
             self.signals.settings_changed.emit()
         self.start_thread(run)
 
-    def apply_winver(self, exe: str, combo: QtWidgets.QComboBox) -> None:
+    def apply_winver(self, exe: str, combo: QComboBox) -> None:
         version = combo.currentData()
         if version:
             self.start_thread(wine.set_win_version, self, exe, version)
@@ -1705,20 +1676,18 @@ class MainWindow(GuiApp):
         self.start_thread(run)
 
     def run_windows_program(self) -> None:
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+        filename, _ = QFileDialog.getOpenFileName(
             self.root, tr("Run a Windows program"), str(Path.home()),
             tr("Windows programs (*.exe *.msi);;All files (*)"))
         if filename:
             self.run_wine_tool(filename)
 
 
-# ── Tray (while Logos runs from its shortcut) ────────────────────────────────
-
-class CloseLogosDialog(QtWidgets.QDialog):
+class CloseLogosDialog(QDialog):
     """Stop: ask Logos to close politely and wait, showing whether it appears to be syncing.
     Forcing it is offered, with a warning, but never done without the user."""
-    progressed = QtCore.Signal(bool, float)
-    finished_closing = QtCore.Signal(bool)
+    progressed = Signal(bool, float)
+    finished_closing = Signal(bool)
 
     def __init__(self, window: "MainWindow", on_closed: Optional[Callable[[], None]] = None):
         super().__init__(window.root)
@@ -1727,15 +1696,15 @@ class CloseLogosDialog(QtWidgets.QDialog):
         self.cancelled = False
         self.setWindowTitle(tr("Closing Logos"))
         self.setWindowIcon(gui_style.app_icon())
-        v = QtWidgets.QVBoxLayout(self)
+        v = QVBoxLayout(self)
         self.text = label(tr("Asking Logos to close…"))
         self.text.setMinimumWidth(380)
         v.addWidget(self.text)
-        self.bar = QtWidgets.QProgressBar()
+        self.bar = QProgressBar()
         self.bar.setRange(0, 0)
         self.bar.setTextVisible(False)
         v.addWidget(self.bar)
-        buttons = QtWidgets.QHBoxLayout()
+        buttons = QHBoxLayout()
         buttons.addStretch(1)
         self.force = button(tr("Force Logos to close…"), "danger", self._force)
         buttons.addWidget(self.force)
@@ -1770,13 +1739,13 @@ class CloseLogosDialog(QtWidgets.QDialog):
         self.adjustSize()  # a wrapped label doesn't grow its dialog by itself
 
     def _force(self) -> None:
-        answer = QtWidgets.QMessageBox.warning(
+        answer = QMessageBox.warning(
             self, tr("Force Logos to close?"),
             tr("Forcing Logos to close stops it at once. Changes that haven't synced to your Faithlife "
                "account yet, or unsaved work, may be lost."),
-            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.Cancel,
-            QtWidgets.QMessageBox.StandardButton.Cancel)
-        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
+        if answer != QMessageBox.StandardButton.Yes:
             return
         self.cancelled = True
         self.main.start_thread(self.main.logos.force_close)
@@ -1793,19 +1762,19 @@ class CloseLogosDialog(QtWidgets.QDialog):
                 self.on_closed()
 
 
-class TrayController(QtCore.QObject):
+class TrayController(QObject):
     """Ou Dedetai in the system tray while Logos runs; leaves when Logos closes."""
 
-    def __init__(self, window: MainWindow, qt_app: QtWidgets.QApplication):
+    def __init__(self, window: MainWindow, qt_app: QApplication):
         super().__init__()
         self.window = window
         self.qt_app = qt_app
         self.seen_running = False
-        self.tray: Optional[QtWidgets.QSystemTrayIcon] = None
-        if QtWidgets.QSystemTrayIcon.isSystemTrayAvailable():
-            self.tray = QtWidgets.QSystemTrayIcon(gui_style.app_icon())
+        self.tray: Optional[QSystemTrayIcon] = None
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray = QSystemTrayIcon(gui_style.app_icon())
             self.tray.setToolTip(constants.APP_NAME)
-            menu = QtWidgets.QMenu()
+            menu = QMenu()
             menu.aboutToShow.connect(lambda: self._fill(menu))
             self._fill(menu)
             self.tray.setContextMenu(menu)
@@ -1813,11 +1782,11 @@ class TrayController(QtCore.QObject):
             self.tray.show()
         else:
             logging.info("No system tray on this desktop: Ou Dedetai runs in the background without an icon.")
-        self.timer = QtCore.QTimer(self)
+        self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(3000)
 
-    def _fill(self, menu: QtWidgets.QMenu) -> None:
+    def _fill(self, menu: QMenu) -> None:
         menu.clear()
         state = self.window.logos.logos_state
         head = menu.addAction(tr("Logos is running") if state == State.RUNNING else tr("Logos is starting…"))
@@ -1839,14 +1808,14 @@ class TrayController(QtCore.QObject):
         closing and tidies up after it."""
         state = self.window.logos.logos_state
         if state in (State.RUNNING, State.STARTING):
-            box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Icon.Warning, constants.APP_NAME,
+            box = QMessageBox(QMessageBox.Icon.Warning, constants.APP_NAME,
                                         tr("Logos is still running."))
             box.setInformativeText(tr(
                 "Ou Dedetai looks after Logos while it runs and tidies up when Logos closes. "
                 "Without it, Logos keeps running with no tray icon to stop it. It's safest to close Logos first."))
-            stop = box.addButton(tr("Close Logos and quit"), QtWidgets.QMessageBox.ButtonRole.AcceptRole)
-            leave = box.addButton(tr("Quit anyway"), QtWidgets.QMessageBox.ButtonRole.DestructiveRole)
-            box.addButton(QtWidgets.QMessageBox.StandardButton.Cancel)
+            stop = box.addButton(tr("Close Logos and quit"), QMessageBox.ButtonRole.AcceptRole)
+            leave = box.addButton(tr("Quit anyway"), QMessageBox.ButtonRole.DestructiveRole)
+            box.addButton(QMessageBox.StandardButton.Cancel)
             box.setDefaultButton(stop)
             box.exec()
             if box.clickedButton() is stop:
@@ -1865,7 +1834,7 @@ class TrayController(QtCore.QObject):
         self.qt_app.quit()
 
     def _activated(self, reason) -> None:
-        if reason == QtWidgets.QSystemTrayIcon.ActivationReason.Trigger:
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self.show_window(SIMPLE)
 
     def show_window(self, view: int, page: int = HOME) -> None:
@@ -1892,12 +1861,10 @@ class TrayController(QtCore.QObject):
                 self.timer.stop()
 
 
-# ── Entry points ─────────────────────────────────────────────────────────────
-
-def _qt_app() -> QtWidgets.QApplication:
-    existing = QtWidgets.QApplication.instance()
-    app = existing if isinstance(existing, QtWidgets.QApplication) else \
-        QtWidgets.QApplication([constants.BINARY_NAME])
+def _qt_app() -> QApplication:
+    existing = QApplication.instance()
+    app = existing if isinstance(existing, QApplication) else \
+        QApplication([constants.BINARY_NAME])
     app.setApplicationName(constants.APP_NAME)
     app.setDesktopFileName(constants.BINARY_NAME)
     gui_style.apply(app)
@@ -1905,7 +1872,7 @@ def _qt_app() -> QtWidgets.QApplication:
 
 
 def start(ephemeral_config: EphemeralConfiguration, install: bool = False) -> int:
-    """The window (control panel). With ``install``, start installing straight away."""
+    """The window (control panel). With `install`, start installing straight away."""
     app = _qt_app()
     root = Root()
     window = MainWindow(root, ephemeral_config)

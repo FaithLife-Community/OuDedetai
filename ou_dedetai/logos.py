@@ -33,7 +33,7 @@ class LogosManager:
     def __init__(self, app: App):
         self.logos_state = State.STOPPED
         self.starting_since = 0.0
-        """When start() last ran: how long Logos's processes have had to appear"""
+        """When start() last ran: how long Logos's processes have had to appear."""
         self.indexing_state = State.STOPPED
         self.app = app
         self.processes: dict[str, subprocess.Popen] = {}
@@ -118,7 +118,7 @@ class LogosManager:
         """Pass a link to the running Logos, as Logos.exe <link> does on Windows."""
         logging.info(f"Handing Logos a {url.split(':', 1)[0]}: link.")
         if not self._run_quietly(self.app.conf.logos_exe, [url], timeout=60):
-            logging.warning("Logos took over a minute to take the link.")
+            logging.warning("Timeout: Logos took over a minute to take the link.")
 
     def _run_quietly(self, exe: Optional[str], args: list[str], timeout: float, kill_late: bool = False) -> bool:
         """Run a Windows program in the prefix, output discarded; False if it took longer
@@ -543,7 +543,7 @@ class LogosManager:
         state = 'DISABLED'
         try:
             current_value = wine.get_registry_value(
-                'HKCU\\Software\\Logos4\\Logging',
+                f"HKCU\\{constants.REG_LOGOS_LOGGING}",
                 'Enabled',
                 self.app
             )
@@ -576,7 +576,7 @@ class LogosManager:
                 state = state_enabled
 
         logging.info(f"Setting app logging to '{state}'.")
-        wine.reg_add(self.app, self.app.conf.wine_binary, 'HKCU\\Software\\Logos4\\Logging', 'Enabled',
+        wine.reg_add(self.app, self.app.conf.wine_binary, f"HKCU\\{constants.REG_LOGOS_LOGGING}", 'Enabled',
                      'REG_DWORD', value)
         wine.wineserver_wait(self.app)
         self.app.conf.faithlife_product_logging = state == state_enabled

@@ -615,7 +615,7 @@ class Config:
 
     @property
     def update_channel(self) -> str:
-        """"stable" (Releases) or "dev" (Prereleases): what Ou Dedetai updates itself to.
+        """"stable" (Releases) or "dev" (Prereleases): which releases Ou Dedetai updates itself from.
         Wine follows the same choice, unless set apart under the developer options."""
         return self._raw.app_release_channel
 
@@ -810,7 +810,7 @@ class Config:
 
     @property
     def desktop_integrations_offered(self) -> bool:
-        """Whether the user has been offered the desktop integrations (we only ask once)"""
+        """Whether the user has been offered the desktop integrations (we only ask once)."""
         return self._raw.desktop_integrations_offered
 
     @desktop_integrations_offered.setter
@@ -833,7 +833,7 @@ class Config:
 
     @property
     def gui_full_view(self) -> bool:
-        """Whether the GUI opens the full view rather than the simple window"""
+        """Whether the GUI opens the full view rather than the simple window."""
         return self._raw.gui_full_view
 
     @gui_full_view.setter
@@ -844,7 +844,7 @@ class Config:
 
     @property
     def faithlife_product_logging(self) -> bool:
-        """Whether or not the installed faithlife product is configured to log"""
+        """Whether or not the installed faithlife product is configured to log."""
         if self._raw.faithlife_product_logging is not None:
             return self._raw.faithlife_product_logging
         return False
@@ -1001,7 +1001,6 @@ class Config:
     def wine_release_channel(self, value: str) -> None:
         if value not in ("stable", "dev"):
             raise ValueError("Wine release channel must be 'stable' or 'dev'")
-        # A choice made here (developer options) sticks, like the Updates choice.
         self._raw.update_channel_chosen = True
         if self._raw.wine_release_channel != value:
             self._raw.wine_release_channel = value
@@ -1035,7 +1034,7 @@ class Config:
 
     @property
     def wine_path_in_distribution(self) -> str:
-        # The configured build: older builds may still be unpacked next to it.
+        """The configured build: older builds may still be unpacked next to it."""
         if self.is_wine_binary_in_distribution and Path(self.wine_binary).is_file():
             return str(Path(self.wine_binary).absolute())
         return str(next(Path(self.wine_distribution_dir).glob("*/bin/wine")).absolute())
@@ -1087,12 +1086,9 @@ class Config:
 
     @wine_binary.setter
     def wine_binary(self, value: str):
-        """Takes in a path to the wine binary and stores it as relative for storage"""
-        # FIXME: consider this, it doesn't work at present as the wine_binary may be an
-        # appimage that hasn't been downloaded yet
-        # aboslute = self._absolute_from_install_dir(value)
-        # if not Path(aboslute).is_file():
-        #     raise ValueError("Wine Binary path must be a valid file")
+        """Takes in a path to the wine binary and stores it as relative for storage.
+
+        Not checked to exist: it may be an AppImage that hasn't been downloaded yet."""
 
         if value == constants.WINE_RECOMMENDED_SIGIL:
             value = constants.WINE_RECOMMENDED_TARBALL_SIGIL
@@ -1280,6 +1276,7 @@ class Config:
             # An unpacked tarball is updated from the release channel's tarball, not the AppImage.
             # Its tag ("11.22-oinos-pre-b1e3dff") carries the version first.
             version = self._wine_tarball_release.version
+            # The leading version number: digits, then one or more ".digits" ("11.22").
             found = re.match(r"\d+(?:\.\d+)+", version)
             if found:
                 return found.group(0)
