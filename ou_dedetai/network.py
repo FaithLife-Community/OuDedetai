@@ -25,6 +25,8 @@ from ou_dedetai.app import App
 from . import constants
 from . import utils
 
+_TIMEOUT = (10, 30)  # (connect, read) seconds
+
 
 def _request_headers(url: str) -> dict[str, str]:
     headers = {"Accept-Encoding": "identity"}
@@ -110,13 +112,17 @@ class UrlProps(Props):
         logging.debug(f"Getting headers from {self.path}.")
         try:
             headers = _request_headers(self.path)
-            r = requests.head(self.path, allow_redirects=True, headers=headers)
-        except requests.exceptions.ConnectionError:
+            r = requests.head(self.path, allow_redirects=True, headers=headers, timeout=_TIMEOUT)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             logging.critical("Failed to connect to the server.")
             return requests.structures.CaseInsensitiveDict()
         except Exception as e:
             logging.error(e)
             raise
+        if not r.ok:
+            # Error page's Content-Length isn't the file's
+            logging.warning(f"HEAD {self.path} returned HTTP {r.status_code}.")
+            return requests.structures.CaseInsensitiveDict()
         return r.headers
 
     def _get_size(self):
@@ -453,32 +459,30 @@ def logos_reuse_download(
                 else:
                     logging.info(f"Incomplete file: {file_path}.")
     if found == 1:
-        file_path = Path(os.path.join(app.conf.download_dir, file))
-        # Start download.
-        _net_get(
+        file_path = Path(app.conf.download_dir) / file
+        # Only verified files get the final name
+        part_path = file_path.with_name(file_path.name + ".part")
+        if not _net_get(sourceurl, target=part_path, app=app):
+            app.exit(f"Failed to download {sourceurl}")
+        if not _verify_downloaded_file(
             sourceurl,
-            target=file_path,
-            app=app,
-        )
-        if _verify_downloaded_file(
-            sourceurl,
-            file_path,
+            part_path,
             app=app,
             status_messages=status_messages
         ):
-            logging.debug(f"Copying: {file} into: {targetdir}")
-            try:
-                shutil.copy(os.path.join(app.conf.download_dir, file), targetdir)
-            except shutil.SameFileError:
-                pass
-        else:
-            # In case we ever get here, give us an opportunity to recover by trying the download again from the start
-            os.remove(file_path)
-            app.exit(f"Bad file size or checksum: {file_path}")
+            part_path.unlink(missing_ok=True)
+            app.exit(f"Bad file size or checksum: {part_path}")
+        part_path.replace(file_path)
+        logging.debug(f"Copying: {file} into: {targetdir}")
+        try:
+            shutil.copy(file_path, targetdir)
+        except shutil.SameFileError:
+            pass
 
 
 # FIXME: refactor to raise rather than return None
 def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
+    """Returns the body as bytes, or True once written to target; None on failure."""
     # TODO:
     # - Check available disk space before starting download
     logging.debug(f"Download source: {url}")
@@ -539,7 +543,7 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
             # One that writes into a file, and one that returns a str, 
             # that share most of the internal logic
             if target_props.path is None:  # return url content as text
-                with requests.get(url_props.path, headers=headers) as r:
+                with requests.get(url_props.path, headers=headers, timeout=_TIMEOUT) as r:
                     if callable(r):
                         logging.error("Failed to retrieve data from the URL.")
                         return None
@@ -569,7 +573,11 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
 
                     return r._content  # raw bytes
             else:  # download url to target.path
-                with requests.get(url_props.path, stream=True, headers=headers) as r:
+                with requests.get(url_props.path, stream=True, headers=headers, timeout=_TIMEOUT) as r:
+                    r.raise_for_status()
+                    if file_mode == 'ab' and r.status_code != 206:
+                        logging.info("Server ignored Range; restarting download.")
+                        file_mode = 'wb'
                     with target_props.path.open(mode=file_mode) as f:
                         if file_mode == 'wb':
                             mode_text = 'Writing'
@@ -592,6 +600,16 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
                                         f"Downloading {target_props.path.name}…",
                                         percent
                                     )
+        except requests.exceptions.HTTPError as e:
+            # Only the download path gets here; the text path handles its own.
+            # Range-gated so an un-ranged 416 can't loop.
+            if e.response.status_code == 416 and 'Range' in headers:
+                logging.info(f"Range not satisfiable; restarting download: {target}")
+                target_props.path.unlink(missing_ok=True)
+                try_again = True
+                continue
+            logging.error(f"HTTP error occurred: {e.response.status_code}")
+            return None
         except requests.exceptions.RequestException as e:
             # If this was an incomplete read try again
             new_size = FileProps(target).size
@@ -611,6 +629,7 @@ def _net_get(url: str, target: Optional[Path]=None, app: Optional[App] = None):
 
             logging.error(f"Error occurred during HTTP request: {e}")
             return None  # Return None values to indicate an error condition
+    return True
 
 
 def _verify_downloaded_file(url: str, file_path: Path | str, app: App, status_messages: bool = True): 
