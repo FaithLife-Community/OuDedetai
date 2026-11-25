@@ -449,8 +449,10 @@ def get_package_manager() -> PackageManager | None:
         install_command = ["apt", "install", "-y"]
         download_command = ["apt", "install", "--download-only", "-y"]
         remove_command = ["apt", "remove", "-y"]
-        query_command =  ["dpkg", "-l"]
-        query_prefix = '.i  '
+        # One query gives name, status, and Provides for every package in the
+        # local database, so virtual packages need no second lookup.
+        query_command =  ["dpkg-query", "-W", "-f=${Package}\\t${Status}\\t${Provides}\\n"]
+        query_prefix = ''
         ubuntu_26_or_newer = os_name == 'ubuntu' and major_ver is not None and major_ver >= 26
         debian_14_or_newer = os_name == 'debian' and major_ver is not None and major_ver >= 14
         # Set default package list.
@@ -648,26 +650,40 @@ def query_packages(package_manager: PackageManager, packages, mode="install") ->
     logging.debug(f"packages to check: {packages}")
     status = {package: "Unchecked" for package in packages}
 
+    # The dpkg query lists every package in the local database as
+    # "name<TAB>status<TAB>provides". Parse it once into the installed real
+    # package names and the virtual (Provides:) names they satisfy.
+    dpkg_installed: set[str] = set()
+    dpkg_provides: dict[str, set[str]] = {}
+    if package_manager.query[0] == 'dpkg-query':
+        for line in package_list.split('\n'):
+            parts = line.split('\t')
+            if len(parts) < 2:
+                continue
+            name = parts[0].split(':')[0]  # remove :arch if present
+            state_parts = parts[1].split()
+            if not state_parts or state_parts[-1] != 'installed':
+                continue
+            dpkg_installed.add(name)
+            for entry in (parts[2] if len(parts) > 2 else '').split(','):
+                provided = entry.strip().split('(')[0].strip().split(':')[0]
+                if provided:
+                    dpkg_provides.setdefault(provided, set()).add(name)
+
     for p in packages:
         logging.debug(f"Checking for: {p}")
-        l_num = 0
-        for line in package_list.split('\n'):
-            # logging.debug(f"{line=}")
-            l_num += 1
-            if package_manager.query[0] == 'dpkg':
-                parts = line.strip().split()
-                if l_num < 6 or len(parts) < 2:  # skip header, etc.
-                    continue
-                state = parts[0]
-                pkg = parts[1].split(':')[0]  # remove :arch if present
-                if pkg == p and state[1] == 'i':
-                    if mode == 'install':
-                        status[p] = "Installed"
-                    elif mode == 'remove':
-                        conflicting_packages.append(p)
-                        status[p] = 'Conflicting'
-                    break
-            else:
+        if package_manager.query[0] == 'dpkg-query':
+            if p in dpkg_installed:
+                if mode == 'install':
+                    status[p] = "Installed"
+                elif mode == 'remove':
+                    conflicting_packages.append(p)
+                    status[p] = 'Conflicting'
+            elif mode == 'install' and p in dpkg_provides:
+                status[p] = "Installed"
+                logging.debug(f"'{p}' satisfied by virtual provider(s): {sorted(dpkg_provides[p])}")
+        else:
+            for line in package_list.split('\n'):
                 package_line_start = f"{package_manager.query_prefix}{p}"
                 # For rpm we can match the whole line
                 if package_manager.query[0] == 'rpm' and line.strip() == package_line_start: 
