@@ -18,6 +18,7 @@ refresh. Each feature is a mixin in gui/mixins (see mixins/base.py).
 """
 import logging
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
@@ -91,6 +92,7 @@ class MainWindow(
         self._installing = False
         self._last_state: Optional[State] = None
         self._polling = False
+        self._logos_checked = threading.Condition()
         self._poller = ThreadPoolExecutor(max_workers=1, thread_name_prefix="logos-monitor")
         self.signals = Signals()
 

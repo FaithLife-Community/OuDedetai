@@ -245,9 +245,9 @@ def saved_layouts() -> list[str]:
     return [n for n in names if isinstance(n, str)] if isinstance(names, list) else []
 
 
-def open_layout(name: str) -> bool:
+def open_layout(name: str, timeout: int = 180) -> bool:
     """Load a saved layout in the running Logos (COM LoadLayout, a few seconds)."""
-    return _run_backend("--layout", name, timeout=180) is not None
+    return _run_backend("--layout", name, timeout=timeout) is not None
 
 
 def open_url(url: str) -> bool:
