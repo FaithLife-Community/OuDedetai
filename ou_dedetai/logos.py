@@ -178,8 +178,7 @@ class LogosManager:
 
         time_logos_started = time.time()
 
-        # Stop with Logos: this thread isn't a daemon, so looping forever would keep
-        # the CLI's process alive after Logos has closed.
+        # Stop with Logos (or with Ou Dedetai: the thread is a daemon).
         while self.logos_state in (State.STARTING, State.RUNNING):
             # Now we wait...
             time.sleep(10)
@@ -256,7 +255,9 @@ class LogosManager:
             wine.wineserver_kill(self.app)
             # Don't send "Running" message to GUI b/c it never clears.
             logging.info(f"Running {self.app.conf.faithlife_product}…")
-            self.app.start_thread(self.monitor_for_potential_issues, daemon_bool=False)
+            # A daemon: when the window quits while Logos runs ("Quit anyway"), nothing updates
+            # logos_state any more, and a non-daemon thread would keep the process alive for good.
+            self.app.start_thread(self.monitor_for_potential_issues)
             self.app.start_thread(run_logos, daemon_bool=False)
             # NOTE: The following code would keep the CLI open while running
             # Logos, but since wine logging is sent directly to wine.log,
