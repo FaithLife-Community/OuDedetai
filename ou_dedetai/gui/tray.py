@@ -17,6 +17,12 @@ if TYPE_CHECKING:
     from .window import MainWindow
 
 
+def tray_available() -> bool:
+    """Whether this desktop shows tray icons. Without one, Ou Dedetai is a plain window:
+    it never hides, and closing it quits."""
+    return QSystemTrayIcon.isSystemTrayAvailable()
+
+
 class TrayController(QObject):
     """Ou Dedetai in the system tray while Logos runs; leaves when Logos closes."""
 

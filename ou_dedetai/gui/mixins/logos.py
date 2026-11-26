@@ -10,7 +10,7 @@ from ... import desktop_integrations
 from ...logos import State
 from ..close_dialog import CloseLogosDialog
 from ..style import tr
-from ..tray import TrayController
+from ..tray import TrayController, tray_available
 from .base import WindowBase
 
 if TYPE_CHECKING:
@@ -120,6 +120,8 @@ class LogosMixin(WindowBase):
         window then leaves it running there, as when Logos is started from its shortcut."""
         if self._tray is not None and self._tray.timer.isActive():
             return
+        if not tray_available():
+            return  # the window stays a plain window: closing it quits
         app = QApplication.instance()
         if isinstance(app, QApplication):
             app.setQuitOnLastWindowClosed(False)
