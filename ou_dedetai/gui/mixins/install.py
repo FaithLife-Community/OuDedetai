@@ -46,6 +46,10 @@ class InstallMixin(WindowBase):
         self.status_gui.progress.setVisible(False)
         self.show_view(SIMPLE)
         self.refresh()
+        # The check at start-up found nothing to check before the install, so the
+        # Update menu would say "Checking for updates…" until the next start.
+        if self.is_installed():
+            self.start_thread(self._check_updates)
 
     def run_installer(self) -> None:
         dialog = Toplevel(self.root)
