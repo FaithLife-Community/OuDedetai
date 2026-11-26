@@ -140,6 +140,7 @@ class TestBackgroundWork(GuiTestCase):
 
     def test_starting_logos_from_the_window_shows_the_tray(self):
         with mock.patch.object(logos_mixin, "TrayController") as tray, \
+                mock.patch.object(logos_mixin, "tray_available", return_value=True), \
                 mock.patch.object(self.window, "start_thread"):
             self.window.run_logos()
             tray.return_value.timer.isActive.return_value = True
@@ -210,6 +211,14 @@ class TestBackgroundWork(GuiTestCase):
         tray._tick()
         self.assertTrue(self.window.root.isVisible())
         tray.timer.stop()
+
+    def test_starting_logos_without_a_tray_keeps_a_plain_window(self):
+        with mock.patch.object(logos_mixin, "TrayController") as tray, \
+                mock.patch.object(logos_mixin, "tray_available", return_value=False), \
+                mock.patch.object(self.window, "start_thread"):
+            self.window.run_logos()
+        tray.assert_not_called()
+        self.assertTrue(self.qt.quitOnLastWindowClosed())  # closing the window quits
 
     def test_tray_quit_warns_while_logos_runs(self):
         qt = mock.Mock()
@@ -311,6 +320,40 @@ class TestBackgroundWork(GuiTestCase):
             self.window._logos_state_changed(State.RUNNING)
             self.window._logos_state_changed(State.RUNNING)
         refresh.assert_called_once()
+
+
+class TestShortcut(GuiTestCase):
+    """Starting Logos from its shortcut (run_with_tray)."""
+    installed = True
+
+    def _start_from_shortcut(self, tray_available):
+        """run_with_tray as the Logos shortcut calls it: (window shown, quits on close, tray made)."""
+        made = []
+        init = gui_window.MainWindow.__init__
+
+        def keep(window, *args, **kwargs):
+            init(window, *args, **kwargs)
+            window.monitor_timer.stop()
+            made.append(window)
+        with mock.patch.object(gui_window, "tray_available", return_value=tray_available), \
+                mock.patch.object(gui_window, "TrayController") as tray, \
+                mock.patch.object(gui_window.MainWindow, "__init__", keep), \
+                mock.patch.object(gui_window.MainWindow, "start_thread"), \
+                mock.patch("ou_dedetai.logos.LogosManager.hand_off_link", return_value=False), \
+                mock.patch.object(QtWidgets.QApplication, "exec", return_value=0):
+            gui_window.run_with_tray(self.window.conf._overrides)
+        shown = made[0].root.isVisible()
+        made[0].signals.blockSignals(True)
+        made[0].root.close()
+        quits = self.qt.quitOnLastWindowClosed()
+        self.qt.setQuitOnLastWindowClosed(True)
+        return shown, quits, tray.called
+
+    def test_shortcut_without_a_tray_opens_the_window(self):
+        self.assertEqual(self._start_from_shortcut(False), (True, True, False))
+
+    def test_shortcut_with_a_tray_starts_in_the_tray(self):
+        self.assertEqual(self._start_from_shortcut(True), (False, False, True))
 
 
 class TestInstalledMenus(GuiTestCase):
