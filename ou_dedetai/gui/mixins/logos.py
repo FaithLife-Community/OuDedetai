@@ -127,5 +127,18 @@ class LogosMixin(WindowBase):
 
     def stop_logos(self, on_closed: Optional[Callable[[], None]] = None) -> None:
         """Close Logos politely; forcing it is offered, with a warning (CloseLogosDialog)."""
+        if self.closing_logos() and self._close_dialog is not None:
+            # Already closing (e.g. Stop, then the tray's Close Logos and quit): one dialog.
+            if on_closed:
+                self._close_dialog.on_closed = on_closed
+            self._close_dialog.raise_()
+            self._close_dialog.activateWindow()
+            return
         self._close_dialog = CloseLogosDialog(cast("MainWindow", self), on_closed)
+        self._close_dialog.finished.connect(lambda _result: self.refresh())  # Stop again once it closes
         self._close_dialog.start()
+        self.refresh()
+
+    def closing_logos(self) -> bool:
+        """The Closing Logos dialog is open: Stop is greyed out meanwhile."""
+        return self._close_dialog is not None and self._close_dialog.isVisible()

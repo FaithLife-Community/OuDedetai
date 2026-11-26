@@ -352,8 +352,8 @@ class MainWindow(
         for b in (self.s_run, self.h_run):
             b.setText(tr("Run {product}").format(product=product))
             b.setEnabled(installed and not running)
-        self.s_stop.setEnabled(running)
-        self.h_stop.setEnabled(running)
+        self.s_stop.setEnabled(running and not self.closing_logos())
+        self.h_stop.setEnabled(running and not self.closing_logos())
         self.h_stop.setVisible(installed)
         for widget in self.while_closed:
             widget.setEnabled(installed and not running)
