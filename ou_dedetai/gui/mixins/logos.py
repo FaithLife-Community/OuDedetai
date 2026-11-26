@@ -7,7 +7,7 @@ import psutil  # type: ignore[import-untyped]
 from PySide6.QtWidgets import QApplication, QMenu
 
 from ... import desktop_integrations
-from ...logos import State
+from ...logos import STARTING_TIMEOUT, State
 from ..close_dialog import CloseLogosDialog
 from ..style import tr
 from ..tray import TrayController
@@ -22,6 +22,11 @@ PREFERRED_BIBLE = "logosref:Bible.Ge1.1"
 # A saved layout with this name serves as the Run menu's "Blank" (Logos has no
 # built-in empty layout that can be opened by name).
 BLANK_LAYOUT = "Blank"
+# Logos answers COM only once it has finished opening, some time after its processes
+# appear (RUNNING): try the layout for this long, each try cut short after LAYOUT_TRY.
+LAYOUT_READY_TIMEOUT = 120
+LAYOUT_TRY = 30
+LAYOUT_RETRY_PAUSE = 5
 
 
 class LogosMixin(WindowBase):
@@ -70,6 +75,8 @@ class LogosMixin(WindowBase):
             logging.warning(f"Couldn't check on Logos: {error}")
         finally:
             self._polling = False
+            with self._logos_checked:
+                self._logos_checked.notify_all()  # anything waiting for Logos (_wait_for_logos)
 
     def _logos_state_changed(self, state: State) -> None:
         self.monitor_timer.setInterval(1000 if self.is_installed() else 10000)
@@ -82,26 +89,47 @@ class LogosMixin(WindowBase):
             self._last_state = state
             self.refresh()
 
-    def open_in_logos(self, action: Callable[[], object], wait_for_com: bool = False) -> None:
-        """Start Logos if needed, then do something in it (open a link or layout)."""
-        def run():
-            started = self.logos.logos_state not in (State.RUNNING, State.STARTING)
-            if started:
-                self.signals.tray.emit()
-                self.logos.start()
-            deadline = time.monotonic() + 240
-            while self.logos.logos_state != State.RUNNING and time.monotonic() < deadline:
-                time.sleep(1)
-                self.logos.monitor()
-            if wait_for_com and started:
-                time.sleep(10)  # COM answers once Logos has finished opening its window
-            action()
-        self.start_thread(run)
+    def _start_logos_if_needed(self) -> None:
+        """Start Logos unless it's running or starting. Looks afresh first: starting a second
+        Logos stops the one that's running (wineserver -k)."""
+        self.logos.monitor()
+        if self.logos.logos_state not in (State.RUNNING, State.STARTING):
+            self.signals.tray.emit()
+            self.logos.start()
+
+    def _wait_for_logos(self) -> bool:
+        """Wait until Logos runs, or has clearly failed to start. Woken by the window's own
+        checks on Logos (_check_logos), so this adds no polling of its own."""
+        seen_starting = False
+
+        def settled() -> bool:
+            nonlocal seen_starting
+            state = self.logos.logos_state
+            seen_starting = seen_starting or state == State.STARTING
+            return state == State.RUNNING or (seen_starting and state == State.STOPPED)
+        with self._logos_checked:
+            self._logos_checked.wait_for(settled, timeout=STARTING_TIMEOUT + 30)
+        return self.logos.logos_state == State.RUNNING
 
     def open_link(self, url: Optional[str]) -> None:
         """Open a Logos link (logosref:, logosres:…), starting Logos first if needed."""
-        if url:
-            self.open_in_logos(lambda: self._send_link(url))
+        if not url:
+            return
+
+        def run():
+            self.logos.monitor()  # afresh: starting a second Logos would stop the running one
+            state = self.logos.logos_state
+            if state == State.STARTING and self._wait_for_logos():
+                state = State.RUNNING  # wait until it can take the link (Logos.exe <link>)
+            if state == State.RUNNING:
+                self._send_link(url)
+                return
+            # Not running: Logos starts with the link on its command line, as the shortcut
+            # does, so nothing has to wait for it.
+            self.conf._overrides.logos_link = url
+            self.signals.tray.emit()
+            self.logos.start()
+        self.start_thread(run)
 
     def _send_link(self, url: str) -> None:
         if desktop_integrations.is_installed() and desktop_integrations.open_url(url):
@@ -109,7 +137,24 @@ class LogosMixin(WindowBase):
         self.logos.send_link(url)  # without the integrations, as the link handler does
 
     def open_layout(self, name: str) -> None:
-        self.open_in_logos(lambda: desktop_integrations.open_layout(name), wait_for_com=True)
+        """Load a saved layout, starting Logos first if needed. Layouts can only be
+        loaded over COM, so Logos has to be up and answering first."""
+        def run():
+            self._start_logos_if_needed()
+            if self._wait_for_logos():
+                deadline = time.monotonic() + LAYOUT_READY_TIMEOUT
+                while True:
+                    if desktop_integrations.open_layout(name, timeout=LAYOUT_TRY):
+                        return
+                    if time.monotonic() > deadline:
+                        break
+                    time.sleep(LAYOUT_RETRY_PAUSE)
+                message = tr("Logos didn't open the layout “{name}”.")
+            else:
+                message = tr("Logos didn't start, so the layout “{name}” couldn't be opened.")
+            logging.warning(message.format(name=name))
+            self.signals.failed.emit(message.format(name=name))
+        self.start_thread(run)
 
     def run_logos(self) -> None:
         self.show_tray()
