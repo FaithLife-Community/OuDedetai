@@ -383,9 +383,22 @@ _VALUE_RE = re.compile(r'^"(?P<name>(?:[^"\\]|\\.)*)"=(?P<value>.*)$', re.MULTIL
 def parse_reg_file(path: Path) -> dict[str, dict[str, str]]:
     """Parse a Wine registry file into {lower-case key: {lower-case value name: raw value}}.
 
-    Keys are as Wine writes them in the file (relative to the hive, single backslashes)."""
+    Keys are as Wine writes them in the file (relative to the hive, single backslashes).
+    The result is shared between callers, so don't change it."""
+    # The window reads the registry on every refresh, and a Logos prefix's system.reg runs
+    # to megabytes. Wine rewrites the whole file when it saves, so a changed file has a new
+    # mtime or size and is parsed again.
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        stat = path.stat()
+    except OSError:
+        return {}
+    return _cached_reg_file(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+
+
+@functools.lru_cache(maxsize=4)  # user.reg and system.reg, plus the copies they replace
+def _cached_reg_file(path: str, _mtime_ns: int, _size: int) -> dict[str, dict[str, str]]:
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
     except OSError:
         return {}
     result: dict[str, dict[str, str]] = {}
