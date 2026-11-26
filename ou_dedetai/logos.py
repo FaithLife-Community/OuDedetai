@@ -13,7 +13,6 @@ from ou_dedetai.app import App
 from ou_dedetai.config import get_logos_user_id
 
 from . import system
-from . import utils
 from . import wine
 
 
@@ -321,28 +320,29 @@ class LogosManager:
             )
             if process is not None:
                 self.processes[self.app.conf.logos_indexer_exe_windows_path] = process
+                # run_wine_application only starts the indexer: this thread lasts as long as it does.
+                process.wait()
 
         def check_if_indexing(process: threading.Thread):
             start_time = time.time()
-            last_time = start_time
-            update_send = 0
-            while process.is_alive():
-                update, last_time = utils.stopwatch(last_time, 3)
-                if update:
-                    update_send = update_send + 1
-                if update_send == 10:
-                    total_elapsed_time = time.time() - start_time
-                    elapsed_min = int(total_elapsed_time // 60)
-                    elapsed_sec = int(total_elapsed_time % 60)
-                    formatted_time = f"{elapsed_min}m {elapsed_sec}s"
-                    self.app.status(f"Indexing is running… (Elapsed Time: {formatted_time})")
-                    update_send = 0
+            # join() waits without using the CPU; report the elapsed time every 30 s meanwhile.
+            while True:
+                process.join(30)
+                if not process.is_alive():
+                    break
+                total_elapsed_time = time.time() - start_time
+                elapsed_min = int(total_elapsed_time // 60)
+                elapsed_sec = int(total_elapsed_time % 60)
+                formatted_time = f"{elapsed_min}m {elapsed_sec}s"
+                self.app.status(f"Indexing is running… (Elapsed Time: {formatted_time})")
             index_finished.set()
 
         def wait_on_indexing():
             index_finished.wait()
             self.indexing_state = State.STOPPED
-            self.app.status("Indexing has finished.", percent=100)
+            process = self.processes.get(self.app.conf.logos_indexer_exe_windows_path or "")
+            if process is None or process.returncode != -signal.SIGKILL:  # killed: stop_indexing said so
+                self.app.status("Indexing has finished.", percent=100)
             wine.wineserver_wait(app=self.app)
 
         wine.wineserver_kill(self.app)
