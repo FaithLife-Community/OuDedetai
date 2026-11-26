@@ -11,6 +11,7 @@ empty class.
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import threading
     from concurrent.futures import ThreadPoolExecutor
     from typing import Callable, Optional
 
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
         _installing: bool
         _last_state: Optional[State]
         _polling: bool
+        _logos_checked: threading.Condition
         guide: InstallGuide
         monitor_timer: QTimer
         reading_card: QWidget

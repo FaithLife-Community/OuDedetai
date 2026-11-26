@@ -313,6 +313,108 @@ class TestBackgroundWork(GuiTestCase):
         refresh.assert_called_once()
 
 
+class TestOpenInLogos(GuiTestCase):
+    """Open Bible, readings and layouts: starting Logos for them when it isn't running."""
+    installed = True
+
+    def setUp(self):
+        super().setUp()
+        self.logos = self.window.logos
+        self.monitor = mock.patch.object(self.logos, "monitor").start()
+        self.start = mock.patch.object(self.logos, "start").start()
+        self.send = mock.patch.object(self.window, "_send_link").start()
+        self.failed = mock.Mock()
+        self.window.signals.failed.connect(self.failed)
+        mock.patch.object(QtWidgets.QMessageBox, "warning").start()  # _task_failed's dialog
+        self.addCleanup(mock.patch.stopall)
+
+    def _run(self, call):
+        """Run an open_* call, keeping its worker thread to join."""
+        threads = []
+        start_thread = self.window.start_thread
+
+        def keep(task, *args, **kwargs):
+            threads.append(start_thread(task, *args, **kwargs))
+            return threads[-1]
+        with mock.patch.object(self.window, "start_thread", keep):
+            call()
+        return threads[0]
+
+    def _checked(self, state):
+        """What the window's check on Logos does: set the state, wake anything waiting."""
+        self.logos.logos_state = state
+        with self.window._logos_checked:
+            self.window._logos_checked.notify_all()
+
+    def test_link_starts_logos_with_it_without_waiting(self):
+        self.logos.logos_state = State.STOPPED
+        self._run(lambda: self.window.open_link("logosref:Bible.Jn1.1")).join(5)
+        self.start.assert_called_once()
+        self.assertEqual(self.window.conf._overrides.logos_link, "logosref:Bible.Jn1.1")
+        self.send.assert_not_called()
+        self.window.conf._overrides.logos_link = None
+
+    def test_link_goes_straight_to_a_running_logos(self):
+        self.logos.logos_state = State.RUNNING
+        self._run(lambda: self.window.open_link("logosref:Bible.Jn1.1")).join(5)
+        self.send.assert_called_once_with("logosref:Bible.Jn1.1")
+        self.start.assert_not_called()
+
+    def test_link_waits_for_a_starting_logos(self):
+        self.logos.logos_state = State.STARTING
+        thread = self._run(lambda: self.window.open_link("logosref:Bible.Jn1.1"))
+        thread.join(0.3)
+        self.assertTrue(thread.is_alive())  # waiting, not polling
+        self.send.assert_not_called()
+        self._checked(State.RUNNING)
+        thread.join(5)
+        self.send.assert_called_once_with("logosref:Bible.Jn1.1")
+        self.start.assert_not_called()
+
+    def test_the_windows_check_on_logos_wakes_a_wait(self):
+        self.logos.logos_state = State.STARTING
+        thread = self._run(lambda: self.window.open_link("logosref:Bible.Jn1.1"))
+        thread.join(0.3)
+        self.assertTrue(thread.is_alive())
+        self.monitor.side_effect = lambda: setattr(self.logos, "logos_state", State.RUNNING)
+        self.window._check_logos()  # one timer tick
+        thread.join(5)
+        self.send.assert_called_once()
+
+    def test_layout_is_retried_until_logos_takes_it(self):
+        self.logos.logos_state = State.RUNNING
+        with mock.patch.object(logos_mixin.desktop_integrations, "open_layout",
+                               side_effect=[False, False, True]) as open_layout, \
+                mock.patch.object(logos_mixin, "LAYOUT_RETRY_PAUSE", 0):
+            self._run(lambda: self.window.open_layout("Study")).join(5)
+        self.assertEqual(open_layout.call_count, 3)
+        open_layout.assert_called_with("Study", timeout=logos_mixin.LAYOUT_TRY)
+        self.qt.processEvents()
+        self.failed.assert_not_called()
+
+    def test_layout_gives_up_and_says_so(self):
+        self.logos.logos_state = State.RUNNING
+        with mock.patch.object(logos_mixin.desktop_integrations, "open_layout", return_value=False), \
+                mock.patch.object(logos_mixin, "LAYOUT_READY_TIMEOUT", 0), \
+                mock.patch.object(logos_mixin, "LAYOUT_RETRY_PAUSE", 0):
+            self._run(lambda: self.window.open_layout("Study")).join(5)
+        self.qt.processEvents()
+        self.failed.assert_called_once_with("Logos didn't open the layout “Study”.")
+
+    def test_layout_when_logos_fails_to_start(self):
+        self.logos.logos_state = State.STOPPED
+        self.start.side_effect = lambda: setattr(self.logos, "logos_state", State.STARTING)
+        with mock.patch.object(logos_mixin.desktop_integrations, "open_layout") as open_layout:
+            thread = self._run(lambda: self.window.open_layout("Study"))
+            thread.join(0.3)
+            self.assertTrue(thread.is_alive())
+            self._checked(State.STOPPED)  # monitor() gave up on the start
+            thread.join(5)
+        open_layout.assert_not_called()
+        self.qt.processEvents()
+        self.failed.assert_called_once_with("Logos didn't start, so the layout “Study” couldn't be opened.")
+
+
 class TestInstalledMenus(GuiTestCase):
     installed = True
 
