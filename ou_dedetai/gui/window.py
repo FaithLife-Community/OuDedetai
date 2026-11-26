@@ -48,7 +48,7 @@ from .mixins.troubleshoot import TroubleshootMixin
 from .mixins.updates import UpdatesMixin
 from .mixins.wine_builds import WineBuildsMixin
 from .style import tr
-from .tray import TrayController
+from .tray import TrayController, tray_available
 
 
 class Signals(QObject):
@@ -416,7 +416,6 @@ def start(ephemeral_config: EphemeralConfiguration, install: bool = False) -> in
 def run_with_tray(ephemeral_config: EphemeralConfiguration) -> int:
     """Start Logos and keep Ou Dedetai in the tray while it runs (the Logos shortcut)."""
     app = _qt_app()
-    app.setQuitOnLastWindowClosed(False)
     root = Root()
     window = MainWindow(root, ephemeral_config, show=False)
     if not window.is_installed():
@@ -425,6 +424,12 @@ def run_with_tray(ephemeral_config: EphemeralConfiguration) -> int:
     if window.logos.hand_off_link():
         return 0  # a link for the Logos that's already running: nothing more to do
     window.start_thread(window.logos.start)
+    if not tray_available():
+        # Nowhere to hide: open the window, as a normal start would, so Ou Dedetai is never
+        # running unseen (e.g. if Logos fails to start).
+        window.root.show()
+        return app.exec()
+    app.setQuitOnLastWindowClosed(False)
     window._tray = TrayController(window, app)
     return app.exec()
 
